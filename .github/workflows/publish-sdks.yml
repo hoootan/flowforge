@@ -1,13 +1,14 @@
 name: Build & Publish SDKs
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to publish (e.g., 0.1.0). Leave empty to use latest release tag.'
-        required: false
+        description: 'Version to publish (e.g., 0.1.0)'
+        required: true
         type: string
       publish_typescript:
         description: 'Publish TypeScript client to npm'
@@ -26,28 +27,25 @@ env:
   PNPM_VERSION: '8'
 
 jobs:
-  # Extract version from release tag or manual input
   prepare:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
       publish_ts: ${{ steps.flags.outputs.publish_ts }}
       publish_py: ${{ steps.flags.outputs.publish_py }}
     steps:
       - name: Determine version
         id: version
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.version }}" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             VERSION="${{ inputs.version }}"
-          elif [ "${{ github.event_name }}" = "release" ]; then
-            # Extract version from tag (remove 'v' prefix if present)
-            VERSION="${{ github.event.release.tag_name }}"
-            VERSION="${VERSION#v}"
           else
-            echo "Error: No version specified"
-            exit 1
+            # Extract version from tag (remove 'v' prefix)
+            VERSION="${GITHUB_REF#refs/tags/v}"
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
           echo "Publishing version: $VERSION"
 
       - name: Determine publish flags
@@ -57,12 +55,10 @@ jobs:
             echo "publish_ts=${{ inputs.publish_typescript }}" >> $GITHUB_OUTPUT
             echo "publish_py=${{ inputs.publish_python }}" >> $GITHUB_OUTPUT
           else
-            # On release, publish both
             echo "publish_ts=true" >> $GITHUB_OUTPUT
             echo "publish_py=true" >> $GITHUB_OUTPUT
           fi
 
-  # Build and publish TypeScript client to npm using Trusted Publishing
   publish-typescript:
     needs: prepare
     if: needs.prepare.outputs.publish_ts == 'true'
@@ -97,7 +93,6 @@ jobs:
           jq --arg v "$VERSION" '.version = $v' package.json > package.json.tmp
           mv package.json.tmp package.json
           echo "Updated package.json to version $VERSION"
-          cat package.json | head -10
 
       - name: Type check
         run: pnpm typecheck
@@ -110,7 +105,6 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-  # Build and publish Python SDK to PyPI using Trusted Publishing
   publish-python:
     needs: prepare
     if: needs.prepare.outputs.publish_py == 'true'
@@ -140,7 +134,6 @@ jobs:
           VERSION="${{ needs.prepare.outputs.version }}"
           sed -i "s/^version = \".*\"/version = \"$VERSION\"/" pyproject.toml
           echo "Updated pyproject.toml to version $VERSION"
-          head -10 pyproject.toml
 
       - name: Build package
         run: python -m build
@@ -150,37 +143,46 @@ jobs:
         with:
           packages-dir: packages/flowforge-sdk/dist/
 
-  # Summary job to report results
-  summary:
+  create-release:
     needs: [prepare, publish-typescript, publish-python]
-    if: always()
+    if: always() && (needs.publish-typescript.result == 'success' || needs.publish-python.result == 'success')
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - name: Report results
-        run: |
-          echo "## SDK Publish Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Version:** ${{ needs.prepare.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Package | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-          if [ "${{ needs.prepare.outputs.publish_ts }}" = "true" ]; then
-            if [ "${{ needs.publish-typescript.result }}" = "success" ]; then
-              echo "| flowforge-client (npm) | ✅ Published |" >> $GITHUB_STEP_SUMMARY
-            else
-              echo "| flowforge-client (npm) | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
-            fi
-          else
-            echo "| flowforge-client (npm) | ⏭️ Skipped |" >> $GITHUB_STEP_SUMMARY
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          TAG="${{ needs.prepare.outputs.tag }}"
+
+          # Build release notes
+          NOTES="## Packages Published\n\n"
+
+          if [ "${{ needs.publish-typescript.result }}" = "success" ]; then
+            NOTES+="- **flowforge-client** v${VERSION} on [npm](https://www.npmjs.com/package/flowforge-client)\n"
           fi
 
-          if [ "${{ needs.prepare.outputs.publish_py }}" = "true" ]; then
-            if [ "${{ needs.publish-python.result }}" = "success" ]; then
-              echo "| flowforge-sdk (PyPI) | ✅ Published |" >> $GITHUB_STEP_SUMMARY
-            else
-              echo "| flowforge-sdk (PyPI) | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
-            fi
+          if [ "${{ needs.publish-python.result }}" = "success" ]; then
+            NOTES+="- **flowforge-sdk** v${VERSION} on [PyPI](https://pypi.org/project/flowforge-sdk/)\n"
+          fi
+
+          NOTES+="\n## What's Changed\n"
+
+          # Check if release already exists
+          if gh release view "$TAG" &>/dev/null; then
+            echo "Release $TAG already exists, updating..."
+            echo -e "$NOTES" | gh release edit "$TAG" --notes-file -
           else
-            echo "| flowforge-sdk (PyPI) | ⏭️ Skipped |" >> $GITHUB_STEP_SUMMARY
+            echo "Creating release $TAG..."
+            echo -e "$NOTES" | gh release create "$TAG" \
+              --title "v${VERSION}" \
+              --notes-file - \
+              --generate-notes
           fi
