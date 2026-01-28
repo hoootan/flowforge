@@ -69,6 +69,19 @@ export {
   type UpdateToolInput,
   type SendEventInput,
   type ClientOptions,
+  // User types (admin API key required)
+  type UserRole,
+  type User,
+  type CreateUserInput,
+  type UpdateUserInput,
+  type UsersResponse,
+  // API Key types
+  type ApiKeyType,
+  type ApiKey,
+  type ApiKeyCreated,
+  type CreateApiKeyInput,
+  type ApiKeysResponse,
+  type ApiKeyFilters,
 } from "./types";
 
 // Query builder (for advanced usage)
@@ -81,3 +94,5 @@ export { FunctionsResource } from "./resources/functions";
 export { ToolsResource } from "./resources/tools";
 export { ApprovalsResource } from "./resources/approvals";
 export { HealthResource } from "./resources/health";
+export { UsersResource } from "./resources/users";
+export { ApiKeysResource } from "./resources/api-keys";

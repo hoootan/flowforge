@@ -9,6 +9,8 @@ import { FunctionsResource } from "./resources/functions";
 import { ToolsResource } from "./resources/tools";
 import { ApprovalsResource } from "./resources/approvals";
 import { HealthResource } from "./resources/health";
+import { UsersResource } from "./resources/users";
+import { ApiKeysResource } from "./resources/api-keys";
 
 /**
  * FlowForge client instance with typed resource accessors.
@@ -26,6 +28,10 @@ export interface FlowForgeClient {
   approvals: ApprovalsResource;
   /** Health resource - server health and stats */
   health: HealthResource;
+  /** Users resource - authentication and user management */
+  users: UsersResource;
+  /** API Keys resource - manage API key authentication */
+  apiKeys: ApiKeysResource;
 }
 
 /**
@@ -48,17 +54,10 @@ export interface FlowForgeClient {
  * });
  * ```
  *
- * @example With API key (recommended for server-to-server)
+ * @example With API key
  * ```ts
  * const ff = createClient('http://localhost:8000', {
  *   apiKey: process.env.FLOWFORGE_API_KEY  // ff_live_xxx
- * });
- * ```
- *
- * @example With JWT token (for CLI/dashboard sessions)
- * ```ts
- * const ff = createClient('http://localhost:8000', {
- *   accessToken: sessionToken
  * });
  * ```
  */
@@ -82,13 +81,9 @@ export function createClient(
       "Content-Type": "application/json",
     };
 
-    // API key authentication (recommended for server-to-server)
+    // API key authentication
     if (options.apiKey) {
       headers["X-FlowForge-API-Key"] = options.apiKey;
-    }
-    // JWT token authentication (for CLI/dashboard sessions)
-    else if (options.accessToken) {
-      headers["Authorization"] = `Bearer ${options.accessToken}`;
     }
 
     try {
@@ -133,5 +128,7 @@ export function createClient(
     tools: new ToolsResource(request),
     approvals: new ApprovalsResource(request),
     health: new HealthResource(request),
+    users: new UsersResource(request),
+    apiKeys: new ApiKeysResource(request),
   };
 }
