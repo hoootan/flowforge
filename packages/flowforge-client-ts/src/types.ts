@@ -256,23 +256,94 @@ export interface SendEventInput {
 }
 
 // ============================================================================
+// Auth Types
+// ============================================================================
+
+export type UserRole = "admin" | "member" | "viewer";
+
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  role: UserRole;
+  is_active: boolean;
+  last_login_at: string | null;
+  created_at: string;
+}
+
+export interface CreateUserInput {
+  email: string;
+  password: string;
+  name: string;
+  role: UserRole;
+}
+
+export interface UpdateUserInput {
+  email?: string;
+  name?: string;
+  role?: UserRole;
+  is_active?: boolean;
+}
+
+export interface UsersResponse {
+  users: User[];
+  total: number;
+}
+
+// ============================================================================
+// API Key Types
+// ============================================================================
+
+export type ApiKeyType = "live" | "test" | "ro";
+
+export interface ApiKey {
+  id: string;
+  name: string;
+  key_prefix: string;
+  key_type: ApiKeyType;
+  scopes: string[];
+  expires_at: string | null;
+  last_used_at: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface ApiKeyCreated extends ApiKey {
+  key: string; // Only returned once on creation
+}
+
+export interface CreateApiKeyInput {
+  name: string;
+  key_type?: ApiKeyType;
+  scopes?: string[];
+  expires_in_days?: number;
+}
+
+export interface ApiKeysResponse {
+  keys: ApiKey[];
+  total: number;
+}
+
+export interface ApiKeyFilters {
+  include_revoked: boolean;
+}
+
+// ============================================================================
 // Client Options
 // ============================================================================
 
 export interface ClientOptions {
   /**
-   * API key for authentication (recommended for server-to-server).
+   * API key for authentication.
    * Uses the X-FlowForge-API-Key header.
-   * Format: ff_{env}_{random} (e.g., ff_live_a1b2c3d4...)
+   * Format: ff_{type}_{random} (e.g., ff_live_a1b2c3d4...)
+   *
+   * Key types:
+   * - ff_live_xxx - Production keys with full access
+   * - ff_test_xxx - Test/development keys
+   * - ff_ro_xxx   - Read-only keys
    */
   apiKey?: string;
-
-  /**
-   * JWT access token for authentication (alternative to apiKey).
-   * Uses the Authorization: Bearer header.
-   * Useful for CLI sessions or dashboard access.
-   */
-  accessToken?: string;
 
   /** Custom fetch implementation (for testing or custom environments) */
   fetch?: typeof fetch;

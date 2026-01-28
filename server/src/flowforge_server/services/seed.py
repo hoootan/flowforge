@@ -120,12 +120,12 @@ async def seed_default_api_key() -> None:
             select(ApiKey).where(
                 ApiKey.tenant_id == default_tenant_id,
                 ApiKey.is_active == True,
-            )
+            ).limit(1)
         )
         existing_key = result.scalar_one_or_none()
 
         if existing_key:
-            print("[Seed] Default API key already exists")
+            print("[Seed] API keys already exist, skipping default key creation")
             return
 
         # Create a development API key with a well-known value
