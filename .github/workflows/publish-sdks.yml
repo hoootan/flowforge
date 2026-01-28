@@ -1,0 +1,186 @@
+name: Build & Publish SDKs
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g., 0.1.0). Leave empty to use latest release tag.'
+        required: false
+        type: string
+      publish_typescript:
+        description: 'Publish TypeScript client to npm'
+        required: false
+        type: boolean
+        default: true
+      publish_python:
+        description: 'Publish Python SDK to PyPI'
+        required: false
+        type: boolean
+        default: true
+
+env:
+  NODE_VERSION: '20'
+  PYTHON_VERSION: '3.11'
+  PNPM_VERSION: '8'
+
+jobs:
+  # Extract version from release tag or manual input
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      publish_ts: ${{ steps.flags.outputs.publish_ts }}
+      publish_py: ${{ steps.flags.outputs.publish_py }}
+    steps:
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+          elif [ "${{ github.event_name }}" = "release" ]; then
+            # Extract version from tag (remove 'v' prefix if present)
+            VERSION="${{ github.event.release.tag_name }}"
+            VERSION="${VERSION#v}"
+          else
+            echo "Error: No version specified"
+            exit 1
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Publishing version: $VERSION"
+
+      - name: Determine publish flags
+        id: flags
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "publish_ts=${{ inputs.publish_typescript }}" >> $GITHUB_OUTPUT
+            echo "publish_py=${{ inputs.publish_python }}" >> $GITHUB_OUTPUT
+          else
+            # On release, publish both
+            echo "publish_ts=true" >> $GITHUB_OUTPUT
+            echo "publish_py=true" >> $GITHUB_OUTPUT
+          fi
+
+  # Build and publish TypeScript client to npm using Trusted Publishing
+  publish-typescript:
+    needs: prepare
+    if: needs.prepare.outputs.publish_ts == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: packages/flowforge-client-ts
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Update version in package.json
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          jq --arg v "$VERSION" '.version = $v' package.json > package.json.tmp
+          mv package.json.tmp package.json
+          echo "Updated package.json to version $VERSION"
+          cat package.json | head -10
+
+      - name: Type check
+        run: pnpm typecheck
+
+      - name: Build
+        run: pnpm build
+
+      - name: Publish to npm
+        run: pnpm publish --no-git-checks --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # Build and publish Python SDK to PyPI using Trusted Publishing
+  publish-python:
+    needs: prepare
+    if: needs.prepare.outputs.publish_py == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: packages/flowforge-sdk
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install build
+
+      - name: Update version in pyproject.toml
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          sed -i "s/^version = \".*\"/version = \"$VERSION\"/" pyproject.toml
+          echo "Updated pyproject.toml to version $VERSION"
+          head -10 pyproject.toml
+
+      - name: Build package
+        run: python -m build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: packages/flowforge-sdk/dist/
+
+  # Summary job to report results
+  summary:
+    needs: [prepare, publish-typescript, publish-python]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report results
+        run: |
+          echo "## SDK Publish Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ needs.prepare.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Package | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ needs.prepare.outputs.publish_ts }}" = "true" ]; then
+            if [ "${{ needs.publish-typescript.result }}" = "success" ]; then
+              echo "| flowforge-client (npm) | ✅ Published |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "| flowforge-client (npm) | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "| flowforge-client (npm) | ⏭️ Skipped |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ needs.prepare.outputs.publish_py }}" = "true" ]; then
+            if [ "${{ needs.publish-python.result }}" = "success" ]; then
+              echo "| flowforge-sdk (PyPI) | ✅ Published |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "| flowforge-sdk (PyPI) | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "| flowforge-sdk (PyPI) | ⏭️ Skipped |" >> $GITHUB_STEP_SUMMARY
+          fi
