@@ -1,0 +1,96 @@
+[project]
+name = "flowforge-server"
+version = "0.1.0"
+description = "FlowForge Server - AI workflow orchestration engine"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "FlowForge Team"}
+]
+keywords = ["workflow", "orchestration", "ai", "server", "engine"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Framework :: FastAPI",
+]
+
+dependencies = [
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "pydantic[email]>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "sqlalchemy[asyncio]>=2.0.0",
+    "asyncpg>=0.29.0",
+    "alembic>=1.12.0",
+    "redis>=5.0.0",
+    "httpx>=0.25.0",
+    "structlog>=23.2.0",
+    "python-ulid>=2.2.0",
+    "litellm>=1.0.0",
+    "instructor>=1.0.0",
+    "tiktoken>=0.5.0",
+    "pyyaml>=6.0.0",
+    "RestrictedPython>=7.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.1.0",
+    "mypy>=1.6.0",
+    "types-redis>=4.6.0",
+]
+observability = [
+    "opentelemetry-api>=1.21.0",
+    "opentelemetry-sdk>=1.21.0",
+    "opentelemetry-instrumentation-fastapi>=0.42b0",
+    "prometheus-client>=0.18.0",
+]
+jwt = [
+    "pyjwt>=2.8.0",
+]
+auth = [
+    "pyjwt>=2.8.0",
+    "bcrypt>=4.1.0",
+]
+all = [
+    "flowforge-server[observability,auth]",
+]
+
+[project.scripts]
+flowforge-server = "flowforge_server.cli:main"
+flowforge-create-admin = "flowforge_server.cli:create_admin"
+
+[project.urls]
+Homepage = "https://github.com/flowforge/flowforge"
+Documentation = "https://flowforge.dev/docs"
+Repository = "https://github.com/flowforge/flowforge"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flowforge_server"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+plugins = ["pydantic.mypy"]
