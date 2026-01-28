@@ -1,0 +1,83 @@
+/**
+ * FlowForge TypeScript Client
+ *
+ * A type-safe, Supabase-style client for interacting with FlowForge server.
+ *
+ * @example
+ * ```ts
+ * import { createClient } from 'flowforge-client';
+ *
+ * const ff = createClient('http://localhost:8000');
+ *
+ * // Send an event - returns { data, error }, never throws
+ * const { data, error } = await ff.events.send('order/created', {
+ *   order_id: '123',
+ *   customer: 'Alice',
+ *   total: 99.99
+ * });
+ *
+ * if (error) {
+ *   console.error('Failed to send event:', error.message);
+ * } else {
+ *   console.log('Triggered runs:', data.runs);
+ * }
+ *
+ * // Query runs with type-safe filters
+ * const { data: runs } = await ff.runs
+ *   .select()
+ *   .eq('status', 'completed')
+ *   .order('created_at', 'desc')
+ *   .limit(10)
+ *   .execute();
+ *
+ * // Wait for a run to complete
+ * const { data: run } = await ff.runs.waitFor('run-id', { timeout: 60000 });
+ * ```
+ */
+
+// Main client factory
+export { createClient } from "./client";
+export type { FlowForgeClient } from "./client";
+
+// Types
+export {
+  FlowForgeError,
+  type Result,
+  type RunStatus,
+  type StepType,
+  type StepStatus,
+  type TriggerType,
+  type ApprovalStatus,
+  type Run,
+  type Step,
+  type RunWithSteps,
+  type FlowForgeFunction,
+  type Tool,
+  type Event,
+  type SendEventResponse,
+  type Approval,
+  type Stats,
+  type HealthStatus,
+  type RunFilters,
+  type FunctionFilters,
+  type EventFilters,
+  type ToolFilters,
+  type ApprovalFilters,
+  type CreateFunctionInput,
+  type UpdateFunctionInput,
+  type CreateToolInput,
+  type UpdateToolInput,
+  type SendEventInput,
+  type ClientOptions,
+} from "./types";
+
+// Query builder (for advanced usage)
+export { QueryBuilder, type OrderDirection, type QueryParams } from "./builder";
+
+// Resources (for advanced usage / extension)
+export { EventsResource } from "./resources/events";
+export { RunsResource } from "./resources/runs";
+export { FunctionsResource } from "./resources/functions";
+export { ToolsResource } from "./resources/tools";
+export { ApprovalsResource } from "./resources/approvals";
+export { HealthResource } from "./resources/health";
