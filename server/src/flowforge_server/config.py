@@ -33,7 +33,6 @@ class Settings(BaseSettings):
 
     # Authentication
     api_key_header: str = "X-FlowForge-API-Key"
-    event_key_header: str = "X-FlowForge-Event-Key"
     signature_header: str = "X-FlowForge-Signature"
 
     # Execution

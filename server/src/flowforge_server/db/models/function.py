@@ -67,6 +67,9 @@ class Function(Base, TimestampMixin):
     # URL where the function is deployed (optional for inline functions)
     endpoint_url: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Last heartbeat from worker (for worker health tracking)
+    worker_last_seen: Mapped[datetime | None] = mapped_column(nullable=True)
+
     # =========================================================================
     # Serverless/Inline Execution Fields
     # =========================================================================
@@ -124,3 +127,13 @@ class Function(Base, TimestampMixin):
         if concurrency:
             return concurrency.get("limit")
         return None
+
+    @property
+    def worker_healthy(self) -> bool:
+        """Check if worker is healthy (seen within last 60 seconds)."""
+        if self.is_inline:
+            return True  # Inline functions don't need a worker
+        if not self.worker_last_seen:
+            return False
+        age = (datetime.utcnow() - self.worker_last_seen).total_seconds()
+        return age < 60  # Consider healthy if seen within last minute

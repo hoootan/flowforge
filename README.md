@@ -12,6 +12,53 @@ A production-ready AI workflow orchestration platform. Build durable, event-driv
 - **Role-Based Access**: Admin, Member, and Viewer roles with granular permissions.
 - **Developer Experience**: CLI for local development with hot reload and event simulation.
 
+## How It Works
+
+FlowForge uses a **client-server architecture** where your workflow code runs on workers, while the central server handles orchestration.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Your Application                          │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐          │
+│  │  Next.js    │    │   FastAPI   │    │   Cron Job  │          │
+│  │  Frontend   │    │   Backend   │    │             │          │
+│  └──────┬──────┘    └──────┬──────┘    └──────┬──────┘          │
+│         │                  │                  │                  │
+│         └──────────────────┼──────────────────┘                  │
+│                            │ send events                         │
+│                            ▼                                     │
+│  ┌─────────────────────────────────────────────────────────────┐ │
+│  │                   FlowForge Server                          │ │
+│  │  ┌─────────┐  ┌─────────┐  ┌──────────┐  ┌───────────────┐  │ │
+│  │  │   API   │  │  Queue  │  │  Runner  │  │   Executor    │  │ │
+│  │  │ :8000   │  │ (Redis) │  │          │  │               │  │ │
+│  │  └─────────┘  └─────────┘  └──────────┘  └───────┬───────┘  │ │
+│  └──────────────────────────────────────────────────┼──────────┘ │
+│                                                     │            │
+│                              invoke function        │            │
+│                                                     ▼            │
+│  ┌─────────────────────────────────────────────────────────────┐ │
+│  │                   Your Worker(s)                            │ │
+│  │  ┌─────────────────────────────────────────────────────┐    │ │
+│  │  │  @flowforge.function("process-order")               │    │ │
+│  │  │  async def process_order(ctx):                      │    │ │
+│  │  │      await step.run("validate", ...)                │    │ │
+│  │  │      await step.ai("fraud-check", ...)              │    │ │
+│  │  └─────────────────────────────────────────────────────┘    │ │
+│  │                         :8080                               │ │
+│  └─────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**The Flow:**
+
+1. Your app sends an event → `client.sendEvent("order/created", {...})`
+2. FlowForge Server receives it and matches to registered functions
+3. Server calls your Worker's `/invoke` endpoint
+4. Worker executes your Python code, step by step
+5. Each step result is saved (durable execution)
+6. If worker crashes, server retries from last checkpoint
+
 ## Quick Start
 
 ### Installation
@@ -20,13 +67,42 @@ A production-ready AI workflow orchestration platform. Build durable, event-driv
 pip install flowforge-sdk
 ```
 
-### Define a Workflow
+### SDK Configuration
 
 ```python
 from flowforge import FlowForge, Context, step
 
-flowforge = FlowForge(app_id="my-app")
+# Initialize with server connection
+flowforge = FlowForge(
+    app_id="my-app",                      # Your application identifier
+    api_url="http://localhost:8000",      # FlowForge server URL
+    api_key="ff_live_xxx",                # API key for authentication (optional)
+    signing_key="sk_xxx",                 # Request signing key (optional)
+)
+```
 
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `app_id` | Unique identifier for your application | Required |
+| `api_url` | URL of the FlowForge server | `FLOWFORGE_API_URL` env or `http://localhost:8000` |
+| `api_key` | API key for authentication (ff_live_xxx) | `FLOWFORGE_API_KEY` env or `None` |
+| `signing_key` | Key for HMAC request signing | `FLOWFORGE_SIGNING_KEY` env or `None` |
+
+**Environment Variables:**
+
+```bash
+export FLOWFORGE_API_URL=http://localhost:8000
+export FLOWFORGE_API_KEY=ff_live_xxx
+export FLOWFORGE_SIGNING_KEY=sk_xxx
+
+# For worker mode:
+export FLOWFORGE_SERVER_URL=http://localhost:8000  # Alias for FLOWFORGE_API_URL
+export FLOWFORGE_WORKER_URL=http://localhost:8080/api/flowforge
+```
+
+### Define a Workflow
+
+```python
 @flowforge.function(
     id="process-order",
     trigger=flowforge.trigger.event("order/created"),
@@ -57,18 +133,91 @@ async def process_order(ctx: Context) -> dict:
     return {"status": "completed", "order_id": order["id"]}
 ```
 
-### Run Locally
+## Running Modes
+
+### 1. Local Development (All-in-One)
+
+For development, use the CLI to run everything locally:
 
 ```bash
 # Install CLI
 pip install flowforge-cli
 
-# Start dev server
-cd examples
+# Start dev server (runs server + executes functions locally)
 flowforge dev .
 
 # Send a test event
-flowforge send order/created -d '{"id": "123", "customer": "Alice", "total": 99.99}'
+flowforge send order/created -d '{"id": "123", "customer": "Alice"}'
+```
+
+### 2. Serverless Mode (No Worker Needed)
+
+Create agent-based functions via API that run directly on the server:
+
+```bash
+# Create a serverless function via API
+curl -X POST http://localhost:8000/api/v1/functions/inline \
+  -H "Content-Type: application/json" \
+  -d '{
+    "function_id": "support-agent",
+    "name": "Support Agent",
+    "trigger_type": "event",
+    "trigger_value": "ticket/created",
+    "system_prompt": "You are a helpful support agent...",
+    "tools": ["web_search", "send_email"],
+    "agent_config": {
+      "model": "gpt-4o",
+      "max_iterations": 10
+    }
+  }'
+```
+
+No worker deployment needed — the server executes the agent internally using the configured tools.
+
+### 3. Production (Separate Server + Workers)
+
+In production, run the server separately and connect workers:
+
+**Start the server:**
+
+```bash
+docker-compose up -d
+```
+
+**Run your worker:**
+
+```python
+# main.py
+from flowforge import FlowForge, Context, step
+
+flowforge = FlowForge(app_id="my-app")
+
+@flowforge.function(id="process-order", ...)
+async def process_order(ctx: Context):
+    ...
+
+# Start as a worker - connects to the server
+if __name__ == "__main__":
+    flowforge.work(
+        server_url="http://flowforge-server:8000",  # Central server
+        host="0.0.0.0",
+        port=8080,                                   # Worker listens here
+        worker_url="http://my-worker:8080/api/flowforge",  # How server reaches us
+    )
+```
+
+**What `work()` does:**
+
+1. Starts a FastAPI server on your machine (port 8080)
+2. Registers your functions with the central server
+3. Exposes `/api/flowforge/invoke` for the server to call
+4. Handles function execution when invoked
+
+**Environment variables for workers:**
+
+```bash
+export FLOWFORGE_SERVER_URL=http://flowforge-server:8000
+export FLOWFORGE_WORKER_URL=http://my-worker:8080/api/flowforge
 ```
 
 ## Step Primitives
@@ -91,18 +240,29 @@ npm install flowforge-client
 ```
 
 ```typescript
-import { FlowForge } from 'flowforge-client';
+import { createClient } from 'flowforge-client';
 
-const client = new FlowForge('http://localhost:8000');
+// Create client (Supabase-style API)
+const ff = createClient('http://localhost:8000', {
+  apiKey: 'ff_live_xxx',  // Optional: API key for authentication
+});
 
 // Send an event to trigger a workflow
-const result = await client.sendEvent('order/created', {
+const { data, error } = await ff.events.send('order/created', {
   order_id: '123',
   customer: 'Alice',
 });
 
-// Wait for completion
-const run = await client.waitForRun(result.runs[0].id);
+if (error) {
+  console.error('Failed:', error.message);
+} else {
+  console.log('Triggered runs:', data.runs);
+}
+
+// Wait for a run to complete
+const { data: run } = await ff.runs.waitFor(data.runs[0].id, {
+  timeout: 60000
+});
 console.log('Output:', run.output);
 ```
 
@@ -147,6 +307,27 @@ For SDK and server-to-server authentication:
 ```
 
 Create API keys via the dashboard (Settings → API Keys) or API.
+
+**Using API keys in the SDK:**
+
+```python
+# Python SDK
+flowforge = FlowForge(
+    app_id="my-app",
+    api_url="http://localhost:8000",
+    api_key="ff_live_xxx",  # For authentication
+)
+
+# Requests are sent with the key in the header:
+# X-FlowForge-API-Key: ff_live_xxx
+```
+
+```typescript
+// TypeScript client
+const ff = createClient('http://localhost:8000', {
+  apiKey: 'ff_live_xxx',
+});
+```
 
 ## Project Structure
 
@@ -202,17 +383,53 @@ REDIS_URL=redis://localhost:6379
 # AI (for step.ai)
 OPENAI_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-ant-...
+
+# SDK/Worker configuration
+FLOWFORGE_SERVER_URL=http://localhost:8000
+FLOWFORGE_EVENT_KEY=ff_live_xxx
+FLOWFORGE_SIGNING_KEY=sk_xxx
+FLOWFORGE_WORKER_URL=http://localhost:8080/api/flowforge
 ```
 
 ## Architecture
 
-1. **Event arrives** at the server API
-2. **Server matches** the event to registered functions by trigger
-3. **Job is enqueued** to the fair queue (Redis-backed)
-4. **Executor dequeues** and invokes the user function
-5. **Function executes** until a `step.*` call
-6. **Step result is saved**, function re-enqueues for continuation
-7. **Repeat** until function returns or fails
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    FlowForge Server                         │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  1. Event arrives at /api/v1/events                         │
+│                    │                                        │
+│                    ▼                                        │
+│  2. Server matches event to registered functions            │
+│                    │                                        │
+│                    ▼                                        │
+│  3. Job enqueued to fair queue (Redis)                      │
+│                    │                                        │
+│                    ▼                                        │
+│  4. Executor dequeues and calls worker's /invoke endpoint   │
+│                    │                                        │
+└────────────────────┼────────────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    Your Worker                              │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  5. Worker executes your function                           │
+│                    │                                        │
+│                    ▼                                        │
+│  6. On step.* call → returns control to server              │
+│     (raises StepCompleted exception)                        │
+│                    │                                        │
+│                    ▼                                        │
+│  7. Step result saved, function re-enqueued                 │
+│                    │                                        │
+│                    ▼                                        │
+│  8. Repeat until function returns or fails                  │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
 
 Steps raise control flow exceptions (`StepCompleted`) to yield control back to the server, enabling durable execution across restarts.
 

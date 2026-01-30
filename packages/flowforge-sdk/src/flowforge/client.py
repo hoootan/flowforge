@@ -5,6 +5,7 @@ from typing import Any, Callable, Awaitable, TypeVar
 import hashlib
 import hmac
 import json
+import os
 import uuid
 
 import httpx
@@ -43,7 +44,7 @@ class FlowForge:
         flowforge = FlowForge(
             app_id="my-app",
             api_url="http://localhost:8000",
-            signing_key="sk_...",
+            api_key="ff_live_...",  # Optional: API key for authentication
         )
 
         @flowforge.function(
@@ -62,8 +63,8 @@ class FlowForge:
     def __init__(
         self,
         app_id: str,
-        api_url: str = "http://localhost:8000",
-        event_key: str | None = None,
+        api_url: str | None = None,
+        api_key: str | None = None,
         signing_key: str | None = None,
     ) -> None:
         """
@@ -71,14 +72,22 @@ class FlowForge:
 
         Args:
             app_id: Unique identifier for your application.
-            api_url: URL of the FlowForge API server.
-            event_key: API key for sending events.
+            api_url: URL of the FlowForge API server. 
+                     Defaults to FLOWFORGE_API_URL env var or http://localhost:8000.
+            api_key: API key for authentication (ff_live_xxx format).
+                     Defaults to FLOWFORGE_API_KEY env var.
             signing_key: Key for signing webhook requests.
+                         Defaults to FLOWFORGE_SIGNING_KEY env var.
         """
         self.app_id = app_id
-        self.api_url = api_url.rstrip("/")
-        self.event_key = event_key
-        self.signing_key = signing_key
+        self.api_url = (
+            api_url 
+            or os.environ.get("FLOWFORGE_API_URL") 
+            or os.environ.get("FLOWFORGE_SERVER_URL")  # Backward compat
+            or "http://localhost:8000"
+        ).rstrip("/")
+        self.api_key = api_key or os.environ.get("FLOWFORGE_API_KEY")
+        self.signing_key = signing_key or os.environ.get("FLOWFORGE_SIGNING_KEY")
 
         # Trigger builder
         self.trigger = TriggerBuilder()
@@ -257,8 +266,8 @@ class FlowForge:
             "Content-Type": "application/json",
         }
 
-        if self.event_key:
-            headers["X-FlowForge-Event-Key"] = self.event_key
+        if self.api_key:
+            headers["X-FlowForge-API-Key"] = self.api_key
 
         body = json.dumps(event).encode()
 

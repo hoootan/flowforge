@@ -317,3 +317,46 @@ async def delete_function(
 
     fn.is_active = False
     await session.commit()
+
+
+@router.post("/heartbeat")
+async def worker_heartbeat(
+    function_ids: list[str],
+    tenant: TenantWithDevFallback,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    """
+    Worker heartbeat endpoint.
+
+    Workers should call this periodically to indicate they are still alive.
+    Updates worker_last_seen for all registered functions.
+
+    Args:
+        function_ids: List of function IDs this worker is serving.
+
+    Returns:
+        Status with count of updated functions.
+    """
+    now = datetime.utcnow()
+    updated_count = 0
+
+    for function_id in function_ids:
+        result = await session.execute(
+            select(Function).where(
+                Function.tenant_id == tenant.id,
+                Function.function_id == function_id,
+                Function.is_active == True,
+            )
+        )
+        fn = result.scalar_one_or_none()
+        if fn:
+            fn.worker_last_seen = now
+            updated_count += 1
+
+    await session.commit()
+
+    return {
+        "status": "ok",
+        "updated": updated_count,
+        "timestamp": now.isoformat() + "Z",
+    }

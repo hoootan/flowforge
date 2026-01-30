@@ -8,17 +8,57 @@ if TYPE_CHECKING:
     from flowforge.client import FlowForge
     from flowforge.decorators import FlowForgeFunction
 
+# Heartbeat interval in seconds
+HEARTBEAT_INTERVAL = 30
+
+
+async def _heartbeat_loop(
+    server_url: str,
+    function_ids: list[str],
+    api_key: str | None = None,
+) -> None:
+    """Send periodic heartbeats to the server."""
+    import httpx
+
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["X-FlowForge-API-Key"] = api_key
+
+    while True:
+        try:
+            await asyncio.sleep(HEARTBEAT_INTERVAL)
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(
+                    f"{server_url}/api/v1/functions/heartbeat",
+                    json=function_ids,
+                    headers=headers,
+                )
+                if response.status_code == 200:
+                    print(f"[Worker] Heartbeat sent ({len(function_ids)} functions)")
+                else:
+                    print(f"[Worker] Heartbeat failed: {response.status_code}")
+        except asyncio.CancelledError:
+            print("[Worker] Heartbeat loop cancelled")
+            break
+        except Exception as e:
+            print(f"[Worker] Heartbeat error: {e}")
+
 
 async def _register_functions(
     server_url: str,
     app_id: str,
     functions: list["FlowForgeFunction"],
     worker_url: str,
+    api_key: str | None = None,
 ) -> None:
     """Register functions with the central FlowForge server."""
     import httpx
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["X-FlowForge-API-Key"] = api_key
+
+    async with httpx.AsyncClient(timeout=30.0, headers=headers) as client:
         for fn in functions:
             # Build function registration payload
             trigger_data = {
@@ -120,12 +160,37 @@ def run_worker(
             "functions": len(functions),
         }
 
+    # Background task for heartbeat
+    heartbeat_task: asyncio.Task | None = None
+
     @app.on_event("startup")
     async def on_startup() -> None:
         """Register functions with the server on startup."""
+        nonlocal heartbeat_task
         print(f"[Worker] Registering {len(functions)} functions with {server_url}...")
-        await _register_functions(server_url, flowforge.app_id, functions, worker_url)
+        await _register_functions(
+            server_url, flowforge.app_id, functions, worker_url, flowforge.api_key
+        )
         print(f"[Worker] Registration complete")
+
+        # Start heartbeat loop
+        function_ids = [fn.id for fn in functions]
+        heartbeat_task = asyncio.create_task(
+            _heartbeat_loop(server_url, function_ids, flowforge.api_key)
+        )
+        print(f"[Worker] Heartbeat started (every {HEARTBEAT_INTERVAL}s)")
+
+    @app.on_event("shutdown")
+    async def on_shutdown() -> None:
+        """Clean up on shutdown."""
+        nonlocal heartbeat_task
+        if heartbeat_task:
+            heartbeat_task.cancel()
+            try:
+                await heartbeat_task
+            except asyncio.CancelledError:
+                pass
+        print("[Worker] Shutdown complete")
 
     print(f"\n{'='*60}")
     print(f"  FlowForge Worker")
