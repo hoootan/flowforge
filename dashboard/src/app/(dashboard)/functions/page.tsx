@@ -130,7 +130,7 @@ function FunctionCard({
   onError: (message: string) => void
 }) {
   return (
-    <Card className="group relative overflow-hidden transition-all hover:shadow-md hover:-translate-y-0.5">
+    <Card className="group relative overflow-hidden transition-all hover:shadow-md hover:-translate-y-0.5 flex flex-col h-full">
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-3">
@@ -160,7 +160,7 @@ function FunctionCard({
           />
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 flex-1">
         {/* Trigger */}
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 text-muted-foreground">
@@ -207,18 +207,13 @@ function FunctionCard({
         {/* Tools (for inline functions) */}
         {fn.is_inline && fn.tools_config && fn.tools_config.length > 0 && (
           <div className="flex items-center gap-2">
-            <Wrench className="h-4 w-4 text-muted-foreground" />
+            <Wrench className="h-4 w-4 text-muted-foreground shrink-0" />
             <div className="flex flex-wrap gap-1">
-              {fn.tools_config.slice(0, 3).map((tool) => (
+              {fn.tools_config.map((tool) => (
                 <Badge key={tool} variant="outline" className="font-mono text-xs">
                   {tool}
                 </Badge>
               ))}
-              {fn.tools_config.length > 3 && (
-                <Badge variant="outline" className="text-xs">
-                  +{fn.tools_config.length - 3}
-                </Badge>
-              )}
             </div>
           </div>
         )}
@@ -230,12 +225,13 @@ function FunctionCard({
             <span className="font-mono truncate">{fn.endpoint_url}</span>
           </div>
         )}
-
-        {/* Created timestamp */}
+      </CardContent>
+      {/* Footer - always at bottom */}
+      <div className="px-6 pb-4">
         <div className="flex items-center justify-between text-xs text-muted-foreground border-t pt-3">
           <span>Created {formatTimestamp(fn.created_at)}</span>
         </div>
-      </CardContent>
+      </div>
     </Card>
   )
 }
@@ -382,17 +378,12 @@ export default function FunctionsPage() {
           const fn = row.original
           if (fn.is_inline) {
             return (
-              <div className="flex flex-wrap gap-1 max-w-48">
-                {fn.tools_config?.slice(0, 3).map((tool) => (
+              <div className="flex flex-wrap gap-1">
+                {fn.tools_config?.map((tool) => (
                   <Badge key={tool} variant="outline" className="font-mono text-xs">
                     {tool}
                   </Badge>
                 ))}
-                {fn.tools_config && fn.tools_config.length > 3 && (
-                  <Badge variant="outline" className="text-xs">
-                    +{fn.tools_config.length - 3}
-                  </Badge>
-                )}
               </div>
             )
           }

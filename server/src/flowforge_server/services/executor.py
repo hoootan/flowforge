@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from flowforge_server.config import get_settings
 from flowforge_server.db import get_session_context
-from flowforge_server.db.models import Function, Run, RunStatus, Step, StepStatus, StepType
+from flowforge_server.db.models import Function, Run, RunStatus, Step, StepStatus, StepType, UsageRecord
 from flowforge_server.queue import FairQueue, Job, JobStatus
 from flowforge_server.services.ai import get_ai_service, AIService
 from flowforge_server.stream.pubsub import publish_run_event, RunEventType
@@ -588,7 +588,7 @@ class Executor:
             )
 
             try:
-                # Execute the AI call via LiteLLM
+                # Execute the AI call via LiteLLM with tenant-specific credentials
                 ai_service = self._get_ai_service()
                 response = await ai_service.complete(
                     model=model,
@@ -598,10 +598,31 @@ class Executor:
                     use_cache=use_cache,
                     tools=tools,
                     tool_choice=tool_choice,
+                    tenant_id=run.tenant_id,
+                    session=session,
                 )
 
                 # Convert AIResponse to dict for storage
                 ai_response = response.to_dict()
+
+                # Record usage to database
+                usage_record = UsageRecord(
+                    tenant_id=run.tenant_id,
+                    run_id=run.id,
+                    model=response.usage.model or model,
+                    provider=response.usage.provider or response.provider,
+                    prompt_tokens=response.usage.prompt_tokens,
+                    completion_tokens=response.usage.completion_tokens,
+                    total_tokens=response.usage.total_tokens,
+                    cost_usd=response.usage.cost_usd,
+                    latency_ms=response.usage.latency_ms,
+                    request_type="completion" if not tools else "tool_call",
+                    extra_data={
+                        "step_id": step.step_id,
+                        "tool_calls_count": len(response.tool_calls) if response.tool_calls else 0,
+                    },
+                )
+                session.add(usage_record)
 
                 # Log tool calls if present
                 tool_calls_info = ""

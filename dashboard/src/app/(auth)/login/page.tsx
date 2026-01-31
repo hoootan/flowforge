@@ -7,32 +7,36 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Layers, Loader2, AlertCircle } from "lucide-react";
-import { useAuthStore } from "@/stores/auth-store";
+import { Layers, Loader2, AlertCircle, Shield } from "lucide-react";
+import { useAuthStore, useHasHydrated } from "@/stores/auth-store";
 import { cn } from "@/lib/utils";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, isAuthenticated, isLoading, refreshUser } = useAuthStore();
+  const hasHydrated = useHasHydrated();
+  const { login, verify2FA, isAuthenticated, isLoading, refreshUser, requires2FA } = useAuthStore();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [totpCode, setTotpCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Check if already authenticated
+  // Check if already authenticated - only after hydration
   useEffect(() => {
+    if (!hasHydrated) return;
+
     const checkAuth = async () => {
       await refreshUser();
     };
     checkAuth();
-  }, [refreshUser]);
+  }, [hasHydrated, refreshUser]);
 
   useEffect(() => {
-    if (isAuthenticated && !isLoading) {
+    if (hasHydrated && isAuthenticated && !isLoading) {
       router.push("/");
     }
-  }, [isAuthenticated, isLoading, router]);
+  }, [hasHydrated, isAuthenticated, isLoading, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,17 +45,34 @@ export default function LoginPage() {
 
     const result = await login({ email, password });
 
+    if (result.success && !result.requires2FA) {
+      router.push("/");
+    } else if (!result.success) {
+      setError(result.error || "Login failed");
+    }
+    // If requires2FA, the form will switch to 2FA input
+
+    setIsSubmitting(false);
+  };
+
+  const handleVerify2FA = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setIsSubmitting(true);
+
+    const result = await verify2FA(totpCode);
+
     if (result.success) {
       router.push("/");
     } else {
-      setError(result.error || "Login failed");
+      setError(result.error || "Invalid verification code");
     }
 
     setIsSubmitting(false);
   };
 
-  // Show loading while checking auth
-  if (isLoading) {
+  // Show loading while hydrating or checking auth
+  if (!hasHydrated || isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -148,60 +169,141 @@ export default function LoginPage() {
 
           {/* Login form */}
           <div className="grid gap-6">
-            <form onSubmit={handleSubmit}>
-              <div className="grid gap-4">
-                {error && (
-                  <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>{error}</AlertDescription>
-                  </Alert>
-                )}
+            {requires2FA ? (
+              // 2FA verification form
+              <form onSubmit={handleVerify2FA}>
+                <div className="grid gap-4">
+                  <div className="flex items-center justify-center">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                      <Shield className="h-6 w-6 text-primary" />
+                    </div>
+                  </div>
 
-                <div className="grid gap-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="you@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    disabled={isSubmitting}
-                    autoComplete="email"
-                    autoFocus
-                  />
-                </div>
+                  <div className="text-center">
+                    <h2 className="text-lg font-semibold">Two-factor authentication</h2>
+                    <p className="text-sm text-muted-foreground">
+                      Enter the code from your authenticator app
+                    </p>
+                  </div>
 
-                <div className="grid gap-2">
-                  <Label htmlFor="password">Password</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    placeholder="Enter your password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    disabled={isSubmitting}
-                    autoComplete="current-password"
-                  />
-                </div>
-
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={isSubmitting || !email || !password}
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Signing in...
-                    </>
-                  ) : (
-                    "Sign in"
+                  {error && (
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>{error}</AlertDescription>
+                    </Alert>
                   )}
-                </Button>
-              </div>
-            </form>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="totp-code">Verification code</Label>
+                    <Input
+                      id="totp-code"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={6}
+                      placeholder="000000"
+                      value={totpCode}
+                      onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ""))}
+                      required
+                      disabled={isSubmitting}
+                      autoComplete="one-time-code"
+                      autoFocus
+                      className="text-center text-2xl tracking-widest"
+                    />
+                    <p className="text-xs text-muted-foreground text-center">
+                      You can also use a backup code
+                    </p>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    className="w-full"
+                    disabled={isSubmitting || totpCode.length < 6}
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Verifying...
+                      </>
+                    ) : (
+                      "Verify"
+                    )}
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="w-full"
+                    onClick={() => {
+                      useAuthStore.setState({
+                        requires2FA: false,
+                        tempToken: null,
+                      });
+                      setTotpCode("");
+                      setError(null);
+                    }}
+                  >
+                    Back to login
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              // Email/password form
+              <form onSubmit={handleSubmit}>
+                <div className="grid gap-4">
+                  {error && (
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>{error}</AlertDescription>
+                    </Alert>
+                  )}
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="you@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      disabled={isSubmitting}
+                      autoComplete="email"
+                      autoFocus
+                    />
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="password">Password</Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      placeholder="Enter your password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      disabled={isSubmitting}
+                      autoComplete="current-password"
+                    />
+                  </div>
+
+                  <Button
+                    type="submit"
+                    className="w-full"
+                    disabled={isSubmitting || !email || !password}
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Signing in...
+                      </>
+                    ) : (
+                      "Sign in"
+                    )}
+                  </Button>
+                </div>
+              </form>
+            )}
           </div>
 
           {/* Footer */}

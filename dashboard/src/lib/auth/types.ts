@@ -23,6 +23,7 @@ export interface UserWithPermissions extends User {
     is_member: boolean;
     is_viewer: boolean;
   };
+  totp_enabled?: boolean;
 }
 
 export interface LoginCredentials {

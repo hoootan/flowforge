@@ -295,6 +295,20 @@ flowforge-server create-admin --email admin@example.com --password secret123
 flowforge-create-admin -e admin@example.com -p secret123 -n "Admin User"
 ```
 
+### Two-Factor Authentication (2FA)
+
+Users can optionally enable two-factor authentication for added security:
+
+1. Go to **Settings → Security** in the dashboard
+2. Click **Enable 2FA**
+3. Scan the QR code with an authenticator app (Google Authenticator, Authy, 1Password, etc.)
+4. Enter the 6-digit verification code
+5. Save your backup codes in a safe place
+
+When 2FA is enabled, users must enter a verification code from their authenticator app after their password during login. Backup codes can be used for recovery if access to the authenticator is lost.
+
+**Requirements:** 2FA requires the `FLOWFORGE_ENCRYPTION_KEY` environment variable to be set for encrypting TOTP secrets.
+
 ### API Keys (for applications)
 
 For SDK and server-to-server authentication:
@@ -384,11 +398,21 @@ REDIS_URL=redis://localhost:6379
 OPENAI_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-ant-...
 
+# Authentication & Security
+FLOWFORGE_JWT_SECRET=your-jwt-secret-change-in-production
+FLOWFORGE_ENCRYPTION_KEY=your-encryption-key  # Required for 2FA and storing AI provider keys
+
 # SDK/Worker configuration
 FLOWFORGE_SERVER_URL=http://localhost:8000
 FLOWFORGE_EVENT_KEY=ff_live_xxx
 FLOWFORGE_SIGNING_KEY=sk_xxx
 FLOWFORGE_WORKER_URL=http://localhost:8080/api/flowforge
+```
+
+**Generate an encryption key:**
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
 ## Architecture

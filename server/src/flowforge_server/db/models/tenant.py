@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from flowforge_server.db.models.tool import Tool
     from flowforge_server.db.models.api_key import ApiKey
     from flowforge_server.db.models.user import User
+    from flowforge_server.db.models.ai_provider import AIProvider
 
 
 class Tenant(Base, TimestampMixin):
@@ -82,6 +83,12 @@ class Tenant(Base, TimestampMixin):
 
     users: Mapped[list["User"]] = relationship(
         "User",
+        back_populates="tenant",
+        lazy="selectin",
+    )
+
+    ai_providers: Mapped[list["AIProvider"]] = relationship(
+        "AIProvider",
         back_populates="tenant",
         lazy="selectin",
     )

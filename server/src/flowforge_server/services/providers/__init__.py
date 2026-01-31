@@ -7,6 +7,7 @@ including configuration, health checking, and fallback chains.
 from __future__ import annotations
 
 import os
+import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -23,6 +24,7 @@ from .config import (
 )
 
 if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
     from .health import HealthChecker, HealthStatus
 
 __all__ = [
@@ -337,6 +339,90 @@ class ProviderRegistry:
             if "api_key" in provider_settings:
                 provider_settings["api_key"] = "***"
         return data
+
+    async def get_api_key_for_tenant(
+        self,
+        session: "AsyncSession",
+        tenant_id: uuid.UUID,
+        provider: str,
+    ) -> str | None:
+        """
+        Get the API key for a provider, checking tenant-specific first.
+
+        Priority:
+        1. Tenant-specific provider from database (encrypted)
+        2. Environment variable (global fallback)
+        3. Config file (if loaded)
+
+        Args:
+            session: Database session for querying tenant providers
+            tenant_id: Tenant ID to check for specific provider
+            provider: Provider name (openai, anthropic, etc.)
+
+        Returns:
+            API key or None if not found
+        """
+        # 1. Check tenant-specific providers first
+        from flowforge_server.services.ai_provider import get_ai_provider_service
+
+        try:
+            service = get_ai_provider_service()
+            api_key = await service.get_decrypted_key(session, tenant_id, provider)
+            if api_key:
+                return api_key
+        except Exception:
+            # If service unavailable or decryption fails, fall back to env vars
+            pass
+
+        # 2. Check environment variables
+        env_keys = {
+            "openai": "OPENAI_API_KEY",
+            "anthropic": "ANTHROPIC_API_KEY",
+            "google": "GOOGLE_API_KEY",
+            "mistral": "MISTRAL_API_KEY",
+            "cohere": "COHERE_API_KEY",
+        }
+
+        env_var = env_keys.get(provider.lower())
+        if env_var:
+            api_key = os.environ.get(env_var)
+            if api_key:
+                return api_key
+
+        # 3. Check loaded config
+        provider_settings = self.get_provider_settings(provider)
+        if provider_settings.api_key:
+            return provider_settings.api_key
+
+        return None
+
+    def get_api_key_from_env(self, provider: str) -> str | None:
+        """
+        Get API key from environment variables only.
+
+        This is the synchronous version for cases where we don't have a session.
+
+        Args:
+            provider: Provider name
+
+        Returns:
+            API key or None
+        """
+        env_keys = {
+            "openai": "OPENAI_API_KEY",
+            "anthropic": "ANTHROPIC_API_KEY",
+            "google": "GOOGLE_API_KEY",
+            "mistral": "MISTRAL_API_KEY",
+            "cohere": "COHERE_API_KEY",
+        }
+
+        env_var = env_keys.get(provider.lower())
+        if env_var:
+            return os.environ.get(env_var)
+
+        # Check loaded config
+        provider_settings = self.get_provider_settings(provider)
+        return provider_settings.api_key
 
 
 # Global registry instance

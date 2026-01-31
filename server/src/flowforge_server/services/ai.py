@@ -5,7 +5,9 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import os
 import time
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any, AsyncIterator, Type, TypeVar
@@ -16,6 +18,7 @@ from pydantic import BaseModel
 from flowforge_server.config import get_settings
 
 if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
     from flowforge_server.services.providers import ProviderRegistry
     from flowforge_server.services.providers.health import HealthChecker
     from flowforge_server.services.structured import StructuredOutputService
@@ -304,6 +307,8 @@ class AIService:
         tools: list[Any] | None = None,
         tool_choice: str | dict[str, Any] = "auto",
         response_model: Type[T] | None = None,
+        tenant_id: uuid.UUID | None = None,
+        session: "AsyncSession | None" = None,
         **kwargs: Any,
     ) -> AIResponse | T:
         """
@@ -320,6 +325,8 @@ class AIService:
             tools: List of Tool objects that can be called.
             tool_choice: How the LLM should choose tools ("auto", "required", "none", or specific tool).
             response_model: Optional Pydantic model for structured output generation.
+            tenant_id: Optional tenant ID for per-tenant API key lookup.
+            session: Optional database session for tenant key lookup.
             **kwargs: Additional provider-specific parameters.
 
         Returns:
@@ -383,6 +390,17 @@ class AIService:
         if model.startswith("claude") and not model.startswith("anthropic/"):
             litellm_model = f"anthropic/{model}"
 
+        # Set up tenant-specific API key if provided
+        api_key_override = None
+        if tenant_id and session and self._provider_registry:
+            try:
+                api_key_override = await self._provider_registry.get_api_key_for_tenant(
+                    session, tenant_id, provider
+                )
+            except Exception:
+                # Fall back to default behavior if lookup fails
+                pass
+
         # Retry loop
         last_error = None
         for attempt in range(max_retries):
@@ -395,6 +413,10 @@ class AIService:
                     "temperature": temperature,
                     **kwargs,
                 }
+
+                # Add API key override if we have one
+                if api_key_override:
+                    completion_params["api_key"] = api_key_override
 
                 # Add tools if provided
                 if tool_schemas:

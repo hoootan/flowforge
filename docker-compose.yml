@@ -45,6 +45,7 @@ services:
       - FLOWFORGE_DATABASE_URL=postgresql+asyncpg://flowforge:flowforge@postgres:5432/flowforge
       - FLOWFORGE_REDIS_URL=redis://redis:6379/0
       - FLOWFORGE_JWT_SECRET=${FLOWFORGE_JWT_SECRET:-flowforge-dev-jwt-secret-change-in-production}
+      - FLOWFORGE_ENCRYPTION_KEY=${FLOWFORGE_ENCRYPTION_KEY:-flowforge-dev-encryption-key-change-in-prod}
     depends_on:
       postgres:
         condition: service_healthy

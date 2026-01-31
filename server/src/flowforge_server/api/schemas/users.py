@@ -32,6 +32,76 @@ class UserLoginResponse(BaseModel):
     user: "UserResponse" = Field(..., description="User details")
 
 
+class User2FARequiredResponse(BaseModel):
+    """Schema for login response when 2FA is required."""
+
+    requires_2fa: bool = Field(default=True, description="Whether 2FA is required")
+    temp_token: str = Field(..., description="Temporary token for 2FA verification")
+
+
+class Verify2FARequest(BaseModel):
+    """Schema for 2FA verification request."""
+
+    temp_token: str = Field(..., description="Temporary token from login")
+    code: str = Field(
+        ...,
+        description="6-digit TOTP code or backup code",
+        min_length=1,
+        max_length=20,
+    )
+
+
+class Setup2FAResponse(BaseModel):
+    """Schema for 2FA setup response."""
+
+    secret: str = Field(..., description="TOTP secret (base32)")
+    qr_code: str = Field(..., description="Base64-encoded QR code image")
+
+
+class Confirm2FARequest(BaseModel):
+    """Schema for 2FA confirmation request."""
+
+    code: str = Field(
+        ...,
+        description="6-digit TOTP code to confirm setup",
+        min_length=6,
+        max_length=6,
+    )
+
+
+class Confirm2FAResponse(BaseModel):
+    """Schema for 2FA confirmation response."""
+
+    success: bool = Field(default=True, description="Whether 2FA was enabled")
+    backup_codes: list[str] = Field(..., description="Backup codes for recovery")
+
+
+class Disable2FARequest(BaseModel):
+    """Schema for 2FA disable request."""
+
+    password: str = Field(
+        ...,
+        description="Current password for verification",
+        min_length=1,
+    )
+
+
+class BackupCodesRequest(BaseModel):
+    """Schema for backup codes request."""
+
+    password: str = Field(
+        ...,
+        description="Current password for verification",
+        min_length=1,
+    )
+
+
+class BackupCodesResponse(BaseModel):
+    """Schema for backup codes response."""
+
+    backup_codes: list[str] = Field(..., description="Backup codes")
+
+
 class UserCreate(BaseModel):
     """Schema for creating a new user."""
 
@@ -138,6 +208,7 @@ class UserMeResponse(BaseModel):
     created_at: datetime = Field(..., description="Creation timestamp")
     tenant_id: str = Field(..., description="Tenant ID")
     permissions: dict = Field(..., description="User permissions")
+    totp_enabled: bool = Field(default=False, description="Whether 2FA is enabled")
 
     model_config = {"from_attributes": True}
 

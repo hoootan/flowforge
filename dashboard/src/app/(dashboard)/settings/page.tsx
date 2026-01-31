@@ -23,12 +23,15 @@ import {
   Monitor,
   Users,
   Plus,
+  Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore, usePermissions } from "@/stores/auth-store";
 import { UsersList } from "@/components/settings/users-list";
 import { UserDialog } from "@/components/settings/user-dialog";
 import { ApiKeysTab } from "@/components/settings/api-keys-tab";
+import { AIProvidersTab } from "@/components/settings/ai-providers-tab";
+import { SecurityTab } from "@/components/settings/security-tab";
 import type { User } from "@/lib/api";
 
 interface SettingsData {
@@ -36,10 +39,6 @@ interface SettingsData {
   maxRetries: number;
   backoffMultiplier: number;
   maxBackoff: number;
-  openaiKey: string;
-  anthropicKey: string;
-  dailyTokens: number;
-  monthlyBudget: number;
 }
 
 const DEFAULT_SETTINGS: SettingsData = {
@@ -47,10 +46,6 @@ const DEFAULT_SETTINGS: SettingsData = {
   maxRetries: 3,
   backoffMultiplier: 2,
   maxBackoff: 300,
-  openaiKey: "",
-  anthropicKey: "",
-  dailyTokens: 500000,
-  monthlyBudget: 100,
 };
 
 const STORAGE_KEY = "flowforge-settings";
@@ -108,15 +103,6 @@ export default function SettingsPage() {
     });
   };
 
-  const handleSaveAI = () => {
-    saveSettings({
-      openaiKey: settings.openaiKey,
-      anthropicKey: settings.anthropicKey,
-      dailyTokens: settings.dailyTokens,
-      monthlyBudget: settings.monthlyBudget,
-    });
-  };
-
   const handleEditUser = (user: User) => {
     setEditingUser(user);
     setUserDialogOpen(true);
@@ -146,10 +132,14 @@ export default function SettingsPage() {
 
       {/* Tabbed Settings Interface */}
       <Tabs defaultValue="general" className="flex-1">
-        <TabsList className={`grid w-full max-w-xl ${showUsersTab ? "grid-cols-5" : "grid-cols-4"}`}>
+        <TabsList className={`grid w-full max-w-2xl ${showUsersTab ? "grid-cols-6" : "grid-cols-5"}`}>
           <TabsTrigger value="general" className="gap-1.5">
             <Settings className="h-4 w-4" />
             <span className="hidden sm:inline">General</span>
+          </TabsTrigger>
+          <TabsTrigger value="security" className="gap-1.5">
+            <Lock className="h-4 w-4" />
+            <span className="hidden sm:inline">Security</span>
           </TabsTrigger>
           {showUsersTab && (
             <TabsTrigger value="users" className="gap-1.5">
@@ -163,13 +153,18 @@ export default function SettingsPage() {
           </TabsTrigger>
           <TabsTrigger value="ai-config" className="gap-1.5">
             <Bot className="h-4 w-4" />
-            <span className="hidden sm:inline">AI Config</span>
+            <span className="hidden sm:inline">AI Providers</span>
           </TabsTrigger>
           <TabsTrigger value="appearance" className="gap-1.5">
             <Palette className="h-4 w-4" />
             <span className="hidden sm:inline">Theme</span>
           </TabsTrigger>
         </TabsList>
+
+        {/* Security Tab */}
+        <TabsContent value="security" className="mt-6 space-y-6">
+          <SecurityTab />
+        </TabsContent>
 
         {/* General Tab */}
         <TabsContent value="general" className="mt-6 space-y-6">
@@ -323,100 +318,9 @@ export default function SettingsPage() {
           <ApiKeysTab />
         </TabsContent>
 
-        {/* AI Configuration Tab */}
+        {/* AI Providers Tab */}
         <TabsContent value="ai-config" className="mt-6 space-y-6">
-          <Alert>
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              The executor reads API keys from environment variables (ANTHROPIC_API_KEY, OPENAI_API_KEY).
-              Keys entered here are for reference only.
-            </AlertDescription>
-          </Alert>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Bot className="h-5 w-5" />
-                LLM Provider Keys
-              </CardTitle>
-              <CardDescription>
-                Configure API keys for AI model providers.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid gap-6 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="openai-key">OpenAI API Key</Label>
-                  <Input
-                    id="openai-key"
-                    type="password"
-                    placeholder="sk-..."
-                    value={settings.openaiKey}
-                    onChange={(e) => setSettings({ ...settings, openaiKey: e.target.value })}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Set OPENAI_API_KEY env var for the executor
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="anthropic-key">Anthropic API Key</Label>
-                  <Input
-                    id="anthropic-key"
-                    type="password"
-                    placeholder="sk-ant-..."
-                    value={settings.anthropicKey}
-                    onChange={(e) => setSettings({ ...settings, anthropicKey: e.target.value })}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Set ANTHROPIC_API_KEY env var for the executor
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Usage Limits</CardTitle>
-              <CardDescription>
-                Set limits for AI token usage and spending.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid gap-6 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="daily-tokens">Daily Token Limit</Label>
-                  <Input
-                    id="daily-tokens"
-                    type="number"
-                    value={settings.dailyTokens}
-                    onChange={(e) => setSettings({ ...settings, dailyTokens: parseInt(e.target.value) || 0 })}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Maximum tokens allowed per day
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="monthly-budget">Monthly Budget (USD)</Label>
-                  <Input
-                    id="monthly-budget"
-                    type="number"
-                    value={settings.monthlyBudget}
-                    onChange={(e) => setSettings({ ...settings, monthlyBudget: parseInt(e.target.value) || 0 })}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Maximum spending allowed per month
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex justify-end">
-                <Button onClick={handleSaveAI} disabled={isSaving}>
-                  {isSaving ? "Saving..." : "Save AI Settings"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+          <AIProvidersTab />
         </TabsContent>
 
         {/* Appearance Tab */}

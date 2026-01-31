@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import update as sql_update
 
 from flowforge_server.db import get_session
 from flowforge_server.db.models.user import User, UserRole
@@ -12,6 +13,14 @@ from flowforge_server.config import get_settings, Settings
 from flowforge_server.api.schemas.users import (
     UserLogin,
     UserLoginResponse,
+    User2FARequiredResponse,
+    Verify2FARequest,
+    Setup2FAResponse,
+    Confirm2FARequest,
+    Confirm2FAResponse,
+    Disable2FARequest,
+    BackupCodesRequest,
+    BackupCodesResponse,
     UserCreate,
     UserUpdate,
     UserPasswordUpdate,
@@ -36,8 +45,62 @@ from flowforge_server.services.user import (
     count_admins,
     verify_password,
 )
+from flowforge_server.services.totp import (
+    setup_totp_for_user,
+    verify_totp_code,
+    verify_backup_code,
+    generate_backup_codes,
+    encrypt_totp_secret,
+    decrypt_totp_secret,
+    encrypt_backup_codes,
+)
 
 router = APIRouter(prefix="/users", tags=["users"])
+
+
+def create_temp_token(user: User, settings: Settings) -> str:
+    """
+    Create a temporary token for 2FA verification.
+
+    This token is short-lived and can only be used to complete 2FA.
+    """
+    try:
+        import jwt
+    except ImportError:
+        raise ImportError("PyJWT is required for user authentication. Install with: pip install pyjwt")
+
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
+
+    payload = {
+        "sub": str(user.id),
+        "tenant_id": str(user.tenant_id),
+        "type": "2fa_temp",
+        "iat": datetime.now(timezone.utc),
+        "exp": expires_at,
+    }
+
+    return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+
+
+def decode_temp_token(token: str, settings: Settings) -> dict | None:
+    """
+    Decode and validate a temporary 2FA token.
+
+    Returns the payload dict if valid, None if invalid.
+    """
+    try:
+        import jwt
+        payload = jwt.decode(
+            token,
+            settings.jwt_secret,
+            algorithms=[settings.jwt_algorithm],
+        )
+        # Verify this is a temp token
+        if payload.get("type") != "2fa_temp":
+            return None
+        return payload
+    except Exception:
+        return None
 
 
 def user_to_response(user: User) -> UserResponse:
@@ -53,14 +116,17 @@ def user_to_response(user: User) -> UserResponse:
     )
 
 
-@router.post("/login", response_model=UserLoginResponse)
+@router.post("/login", response_model=UserLoginResponse | User2FARequiredResponse)
 async def login(
     credentials: UserLogin,
     session: AsyncSession = Depends(get_session),
     settings: Settings = Depends(get_settings),
-) -> UserLoginResponse:
+) -> UserLoginResponse | User2FARequiredResponse:
     """
     Authenticate a user and return a JWT token.
+
+    If the user has 2FA enabled, returns a temporary token that must be
+    verified with the /users/verify-2fa endpoint.
 
     The token can be used in the Authorization header as:
     `Authorization: Bearer <token>`
@@ -80,7 +146,16 @@ async def login(
 
     await session.commit()
 
-    # Create JWT token
+    # Check if 2FA is enabled
+    if user.totp_enabled:
+        # Return temporary token for 2FA verification
+        temp_token = create_temp_token(user, settings)
+        return User2FARequiredResponse(
+            requires_2fa=True,
+            temp_token=temp_token,
+        )
+
+    # No 2FA - return full login response
     expires_in = settings.jwt_default_expiry_seconds
     token = create_user_jwt(user, expires_in)
     expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
@@ -105,6 +180,283 @@ async def logout() -> None:
     """
     # JWT tokens are stateless - client should discard the token
     pass
+
+
+@router.post("/verify-2fa", response_model=UserLoginResponse)
+async def verify_2fa(
+    request: Verify2FARequest,
+    session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> UserLoginResponse:
+    """
+    Verify 2FA code and complete login.
+
+    Uses the temporary token from login and a TOTP code or backup code.
+    """
+    # Decode and validate temp token
+    payload = decode_temp_token(request.temp_token, settings)
+
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired verification token",
+        )
+
+    # Get user
+    user_id = uuid.UUID(payload["sub"])
+    user = await get_user_by_id(session, user_id)
+
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found or inactive",
+        )
+
+    if not user.totp_enabled or not user.totp_secret:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="2FA is not enabled for this user",
+        )
+
+    # Try TOTP code first
+    decrypted_secret = decrypt_totp_secret(user.totp_secret)
+    code_valid = verify_totp_code(decrypted_secret, request.code)
+
+    # If TOTP fails, try backup code
+    backup_code_used = False
+    backup_code_index = None
+    if not code_valid and user.backup_codes:
+        code_valid, backup_code_index = verify_backup_code(request.code, user.backup_codes)
+        backup_code_used = code_valid
+
+    if not code_valid:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid verification code",
+        )
+
+    # If backup code was used, remove it from the list
+    if backup_code_used and backup_code_index is not None:
+        new_backup_codes = user.backup_codes.copy()
+        new_backup_codes.pop(backup_code_index)
+        await session.execute(
+            sql_update(User)
+            .where(User.id == user.id)
+            .values(backup_codes=new_backup_codes)
+        )
+        await session.commit()
+
+    # Create full JWT token
+    expires_in = settings.jwt_default_expiry_seconds
+    token = create_user_jwt(user, expires_in)
+    expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
+
+    return UserLoginResponse(
+        access_token=token,
+        token_type="Bearer",
+        expires_in=expires_in,
+        expires_at=expires_at,
+        user=user_to_response(user),
+    )
+
+
+@router.post("/2fa/setup", response_model=Setup2FAResponse)
+async def setup_2fa(
+    current_user: CurrentUser,
+    session: AsyncSession = Depends(get_session),
+) -> Setup2FAResponse:
+    """
+    Start 2FA setup for the current user.
+
+    Returns a QR code and secret to configure an authenticator app.
+    The setup must be confirmed with the /2fa/confirm endpoint.
+    """
+    if current_user.totp_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="2FA is already enabled. Disable it first to reconfigure.",
+        )
+
+    # Generate new TOTP setup
+    setup_data = setup_totp_for_user(current_user.email)
+
+    # Store encrypted secret temporarily (not enabled yet)
+    encrypted_secret = encrypt_totp_secret(setup_data.secret)
+    await session.execute(
+        sql_update(User)
+        .where(User.id == current_user.id)
+        .values(totp_secret=encrypted_secret)
+    )
+    await session.commit()
+
+    return Setup2FAResponse(
+        secret=setup_data.secret,
+        qr_code=setup_data.qr_code,
+    )
+
+
+@router.post("/2fa/confirm", response_model=Confirm2FAResponse)
+async def confirm_2fa(
+    request: Confirm2FARequest,
+    current_user: CurrentUser,
+    session: AsyncSession = Depends(get_session),
+) -> Confirm2FAResponse:
+    """
+    Confirm 2FA setup with a verification code.
+
+    This enables 2FA and returns backup codes.
+    """
+    if current_user.totp_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="2FA is already enabled",
+        )
+
+    if not current_user.totp_secret:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="2FA setup not started. Call /2fa/setup first.",
+        )
+
+    # Verify the code
+    decrypted_secret = decrypt_totp_secret(current_user.totp_secret)
+    if not verify_totp_code(decrypted_secret, request.code):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid verification code",
+        )
+
+    # Generate backup codes
+    backup_codes = generate_backup_codes()
+    hashed_backup_codes = encrypt_backup_codes(backup_codes)
+
+    # Enable 2FA
+    await session.execute(
+        sql_update(User)
+        .where(User.id == current_user.id)
+        .values(
+            totp_enabled=True,
+            backup_codes=hashed_backup_codes,
+        )
+    )
+    await session.commit()
+
+    return Confirm2FAResponse(
+        success=True,
+        backup_codes=backup_codes,
+    )
+
+
+@router.post("/2fa/disable", status_code=204)
+async def disable_2fa(
+    request: Disable2FARequest,
+    current_user: CurrentUser,
+    session: AsyncSession = Depends(get_session),
+) -> None:
+    """
+    Disable 2FA for the current user.
+
+    Requires password verification.
+    """
+    if not current_user.totp_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="2FA is not enabled",
+        )
+
+    # Verify password
+    if not verify_password(request.password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid password",
+        )
+
+    # Disable 2FA
+    await session.execute(
+        sql_update(User)
+        .where(User.id == current_user.id)
+        .values(
+            totp_enabled=False,
+            totp_secret=None,
+            backup_codes=None,
+        )
+    )
+    await session.commit()
+
+
+@router.post("/2fa/backup-codes", response_model=BackupCodesResponse)
+async def get_backup_codes(
+    request: BackupCodesRequest,
+    current_user: CurrentUser,
+    session: AsyncSession = Depends(get_session),
+) -> BackupCodesResponse:
+    """
+    View remaining backup codes.
+
+    Requires password verification.
+    Note: This returns masked versions for security.
+    """
+    if not current_user.totp_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="2FA is not enabled",
+        )
+
+    # Verify password
+    if not verify_password(request.password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid password",
+        )
+
+    # Return count of remaining codes (we can't retrieve the original codes)
+    remaining_count = len(current_user.backup_codes) if current_user.backup_codes else 0
+
+    return BackupCodesResponse(
+        backup_codes=[f"***-**** ({remaining_count} remaining)"],
+    )
+
+
+@router.post("/2fa/regenerate-backup-codes", response_model=BackupCodesResponse)
+async def regenerate_backup_codes(
+    request: BackupCodesRequest,
+    current_user: CurrentUser,
+    session: AsyncSession = Depends(get_session),
+) -> BackupCodesResponse:
+    """
+    Regenerate backup codes.
+
+    This invalidates all existing backup codes and generates new ones.
+    Requires password verification.
+    """
+    if not current_user.totp_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="2FA is not enabled",
+        )
+
+    # Verify password
+    if not verify_password(request.password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid password",
+        )
+
+    # Generate new backup codes
+    backup_codes = generate_backup_codes()
+    hashed_backup_codes = encrypt_backup_codes(backup_codes)
+
+    # Update backup codes
+    await session.execute(
+        sql_update(User)
+        .where(User.id == current_user.id)
+        .values(backup_codes=hashed_backup_codes)
+    )
+    await session.commit()
+
+    return BackupCodesResponse(
+        backup_codes=backup_codes,
+    )
 
 
 @router.get("/me", response_model=UserMeResponse)
@@ -134,6 +486,7 @@ async def get_current_user_info(
         created_at=current_user.created_at,
         tenant_id=str(current_user.tenant_id),
         permissions=permissions,
+        totp_enabled=current_user.totp_enabled,
     )
 
 

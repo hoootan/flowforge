@@ -79,6 +79,9 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_default_expiry_seconds: int = 3600  # 1 hour
 
+    # Encryption (for storing sensitive data like AI provider API keys)
+    encryption_key: str | None = None  # Required for secure credential storage
+
     @property
     def is_development(self) -> bool:
         return self.env == "development"

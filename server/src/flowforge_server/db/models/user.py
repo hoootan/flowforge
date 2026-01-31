@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 import uuid
 
 from sqlalchemy import String, Text, Boolean, ForeignKey, DateTime
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from flowforge_server.db.models.base import Base, TimestampMixin
@@ -67,6 +67,26 @@ class User(Base, TimestampMixin):
     last_login_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
+    )
+
+    # Two-Factor Authentication fields
+    totp_secret: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Encrypted TOTP secret for 2FA",
+    )
+
+    totp_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        comment="Whether 2FA is enabled for this user",
+    )
+
+    backup_codes: Mapped[list[str] | None] = mapped_column(
+        ARRAY(String(64)),
+        nullable=True,
+        comment="Encrypted backup codes for 2FA recovery",
     )
 
     # Relationship to tenant

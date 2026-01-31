@@ -191,6 +191,96 @@ export interface CreateApiKeyRequest {
   expires_in_days?: number;
 }
 
+// AI Provider types
+export interface AIProvider {
+  id: string;
+  provider_name: string;
+  display_name: string;
+  api_key_prefix: string;
+  base_url: string | null;
+  is_active: boolean;
+  is_default: boolean;
+  config: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AIProvidersResponse {
+  providers: AIProvider[];
+  total: number;
+}
+
+export interface KnownProviderInfo {
+  name: string;
+  display_name: string;
+  models: string[];
+  default_model: string | null;
+}
+
+export interface KnownProvidersResponse {
+  providers: KnownProviderInfo[];
+}
+
+export interface CreateAIProviderRequest {
+  provider_name: "openai" | "anthropic" | "google" | "mistral" | "cohere" | "custom";
+  api_key: string;
+  display_name?: string;
+  base_url?: string;
+  is_default?: boolean;
+  config?: Record<string, unknown>;
+}
+
+export interface UpdateAIProviderRequest {
+  api_key?: string;
+  display_name?: string;
+  base_url?: string;
+  is_active?: boolean;
+  is_default?: boolean;
+  config?: Record<string, unknown>;
+}
+
+export interface AIProviderTestResult {
+  status: "healthy" | "error" | "unknown";
+  message: string;
+  model_tested?: string;
+}
+
+// Usage types
+export interface UsageSummary {
+  total_requests: number;
+  total_tokens: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_cost_usd: number;
+  avg_latency_ms: number;
+  period_start: string | null;
+  period_end: string | null;
+}
+
+export interface UsageByProvider {
+  provider: string;
+  requests: number;
+  total_tokens: number;
+  cost_usd: number;
+  avg_latency_ms: number;
+}
+
+export interface UsageByModel {
+  model: string;
+  provider: string;
+  requests: number;
+  total_tokens: number;
+  cost_usd: number;
+  avg_latency_ms: number;
+}
+
+export interface DailyUsage {
+  date: string;
+  requests: number;
+  total_tokens: number;
+  cost_usd: number;
+}
+
 const emptyRunsResponse: RunsResponse = { runs: [], total: 0, page: 1, page_size: 50 };
 const emptyFunctionsResponse: FunctionsResponse = { functions: [], total: 0 };
 const emptyEventsResponse: EventsResponse = { events: [], total: 0, page: 1, page_size: 50 };
@@ -689,6 +779,127 @@ class FlowForgeAPI {
       return true;
     } catch {
       return false;
+    }
+  }
+
+  // AI Providers
+  async getAIProviders(params?: { include_inactive?: boolean }): Promise<AIProvidersResponse> {
+    const searchParams = new URLSearchParams();
+    if (params?.include_inactive !== undefined) {
+      searchParams.set("include_inactive", String(params.include_inactive));
+    }
+    const query = searchParams.toString();
+    try {
+      return await this.request<AIProvidersResponse>(`/ai/providers${query ? `?${query}` : ""}`);
+    } catch {
+      return { providers: [], total: 0 };
+    }
+  }
+
+  async getKnownProviders(): Promise<KnownProvidersResponse> {
+    try {
+      return await this.request<KnownProvidersResponse>("/ai/providers/known");
+    } catch {
+      return { providers: [] };
+    }
+  }
+
+  async createAIProvider(data: CreateAIProviderRequest): Promise<AIProvider | null> {
+    try {
+      return await this.request<AIProvider>("/ai/providers", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async getAIProvider(providerName: string): Promise<AIProvider | null> {
+    try {
+      return await this.request<AIProvider>(`/ai/providers/${providerName}`);
+    } catch {
+      return null;
+    }
+  }
+
+  async updateAIProvider(providerName: string, data: UpdateAIProviderRequest): Promise<AIProvider | null> {
+    try {
+      return await this.request<AIProvider>(`/ai/providers/${providerName}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async deleteAIProvider(providerName: string): Promise<boolean> {
+    try {
+      await this.request(`/ai/providers/${providerName}`, {
+        method: "DELETE",
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async testAIProvider(providerName: string): Promise<AIProviderTestResult | null> {
+    try {
+      return await this.request<AIProviderTestResult>(`/ai/providers/${providerName}/test`, {
+        method: "POST",
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async rotateAIProviderKey(providerName: string, newApiKey: string): Promise<AIProvider | null> {
+    try {
+      return await this.request<AIProvider>(`/ai/providers/${providerName}/rotate`, {
+        method: "POST",
+        body: JSON.stringify({ new_api_key: newApiKey }),
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  // Usage API
+  async getUsageSummary(days: number = 30): Promise<UsageSummary | null> {
+    try {
+      const response = await this.request<{ summary: UsageSummary }>(`/usage/summary?days=${days}`);
+      return response.summary;
+    } catch {
+      return null;
+    }
+  }
+
+  async getUsageByProvider(days: number = 30): Promise<UsageByProvider[]> {
+    try {
+      const response = await this.request<{ providers: UsageByProvider[] }>(`/usage/by-provider?days=${days}`);
+      return response.providers;
+    } catch {
+      return [];
+    }
+  }
+
+  async getUsageByModel(days: number = 30): Promise<UsageByModel[]> {
+    try {
+      const response = await this.request<{ models: UsageByModel[] }>(`/usage/by-model?days=${days}`);
+      return response.models;
+    } catch {
+      return [];
+    }
+  }
+
+  async getDailyUsage(days: number = 30): Promise<DailyUsage[]> {
+    try {
+      const response = await this.request<{ daily: DailyUsage[] }>(`/usage/daily?days=${days}`);
+      return response.daily;
+    } catch {
+      return [];
     }
   }
 }
