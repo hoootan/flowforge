@@ -227,7 +227,7 @@ class ProviderRegistry:
         Get the default model for a use case.
 
         Args:
-            use_case: Use case name (default, fast, smart, coding)
+            use_case: Use case name (default, fast, smart, coding, cheap, reasoning)
 
         Returns:
             Model name
@@ -237,12 +237,14 @@ class ProviderRegistry:
 
         # Default fallbacks
         defaults = {
-            "default": "claude-sonnet-4-5-20250514",
-            "fast": "gpt-4o-mini",
-            "smart": "claude-sonnet-4-5-20250514",
+            "default": "gpt-5",
+            "fast": "gpt-5-mini",
+            "smart": "gpt-5.2",
             "coding": "claude-sonnet-4-5-20250514",
+            "cheap": "gpt-5-nano",
+            "reasoning": "o3",
         }
-        return defaults.get(use_case, "claude-sonnet-4-5-20250514")
+        return defaults.get(use_case, "gpt-5")
 
     def set_health_checker(self, checker: HealthChecker) -> None:
         """Set the health checker for provider health awareness."""
@@ -255,7 +257,7 @@ class ProviderRegistry:
         completion_tokens: int,
     ) -> float:
         """
-        Calculate cost for a model call.
+        Calculate cost for a model call (synchronous, uses defaults only).
 
         Args:
             model: Model name
@@ -269,6 +271,42 @@ class ProviderRegistry:
 
         input_price = config.input_price_per_m or 1.0
         output_price = config.output_price_per_m or 2.0
+
+        input_cost = (prompt_tokens / 1_000_000) * input_price
+        output_cost = (completion_tokens / 1_000_000) * output_price
+
+        return round(input_cost + output_cost, 6)
+
+    async def calculate_cost_async(
+        self,
+        session: "AsyncSession",
+        tenant_id: uuid.UUID,
+        model: str,
+        prompt_tokens: int,
+        completion_tokens: int,
+    ) -> float:
+        """
+        Calculate cost for a model call using configurable pricing.
+
+        This async version uses the model pricing service to get tenant-specific
+        or global custom pricing, falling back to defaults.
+
+        Args:
+            session: Database session
+            tenant_id: Tenant ID for tenant-specific pricing
+            model: Model name
+            prompt_tokens: Number of input tokens
+            completion_tokens: Number of output tokens
+
+        Returns:
+            Cost in USD
+        """
+        from flowforge_server.services.model_pricing import get_model_pricing_service
+
+        pricing_service = get_model_pricing_service()
+        input_price, output_price, source, pricing_id = await pricing_service.get_effective_pricing(
+            session, model, tenant_id
+        )
 
         input_cost = (prompt_tokens / 1_000_000) * input_price
         output_cost = (completion_tokens / 1_000_000) * output_price

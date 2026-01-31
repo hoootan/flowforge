@@ -24,6 +24,7 @@ from flowforge_server.api.routes import (
     stats_router,
     ai_providers_router,
     usage_router,
+    model_pricing_router,
 )
 
 
@@ -167,6 +168,7 @@ FlowForge provides durable execution for AI-powered workflows with:
     app.include_router(stats_router, prefix="/api/v1")
     app.include_router(ai_providers_router, prefix="/api/v1")
     app.include_router(usage_router, prefix="/api/v1")
+    app.include_router(model_pricing_router, prefix="/api/v1")
 
     return app
 

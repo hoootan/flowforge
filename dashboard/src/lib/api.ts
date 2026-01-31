@@ -281,6 +281,72 @@ export interface DailyUsage {
   cost_usd: number;
 }
 
+// Model Pricing types
+export type PricingSource = "tenant" | "global" | "default" | "fallback";
+
+export interface ModelPricingConfig {
+  id: string;
+  model_id: string;
+  provider: string;
+  input_price_per_m: number;
+  output_price_per_m: number;
+  display_name: string | null;
+  is_active: boolean;
+  is_global: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ModelPricingListResponse {
+  pricing_configs: ModelPricingConfig[];
+  total: number;
+}
+
+export interface EffectiveModelPricing {
+  model_id: string;
+  provider: string;
+  input_price_per_m: number;
+  output_price_per_m: number;
+  display_name: string | null;
+  source: PricingSource;
+  pricing_id: string | null;
+}
+
+export interface EffectiveModelPricingListResponse {
+  models: EffectiveModelPricing[];
+  total: number;
+}
+
+export interface DefaultModelPricing {
+  model_id: string;
+  provider: string;
+  input_price_per_m: number;
+  output_price_per_m: number;
+}
+
+export interface DefaultModelPricingListResponse {
+  defaults: DefaultModelPricing[];
+  total: number;
+  fallback_input_price: number;
+  fallback_output_price: number;
+}
+
+export interface CreateModelPricingRequest {
+  model_id: string;
+  provider: string;
+  input_price_per_m: number;
+  output_price_per_m: number;
+  display_name?: string;
+  is_global?: boolean;
+}
+
+export interface UpdateModelPricingRequest {
+  input_price_per_m?: number;
+  output_price_per_m?: number;
+  display_name?: string;
+  is_active?: boolean;
+}
+
 const emptyRunsResponse: RunsResponse = { runs: [], total: 0, page: 1, page_size: 50 };
 const emptyFunctionsResponse: FunctionsResponse = { functions: [], total: 0 };
 const emptyEventsResponse: EventsResponse = { events: [], total: 0, page: 1, page_size: 50 };
@@ -962,6 +1028,69 @@ class FlowForgeAPI {
       return response.daily;
     } catch {
       return [];
+    }
+  }
+
+  // Model Pricing API
+  async getModelPricingConfigs(includeGlobal: boolean = true): Promise<ModelPricingListResponse> {
+    try {
+      return await this.request<ModelPricingListResponse>(
+        `/ai/pricing?include_global=${includeGlobal}`
+      );
+    } catch {
+      return { pricing_configs: [], total: 0 };
+    }
+  }
+
+  async getEffectiveModelPricing(): Promise<EffectiveModelPricingListResponse> {
+    try {
+      return await this.request<EffectiveModelPricingListResponse>("/ai/pricing/effective");
+    } catch {
+      return { models: [], total: 0 };
+    }
+  }
+
+  async getDefaultModelPricing(): Promise<DefaultModelPricingListResponse> {
+    try {
+      return await this.request<DefaultModelPricingListResponse>("/ai/pricing/defaults");
+    } catch {
+      return { defaults: [], total: 0, fallback_input_price: 1.0, fallback_output_price: 2.0 };
+    }
+  }
+
+  async createModelPricing(data: CreateModelPricingRequest): Promise<ModelPricingConfig | null> {
+    try {
+      return await this.request<ModelPricingConfig>("/ai/pricing", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async updateModelPricing(
+    pricingId: string,
+    data: UpdateModelPricingRequest
+  ): Promise<ModelPricingConfig | null> {
+    try {
+      return await this.request<ModelPricingConfig>(`/ai/pricing/${pricingId}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async deleteModelPricing(pricingId: string): Promise<boolean> {
+    try {
+      await this.request(`/ai/pricing/${pricingId}`, {
+        method: "DELETE",
+      });
+      return true;
+    } catch {
+      return false;
     }
   }
 }

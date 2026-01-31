@@ -62,9 +62,89 @@ class FallbackConfig(BaseModel):
     )
 
 
-# Default model configurations with pricing
+# Default model configurations with pricing (updated January 2026)
 DEFAULT_MODEL_CONFIGS: dict[str, ModelConfig] = {
-    # OpenAI models
+    # ===================
+    # OpenAI GPT-5 Family (Latest - August 2025)
+    # ===================
+    "gpt-5": ModelConfig(
+        provider="openai",
+        model_id="gpt-5",
+        input_price_per_m=1.25,
+        output_price_per_m=10.00,
+        supports_vision=True,
+        context_window=400000,
+    ),
+    "gpt-5-mini": ModelConfig(
+        provider="openai",
+        model_id="gpt-5-mini",
+        input_price_per_m=0.25,
+        output_price_per_m=2.00,
+        supports_vision=True,
+        context_window=400000,
+    ),
+    "gpt-5-nano": ModelConfig(
+        provider="openai",
+        model_id="gpt-5-nano",
+        input_price_per_m=0.05,
+        output_price_per_m=0.40,
+        supports_vision=True,
+        context_window=200000,
+    ),
+    "gpt-5-pro": ModelConfig(
+        provider="openai",
+        model_id="gpt-5-pro",
+        input_price_per_m=15.00,
+        output_price_per_m=120.00,
+        supports_vision=True,
+        context_window=400000,
+    ),
+    "gpt-5.1": ModelConfig(
+        provider="openai",
+        model_id="gpt-5.1",
+        input_price_per_m=1.25,
+        output_price_per_m=10.00,
+        supports_vision=True,
+        context_window=400000,
+    ),
+    "gpt-5.2": ModelConfig(
+        provider="openai",
+        model_id="gpt-5.2",
+        input_price_per_m=1.25,
+        output_price_per_m=10.00,
+        supports_vision=True,
+        context_window=400000,
+    ),
+    # ===================
+    # OpenAI GPT-4.1 Family (April 2025)
+    # ===================
+    "gpt-4.1": ModelConfig(
+        provider="openai",
+        model_id="gpt-4.1",
+        input_price_per_m=2.00,
+        output_price_per_m=8.00,
+        supports_vision=True,
+        context_window=1000000,
+    ),
+    "gpt-4.1-mini": ModelConfig(
+        provider="openai",
+        model_id="gpt-4.1-mini",
+        input_price_per_m=0.40,
+        output_price_per_m=1.60,
+        supports_vision=True,
+        context_window=1000000,
+    ),
+    "gpt-4.1-nano": ModelConfig(
+        provider="openai",
+        model_id="gpt-4.1-nano",
+        input_price_per_m=0.10,
+        output_price_per_m=0.40,
+        supports_vision=True,
+        context_window=1000000,
+    ),
+    # ===================
+    # OpenAI GPT-4o Family (Legacy)
+    # ===================
     "gpt-4o": ModelConfig(
         provider="openai",
         model_id="gpt-4o",
@@ -89,6 +169,9 @@ DEFAULT_MODEL_CONFIGS: dict[str, ModelConfig] = {
         supports_vision=True,
         context_window=128000,
     ),
+    # ===================
+    # OpenAI O-Series (Reasoning Models)
+    # ===================
     "o1": ModelConfig(
         provider="openai",
         model_id="o1",
@@ -107,20 +190,41 @@ DEFAULT_MODEL_CONFIGS: dict[str, ModelConfig] = {
         supports_streaming=False,
         context_window=128000,
     ),
-    # Anthropic models
-    "claude-3-5-sonnet-20241022": ModelConfig(
-        provider="anthropic",
-        model_id="claude-3-5-sonnet-20241022",
-        input_price_per_m=3.00,
-        output_price_per_m=15.00,
-        supports_vision=True,
+    "o3": ModelConfig(
+        provider="openai",
+        model_id="o3",
+        input_price_per_m=0.40,
+        output_price_per_m=1.60,
+        supports_tools=True,
+        supports_streaming=False,
         context_window=200000,
     ),
-    "claude-sonnet-4-20250514": ModelConfig(
+    "o3-mini": ModelConfig(
+        provider="openai",
+        model_id="o3-mini",
+        input_price_per_m=1.10,
+        output_price_per_m=4.40,
+        supports_tools=True,
+        supports_streaming=False,
+        context_window=200000,
+    ),
+    "o4-mini": ModelConfig(
+        provider="openai",
+        model_id="o4-mini",
+        input_price_per_m=1.10,
+        output_price_per_m=4.40,
+        supports_tools=True,
+        supports_streaming=False,
+        context_window=200000,
+    ),
+    # ===================
+    # Anthropic Claude 4.5 Series (Latest)
+    # ===================
+    "claude-opus-4-5-20250514": ModelConfig(
         provider="anthropic",
-        model_id="claude-sonnet-4-20250514",
-        input_price_per_m=3.00,
-        output_price_per_m=15.00,
+        model_id="claude-opus-4-5-20250514",
+        input_price_per_m=5.00,
+        output_price_per_m=25.00,
         supports_vision=True,
         context_window=200000,
     ),
@@ -132,11 +236,33 @@ DEFAULT_MODEL_CONFIGS: dict[str, ModelConfig] = {
         supports_vision=True,
         context_window=200000,
     ),
-    "claude-opus-4-5-20250514": ModelConfig(
+    "claude-haiku-4-5-20250514": ModelConfig(
         provider="anthropic",
-        model_id="claude-opus-4-5-20250514",
-        input_price_per_m=15.00,
-        output_price_per_m=75.00,
+        model_id="claude-haiku-4-5-20250514",
+        input_price_per_m=1.00,
+        output_price_per_m=5.00,
+        supports_vision=True,
+        context_window=200000,
+    ),
+    # ===================
+    # Anthropic Claude 4 Series
+    # ===================
+    "claude-sonnet-4-20250514": ModelConfig(
+        provider="anthropic",
+        model_id="claude-sonnet-4-20250514",
+        input_price_per_m=3.00,
+        output_price_per_m=15.00,
+        supports_vision=True,
+        context_window=200000,
+    ),
+    # ===================
+    # Anthropic Claude 3.x Series (Legacy)
+    # ===================
+    "claude-3-5-sonnet-20241022": ModelConfig(
+        provider="anthropic",
+        model_id="claude-3-5-sonnet-20241022",
+        input_price_per_m=3.00,
+        output_price_per_m=15.00,
         supports_vision=True,
         context_window=200000,
     ),
@@ -156,12 +282,63 @@ DEFAULT_MODEL_CONFIGS: dict[str, ModelConfig] = {
         supports_vision=True,
         context_window=200000,
     ),
-    # Google models
+    # ===================
+    # Google Gemini 3 Series (Latest - Preview)
+    # ===================
+    "gemini-3-pro": ModelConfig(
+        provider="google",
+        model_id="gemini-3-pro",
+        input_price_per_m=2.00,
+        output_price_per_m=12.00,
+        supports_vision=True,
+        context_window=1000000,
+    ),
+    # ===================
+    # Google Gemini 2.5 Series
+    # ===================
+    "gemini-2.5-pro": ModelConfig(
+        provider="google",
+        model_id="gemini-2.5-pro",
+        input_price_per_m=1.25,
+        output_price_per_m=10.00,
+        supports_vision=True,
+        context_window=1000000,
+    ),
+    "gemini-2.5-flash": ModelConfig(
+        provider="google",
+        model_id="gemini-2.5-flash",
+        input_price_per_m=0.30,
+        output_price_per_m=2.50,
+        supports_vision=True,
+        context_window=1000000,
+    ),
+    # ===================
+    # Google Gemini 2.0 Series
+    # ===================
+    "gemini-2.0-flash": ModelConfig(
+        provider="google",
+        model_id="gemini-2.0-flash",
+        input_price_per_m=0.10,
+        output_price_per_m=0.40,
+        supports_vision=True,
+        context_window=1000000,
+    ),
+    "gemini-2.0-flash-lite": ModelConfig(
+        provider="google",
+        model_id="gemini-2.0-flash-lite",
+        input_price_per_m=0.10,
+        output_price_per_m=0.40,
+        supports_vision=True,
+        context_window=1000000,
+    ),
+    # ===================
+    # Google Gemini 1.5 Series (Legacy)
+    # ===================
     "gemini-1.5-pro": ModelConfig(
         provider="google",
         model_id="gemini-1.5-pro",
-        input_price_per_m=3.50,
-        output_price_per_m=10.50,
+        input_price_per_m=1.25,
+        output_price_per_m=5.00,
         supports_vision=True,
         context_window=2000000,
     ),
@@ -184,36 +361,74 @@ DEFAULT_MODEL_CONFIGS: dict[str, ModelConfig] = {
 
 # Model aliases for convenience
 MODEL_ALIASES: dict[str, str] = {
+    # OpenAI GPT aliases
+    "gpt-5-latest": "gpt-5.2",
+    "gpt-5-fast": "gpt-5-mini",
+    "gpt-5-cheap": "gpt-5-nano",
     "gpt-4": "gpt-4o",
+    "gpt-4-latest": "gpt-4.1",
+    "gpt-4-fast": "gpt-4.1-mini",
+    "gpt-4-cheap": "gpt-4.1-nano",
+    # OpenAI O-series aliases
+    "o3-latest": "o3",
+    "o-fast": "o3-mini",
+    "o-latest": "o4-mini",
+    # Anthropic Claude aliases
+    "claude": "claude-sonnet-4-5-20250514",
     "claude-3-sonnet": "claude-3-5-sonnet-20241022",
     "claude-sonnet": "claude-sonnet-4-5-20250514",
     "claude-sonnet-4": "claude-sonnet-4-20250514",
     "claude-sonnet-4.5": "claude-sonnet-4-5-20250514",
     "claude-opus": "claude-opus-4-5-20250514",
-    "claude-haiku": "claude-3-haiku-20240307",
-    "gemini": "gemini-1.5-pro",
-    "gemini-flash": "gemini-1.5-flash",
+    "claude-opus-4.5": "claude-opus-4-5-20250514",
+    "claude-haiku": "claude-haiku-4-5-20250514",
+    "claude-haiku-4.5": "claude-haiku-4-5-20250514",
+    "claude-3-haiku": "claude-3-haiku-20240307",
+    # Google Gemini aliases
+    "gemini": "gemini-3-pro",
+    "gemini-latest": "gemini-3-pro",
+    "gemini-pro": "gemini-2.5-pro",
+    "gemini-flash": "gemini-2.5-flash",
+    "gemini-flash-lite": "gemini-2.0-flash-lite",
+    "gemini-1.5": "gemini-1.5-pro",
     # Use case aliases
-    "fast": "gpt-4o-mini",
-    "smart": "claude-sonnet-4-5-20250514",
+    "fast": "gpt-5-mini",
+    "fastest": "gpt-5-nano",
+    "smart": "gpt-5.2",
+    "smartest": "gpt-5-pro",
     "coding": "claude-sonnet-4-5-20250514",
-    "cheap": "gemini-1.5-flash",
-    "reasoning": "o1",
+    "cheap": "gemini-2.0-flash",
+    "cheapest": "gpt-5-nano",
+    "reasoning": "o3",
+    "reasoning-fast": "o3-mini",
+    "reasoning-deep": "o1",
 }
 
 # Default fallback chains
 DEFAULT_FALLBACK_CHAINS: dict[str, FallbackConfig] = {
     "default": FallbackConfig(
         name="default",
-        models=["claude-sonnet-4-5-20250514", "gpt-4o", "gemini-1.5-pro"],
+        models=["gpt-5", "claude-sonnet-4-5-20250514", "gemini-3-pro"],
     ),
     "fast": FallbackConfig(
         name="fast",
-        models=["gpt-4o-mini", "claude-3-haiku-20240307", "gemini-1.5-flash"],
+        models=["gpt-5-mini", "claude-haiku-4-5-20250514", "gemini-2.5-flash"],
     ),
     "smart": FallbackConfig(
         name="smart",
-        models=["claude-sonnet-4-5-20250514", "gpt-4o", "gemini-1.5-pro"],
+        models=["gpt-5.2", "claude-opus-4-5-20250514", "gemini-3-pro"],
+    ),
+    "cheap": FallbackConfig(
+        name="cheap",
+        models=["gpt-5-nano", "gemini-2.0-flash", "gpt-4.1-nano"],
+    ),
+    "reasoning": FallbackConfig(
+        name="reasoning",
+        models=["o3", "o4-mini", "o1"],
+    ),
+    "coding": FallbackConfig(
+        name="coding",
+        models=["claude-sonnet-4-5-20250514", "gpt-5.2", "gpt-4.1"],
     ),
 }
 
@@ -236,9 +451,11 @@ class ProviderRegistryConfig(BaseModel):
     # Default model for various use cases
     defaults: dict[str, str] = Field(
         default_factory=lambda: {
-            "default": "claude-sonnet-4-5-20250514",
-            "fast": "gpt-4o-mini",
-            "smart": "claude-sonnet-4-5-20250514",
+            "default": "gpt-5",
+            "fast": "gpt-5-mini",
+            "smart": "gpt-5.2",
             "coding": "claude-sonnet-4-5-20250514",
+            "cheap": "gpt-5-nano",
+            "reasoning": "o3",
         }
     )

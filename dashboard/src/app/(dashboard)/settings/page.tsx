@@ -24,6 +24,7 @@ import {
   Users,
   Plus,
   Lock,
+  DollarSign,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore, usePermissions } from "@/stores/auth-store";
@@ -32,6 +33,7 @@ import { UserDialog } from "@/components/settings/user-dialog";
 import { ApiKeysTab } from "@/components/settings/api-keys-tab";
 import { AIProvidersTab } from "@/components/settings/ai-providers-tab";
 import { SecurityTab } from "@/components/settings/security-tab";
+import { ModelPricingTab } from "@/components/settings/model-pricing-tab";
 import type { User } from "@/lib/api";
 
 interface SettingsData {
@@ -132,7 +134,7 @@ export default function SettingsPage() {
 
       {/* Tabbed Settings Interface */}
       <Tabs defaultValue="general" className="flex-1">
-        <TabsList className={`grid w-full max-w-2xl ${showUsersTab ? "grid-cols-6" : "grid-cols-5"}`}>
+        <TabsList className={`grid w-full max-w-3xl ${showUsersTab ? "grid-cols-7" : "grid-cols-6"}`}>
           <TabsTrigger value="general" className="gap-1.5">
             <Settings className="h-4 w-4" />
             <span className="hidden sm:inline">General</span>
@@ -153,7 +155,11 @@ export default function SettingsPage() {
           </TabsTrigger>
           <TabsTrigger value="ai-config" className="gap-1.5">
             <Bot className="h-4 w-4" />
-            <span className="hidden sm:inline">AI Providers</span>
+            <span className="hidden sm:inline">Providers</span>
+          </TabsTrigger>
+          <TabsTrigger value="pricing" className="gap-1.5">
+            <DollarSign className="h-4 w-4" />
+            <span className="hidden sm:inline">Pricing</span>
           </TabsTrigger>
           <TabsTrigger value="appearance" className="gap-1.5">
             <Palette className="h-4 w-4" />
@@ -321,6 +327,11 @@ export default function SettingsPage() {
         {/* AI Providers Tab */}
         <TabsContent value="ai-config" className="mt-6 space-y-6">
           <AIProvidersTab />
+        </TabsContent>
+
+        {/* Model Pricing Tab */}
+        <TabsContent value="pricing" className="mt-6 space-y-6">
+          <ModelPricingTab />
         </TabsContent>
 
         {/* Appearance Tab */}

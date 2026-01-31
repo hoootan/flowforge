@@ -12,6 +12,7 @@ from flowforge_server.db.models.usage import UsageRecord
 from flowforge_server.db.models.api_key import ApiKey, ApiKeyType, DEFAULT_SCOPES, ALL_SCOPES
 from flowforge_server.db.models.user import User, UserRole
 from flowforge_server.db.models.ai_provider import AIProvider
+from flowforge_server.db.models.model_pricing import ModelPricing
 
 __all__ = [
     "Base",
@@ -35,4 +36,5 @@ __all__ = [
     "User",
     "UserRole",
     "AIProvider",
+    "ModelPricing",
 ]
