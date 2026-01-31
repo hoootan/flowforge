@@ -298,6 +298,10 @@ const emptyStats: Stats = {
 class FlowForgeAPI {
   private baseUrl: string;
   private getToken: (() => string | null) | null = null;
+  private refreshAccessToken: (() => Promise<boolean>) | null = null;
+  private onAuthFailure: (() => void) | null = null;
+  private isRefreshing: boolean = false;
+  private refreshPromise: Promise<boolean> | null = null;
 
   constructor(baseUrl: string = API_BASE_URL) {
     this.baseUrl = baseUrl;
@@ -311,9 +315,48 @@ class FlowForgeAPI {
     this.getToken = getToken;
   }
 
+  /**
+   * Set a function to refresh the access token.
+   * Called automatically on 401 responses.
+   */
+  setRefreshHandler(refreshFn: () => Promise<boolean>) {
+    this.refreshAccessToken = refreshFn;
+  }
+
+  /**
+   * Set a callback for when authentication fails completely.
+   * Called when refresh token is invalid or expired.
+   */
+  setAuthFailureHandler(handler: () => void) {
+    this.onAuthFailure = handler;
+  }
+
+  private async tryRefresh(): Promise<boolean> {
+    // If already refreshing, wait for that to complete
+    if (this.isRefreshing && this.refreshPromise) {
+      return this.refreshPromise;
+    }
+
+    if (!this.refreshAccessToken) {
+      return false;
+    }
+
+    this.isRefreshing = true;
+    this.refreshPromise = this.refreshAccessToken();
+
+    try {
+      const success = await this.refreshPromise;
+      return success;
+    } finally {
+      this.isRefreshing = false;
+      this.refreshPromise = null;
+    }
+  }
+
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    retryCount: number = 0
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
 
@@ -335,9 +378,28 @@ class FlowForgeAPI {
       headers,
     });
 
+    // Handle 401 with automatic token refresh
+    if (response.status === 401 && retryCount === 0) {
+      const refreshed = await this.tryRefresh();
+      if (refreshed) {
+        // Retry the original request with new token
+        return this.request<T>(endpoint, options, retryCount + 1);
+      }
+      // Refresh failed - trigger auth failure callback
+      if (this.onAuthFailure) {
+        this.onAuthFailure();
+      }
+      throw new Error("Session expired");
+    }
+
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
       throw new Error(error.detail || `HTTP ${response.status}`);
+    }
+
+    // Handle 204 No Content responses (e.g., DELETE operations)
+    if (response.status === 204) {
+      return undefined as T;
     }
 
     return response.json();

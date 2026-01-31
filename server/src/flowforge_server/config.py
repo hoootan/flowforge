@@ -78,6 +78,7 @@ class Settings(BaseSettings):
     jwt_secret: str | None = None  # Required for JWT token support
     jwt_algorithm: str = "HS256"
     jwt_default_expiry_seconds: int = 3600  # 1 hour
+    jwt_refresh_expiry_seconds: int = 604800  # 7 days
 
     # Encryption (for storing sensitive data like AI provider API keys)
     encryption_key: str | None = None  # Required for secure credential storage

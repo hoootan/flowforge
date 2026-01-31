@@ -33,8 +33,10 @@ export interface LoginCredentials {
 
 export interface LoginResponse {
   access_token: string;
+  refresh_token: string;
   token_type: string;
   expires_in: number;
+  refresh_expires_in: number;
   expires_at: string;
   user: User;
 }
@@ -42,6 +44,8 @@ export interface LoginResponse {
 export interface AuthState {
   user: UserWithPermissions | null;
   token: string | null;
+  refreshToken: string | null;
+  tokenExpiresAt: number | null;
   isAuthenticated: boolean;
   isLoading: boolean;
 }

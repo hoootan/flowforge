@@ -26,9 +26,11 @@ class UserLoginResponse(BaseModel):
     """Schema for successful login response."""
 
     access_token: str = Field(..., description="JWT access token")
+    refresh_token: str = Field(..., description="JWT refresh token")
     token_type: str = Field(default="Bearer", description="Token type")
-    expires_in: int = Field(..., description="Token lifetime in seconds")
-    expires_at: datetime = Field(..., description="Expiration timestamp")
+    expires_in: int = Field(..., description="Access token lifetime in seconds")
+    refresh_expires_in: int = Field(..., description="Refresh token lifetime in seconds")
+    expires_at: datetime = Field(..., description="Access token expiration timestamp")
     user: "UserResponse" = Field(..., description="User details")
 
 
@@ -37,6 +39,12 @@ class User2FARequiredResponse(BaseModel):
 
     requires_2fa: bool = Field(default=True, description="Whether 2FA is required")
     temp_token: str = Field(..., description="Temporary token for 2FA verification")
+
+
+class RefreshTokenRequest(BaseModel):
+    """Schema for token refresh request."""
+
+    refresh_token: str = Field(..., description="JWT refresh token")
 
 
 class Verify2FARequest(BaseModel):

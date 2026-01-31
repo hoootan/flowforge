@@ -328,7 +328,13 @@ class AIProviderService:
         Returns:
             True if deleted, False if not found
         """
-        result = await session.execute(
+        # First check if provider exists
+        provider = await self.get_provider(session, tenant_id, provider_name, raise_not_found=False)
+        if not provider:
+            return False
+
+        # Delete the provider
+        await session.execute(
             delete(AIProvider).where(
                 AIProvider.tenant_id == tenant_id,
                 AIProvider.provider_name == provider_name.lower(),
@@ -338,7 +344,7 @@ class AIProviderService:
         # Clear cache
         self._clear_key_cache(tenant_id, provider_name)
 
-        return result.rowcount > 0
+        return True
 
     async def get_decrypted_key(
         self,

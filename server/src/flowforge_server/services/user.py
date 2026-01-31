@@ -51,7 +51,7 @@ def create_user_jwt(
     expires_in_seconds: int | None = None,
 ) -> str:
     """
-    Create a JWT token for a user.
+    Create a JWT access token for a user.
 
     Token payload includes:
     - sub: user_id
@@ -87,6 +87,99 @@ def create_user_jwt(
     }
 
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+
+
+def create_refresh_token(
+    user: User,
+    expires_in_seconds: int | None = None,
+) -> str:
+    """
+    Create a JWT refresh token for a user.
+
+    Refresh tokens are long-lived and used to obtain new access tokens.
+
+    Token payload includes:
+    - sub: user_id
+    - tenant_id: tenant_id
+    - type: "refresh"
+    - jti: unique token ID (for potential revocation tracking)
+    - exp: expiration timestamp
+    """
+    settings = get_settings()
+
+    if not settings.jwt_secret:
+        raise ValueError("JWT_SECRET not configured")
+
+    try:
+        import jwt
+    except ImportError:
+        raise ImportError("PyJWT is required for user authentication. Install with: pip install pyjwt")
+
+    if expires_in_seconds is None:
+        expires_in_seconds = settings.jwt_refresh_expiry_seconds
+
+    expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in_seconds)
+
+    payload = {
+        "sub": str(user.id),
+        "tenant_id": str(user.tenant_id),
+        "type": "refresh",
+        "jti": secrets.token_hex(16),  # Unique token ID for revocation tracking
+        "iat": datetime.now(timezone.utc),
+        "exp": expires_at,
+    }
+
+    return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+
+
+def decode_refresh_token(token: str) -> dict | None:
+    """
+    Decode and validate a refresh JWT token.
+
+    Returns the payload dict if valid, None if invalid.
+    """
+    settings = get_settings()
+
+    if not settings.jwt_secret:
+        return None
+
+    try:
+        import jwt
+        payload = jwt.decode(
+            token,
+            settings.jwt_secret,
+            algorithms=[settings.jwt_algorithm],
+        )
+        # Verify this is a refresh token
+        if payload.get("type") != "refresh":
+            return None
+        return payload
+    except (ImportError, Exception):
+        return None
+
+
+def create_token_pair(
+    user: User,
+    access_expires_in: int | None = None,
+    refresh_expires_in: int | None = None,
+) -> tuple[str, str, int, int]:
+    """
+    Create both access and refresh tokens for a user.
+
+    Returns:
+        Tuple of (access_token, refresh_token, access_expires_in, refresh_expires_in)
+    """
+    settings = get_settings()
+
+    if access_expires_in is None:
+        access_expires_in = settings.jwt_default_expiry_seconds
+    if refresh_expires_in is None:
+        refresh_expires_in = settings.jwt_refresh_expiry_seconds
+
+    access_token = create_user_jwt(user, access_expires_in)
+    refresh_token = create_refresh_token(user, refresh_expires_in)
+
+    return access_token, refresh_token, access_expires_in, refresh_expires_in
 
 
 def decode_user_jwt(token: str) -> dict | None:

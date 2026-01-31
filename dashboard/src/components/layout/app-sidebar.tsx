@@ -77,7 +77,7 @@ export default function AppSidebar() {
   const filteredItems = useFilteredNavItems(navItems);
   const [pendingApprovals, setPendingApprovals] = React.useState(0);
 
-  const { user, logout, token, isAuthenticated, isLoading, refreshUser } = useAuthStore();
+  const { user, logout, token, isAuthenticated, isLoading, refreshUser, refreshAccessToken } = useAuthStore();
   const { canCreateResources, isAdmin } = usePermissions();
 
   // Initialize auth on mount
@@ -87,10 +87,15 @@ export default function AppSidebar() {
     }
   }, [token, user, refreshUser]);
 
-  // Set token provider for API client
+  // Set token provider and refresh handler for API client
   React.useEffect(() => {
     api.setTokenProvider(() => token);
-  }, [token]);
+    api.setRefreshHandler(refreshAccessToken);
+    api.setAuthFailureHandler(() => {
+      logout();
+      router.push('/login');
+    });
+  }, [token, refreshAccessToken, logout, router]);
 
   // Fetch pending approvals count
   React.useEffect(() => {

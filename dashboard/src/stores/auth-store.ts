@@ -12,6 +12,10 @@ import type {
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
+// Store reference for hydration callback (avoids TDZ issue)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let storeApi: any = null;
+
 interface AuthStore extends AuthState {
   // Hydration tracking
   _hasHydrated: boolean;
@@ -21,11 +25,15 @@ interface AuthStore extends AuthState {
   requires2FA: boolean;
   tempToken: string | null;
 
+  // Refresh state
+  isRefreshing: boolean;
+
   // Actions
   login: (credentials: LoginCredentials) => Promise<{ success: boolean; error?: string; requires2FA?: boolean }>;
   verify2FA: (code: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  refreshAccessToken: () => Promise<boolean>;
   setToken: (token: string | null) => void;
   setUser: (user: UserWithPermissions | null) => void;
   setLoading: (loading: boolean) => void;
@@ -44,6 +52,8 @@ export const useAuthStore = create<AuthStore>()(
       // Initial state
       user: null,
       token: null,
+      refreshToken: null,
+      tokenExpiresAt: null,
       isAuthenticated: false,
       isLoading: true,
 
@@ -54,6 +64,9 @@ export const useAuthStore = create<AuthStore>()(
       // 2FA state
       requires2FA: false,
       tempToken: null,
+
+      // Refresh state
+      isRefreshing: false,
 
       // Actions
       login: async (credentials) => {
@@ -109,8 +122,13 @@ export const useAuthStore = create<AuthStore>()(
           // Set cookie for middleware
           document.cookie = `flowforge-auth-token=${loginData.access_token}; path=/; max-age=${loginData.expires_in}; SameSite=Lax`;
 
+          // Calculate token expiry timestamp
+          const tokenExpiresAt = Math.floor(Date.now() / 1000) + loginData.expires_in;
+
           set({
             token: loginData.access_token,
+            refreshToken: loginData.refresh_token,
+            tokenExpiresAt,
             user: userData,
             isAuthenticated: true,
             isLoading: false,
@@ -174,8 +192,13 @@ export const useAuthStore = create<AuthStore>()(
           // Set cookie for middleware
           document.cookie = `flowforge-auth-token=${data.access_token}; path=/; max-age=${data.expires_in}; SameSite=Lax`;
 
+          // Calculate token expiry timestamp
+          const tokenExpiresAt = Math.floor(Date.now() / 1000) + data.expires_in;
+
           set({
             token: data.access_token,
+            refreshToken: data.refresh_token,
+            tokenExpiresAt,
             user: userData,
             isAuthenticated: true,
             isLoading: false,
@@ -217,6 +240,8 @@ export const useAuthStore = create<AuthStore>()(
         set({
           user: null,
           token: null,
+          refreshToken: null,
+          tokenExpiresAt: null,
           isAuthenticated: false,
           isLoading: false,
           requires2FA: false,
@@ -281,6 +306,66 @@ export const useAuthStore = create<AuthStore>()(
       setToken: (token) => set({ token }),
       setUser: (user) => set({ user }),
       setLoading: (loading) => set({ isLoading: loading }),
+
+      refreshAccessToken: async () => {
+        const { refreshToken, isRefreshing } = get();
+
+        // Prevent concurrent refresh attempts
+        if (isRefreshing) {
+          return false;
+        }
+
+        if (!refreshToken) {
+          return false;
+        }
+
+        set({ isRefreshing: true });
+
+        try {
+          const response = await fetch(`${API_BASE_URL}/users/refresh`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ refresh_token: refreshToken }),
+          });
+
+          if (!response.ok) {
+            // Refresh failed - clear auth state
+            document.cookie =
+              "flowforge-auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+            set({
+              user: null,
+              token: null,
+              refreshToken: null,
+              tokenExpiresAt: null,
+              isAuthenticated: false,
+              isRefreshing: false,
+            });
+            return false;
+          }
+
+          const data: LoginResponse = await response.json();
+
+          // Update cookie
+          document.cookie = `flowforge-auth-token=${data.access_token}; path=/; max-age=${data.expires_in}; SameSite=Lax`;
+
+          // Calculate token expiry timestamp
+          const tokenExpiresAt = Math.floor(Date.now() / 1000) + data.expires_in;
+
+          set({
+            token: data.access_token,
+            refreshToken: data.refresh_token,
+            tokenExpiresAt,
+            isRefreshing: false,
+          });
+
+          return true;
+        } catch {
+          set({ isRefreshing: false });
+          return false;
+        }
+      },
 
       // 2FA management
       setup2FA: async () => {
@@ -490,28 +575,45 @@ export const useAuthStore = create<AuthStore>()(
       name: "flowforge-auth",
       partialize: (state) => ({
         token: state.token,
+        refreshToken: state.refreshToken,
+        tokenExpiresAt: state.tokenExpiresAt,
         user: state.user,
         isAuthenticated: state.isAuthenticated,
       }),
-      onRehydrateStorage: () => {
-        return (state, error) => {
-          if (error) {
-            console.error("Failed to rehydrate auth state:", error);
-          }
-          if (state) {
-            // Use setState to properly trigger re-renders
-            useAuthStore.setState({
-              _hasHydrated: true,
-              isLoading: false,
-              // If we have a token and user, keep authenticated state
-              isAuthenticated: !!(state.token && state.user),
-            });
-          }
-        };
+      merge: (persistedState, currentState) => ({
+        ...currentState,
+        ...(persistedState as Partial<AuthStore>),
+        // Ensure new fields have defaults if not in persisted state
+        refreshToken: (persistedState as Partial<AuthStore>)?.refreshToken ?? null,
+        tokenExpiresAt: (persistedState as Partial<AuthStore>)?.tokenExpiresAt ?? null,
+      }),
+      onRehydrateStorage: () => (rehydratedState, error) => {
+        if (error) {
+          console.error("Failed to rehydrate auth state:", error);
+        }
+        // Use setTimeout to ensure store is fully created before accessing
+        if (typeof window !== "undefined") {
+          const updateState = () => {
+            if (storeApi) {
+              storeApi.setState({
+                _hasHydrated: true,
+                isLoading: false,
+                isAuthenticated: !!(rehydratedState?.token && rehydratedState?.user),
+              });
+            } else {
+              // Retry if store isn't ready yet
+              setTimeout(updateState, 0);
+            }
+          };
+          setTimeout(updateState, 0);
+        }
       },
     }
   )
 );
+
+// Set store reference after creation (for hydration callback)
+storeApi = useAuthStore;
 
 // Hook to wait for hydration
 export function useHasHydrated() {

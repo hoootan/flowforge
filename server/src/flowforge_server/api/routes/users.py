@@ -14,6 +14,7 @@ from flowforge_server.api.schemas.users import (
     UserLogin,
     UserLoginResponse,
     User2FARequiredResponse,
+    RefreshTokenRequest,
     Verify2FARequest,
     Setup2FAResponse,
     Confirm2FARequest,
@@ -37,6 +38,9 @@ from flowforge_server.services.user import (
     authenticate_user_any_tenant,
     create_user,
     create_user_jwt,
+    create_refresh_token,
+    create_token_pair,
+    decode_refresh_token,
     get_user_by_id,
     list_users,
     update_user,
@@ -155,15 +159,16 @@ async def login(
             temp_token=temp_token,
         )
 
-    # No 2FA - return full login response
-    expires_in = settings.jwt_default_expiry_seconds
-    token = create_user_jwt(user, expires_in)
+    # No 2FA - return full login response with refresh token
+    access_token, refresh_token, expires_in, refresh_expires_in = create_token_pair(user)
     expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
 
     return UserLoginResponse(
-        access_token=token,
+        access_token=access_token,
+        refresh_token=refresh_token,
         token_type="Bearer",
         expires_in=expires_in,
+        refresh_expires_in=refresh_expires_in,
         expires_at=expires_at,
         user=user_to_response(user),
     )
@@ -246,15 +251,78 @@ async def verify_2fa(
         )
         await session.commit()
 
-    # Create full JWT token
-    expires_in = settings.jwt_default_expiry_seconds
-    token = create_user_jwt(user, expires_in)
+    # Create full JWT token pair
+    access_token, refresh_token, expires_in, refresh_expires_in = create_token_pair(user)
     expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
 
     return UserLoginResponse(
-        access_token=token,
+        access_token=access_token,
+        refresh_token=refresh_token,
         token_type="Bearer",
         expires_in=expires_in,
+        refresh_expires_in=refresh_expires_in,
+        expires_at=expires_at,
+        user=user_to_response(user),
+    )
+
+
+@router.post("/refresh", response_model=UserLoginResponse)
+async def refresh_access_token(
+    request: RefreshTokenRequest,
+    session: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> UserLoginResponse:
+    """
+    Refresh an access token using a valid refresh token.
+
+    Returns new access and refresh tokens (token rotation).
+    """
+    # Decode and validate refresh token
+    payload = decode_refresh_token(request.refresh_token)
+
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Get user from database
+    try:
+        user_id = uuid.UUID(payload["sub"])
+    except (KeyError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user = await get_user_by_id(session, user_id)
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Account is deactivated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Generate new token pair (token rotation)
+    access_token, refresh_token, expires_in, refresh_expires_in = create_token_pair(user)
+    expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
+
+    return UserLoginResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token_type="Bearer",
+        expires_in=expires_in,
+        refresh_expires_in=refresh_expires_in,
         expires_at=expires_at,
         user=user_to_response(user),
     )
