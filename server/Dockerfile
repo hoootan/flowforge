@@ -1,38 +1,64 @@
-FROM python:3.11-slim
+# syntax=docker/dockerfile:1
 
-# Create non-root user for security
-RUN groupadd --gid 1000 flowforge && \
-    useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash flowforge
+# ================================
+# Build Stage
+# ================================
+FROM python:3.12-slim AS builder
 
-WORKDIR /app
-
-# Install curl for healthcheck and image libraries for Pillow (QR code generation)
-RUN apt-get update && apt-get install -y \
-    curl \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
     libjpeg-dev \
     zlib1g-dev \
     libpng-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy project files
+WORKDIR /build
+
+# Virtual environment for clean isolation
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+RUN pip install --no-cache-dir --upgrade "pip>=25.3" "wheel>=0.46.2" setuptools
+
 COPY pyproject.toml .
 COPY src/ src/
-COPY migrations/ /app/migrations/
-
-# Install dependencies (including auth extras for JWT and bcrypt)
 RUN pip install --no-cache-dir ".[auth]"
 
-# Change ownership of app directory to non-root user
-RUN chown -R flowforge:flowforge /app
+# ================================
+# Runtime Stage
+# ================================
+FROM python:3.12-slim AS runtime
 
-# Set migrations directory for Docker
+LABEL org.opencontainers.image.source="https://github.com/flowforge/flowforge"
+LABEL org.opencontainers.image.description="FlowForge Server"
+
+# Runtime libraries and security updates
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
+    libjpeg62-turbo \
+    zlib1g \
+    libpng16-16 \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+RUN groupadd --gid 1000 flowforge && \
+    useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash flowforge
+
+WORKDIR /app
+
+COPY --from=builder /opt/venv /opt/venv
+COPY --chown=flowforge:flowforge src/ src/
+COPY --chown=flowforge:flowforge migrations/ /app/migrations/
+
+ENV PATH="/opt/venv/bin:$PATH"
 ENV FLOWFORGE_MIGRATIONS_DIR=/app/migrations
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
-# Switch to non-root user
 USER flowforge
 
-# Expose port
 EXPOSE 8000
 
-# Run server
+HEALTHCHECK --interval=10s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')" || exit 1
+
 CMD ["uvicorn", "flowforge_server.main:app", "--host", "0.0.0.0", "--port", "8000"]
