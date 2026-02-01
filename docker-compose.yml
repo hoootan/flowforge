@@ -3,16 +3,17 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: flowforge-postgres
+    # Note: postgres:alpine runs as non-root 'postgres' user by default
     environment:
-      POSTGRES_USER: flowforge
-      POSTGRES_PASSWORD: flowforge
-      POSTGRES_DB: flowforge
+      POSTGRES_USER: ${POSTGRES_USER:-flowforge}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-flowforge}
+      POSTGRES_DB: ${POSTGRES_DB:-flowforge}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U flowforge"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-flowforge}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -21,6 +22,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: flowforge-redis
+    # Note: redis:alpine runs as non-root 'redis' user by default
     ports:
       - "6379:6379"
     volumes:
@@ -38,14 +40,23 @@ services:
       context: ./server
       dockerfile: Dockerfile
     container_name: flowforge-server
+    # Dockerfile sets USER flowforge (uid 1000) - this is redundant but explicit
     ports:
       - "8000:8000"
     environment:
-      - FLOWFORGE_ENV=development
-      - FLOWFORGE_DATABASE_URL=postgresql+asyncpg://flowforge:flowforge@postgres:5432/flowforge
+      - FLOWFORGE_ENV=${FLOWFORGE_ENV:-development}
+      - FLOWFORGE_DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-flowforge}:${POSTGRES_PASSWORD:-flowforge}@postgres:5432/${POSTGRES_DB:-flowforge}
       - FLOWFORGE_REDIS_URL=redis://redis:6379/0
+      # Security: JWT and Encryption (required for production)
       - FLOWFORGE_JWT_SECRET=${FLOWFORGE_JWT_SECRET:-flowforge-dev-jwt-secret-change-in-production}
       - FLOWFORGE_ENCRYPTION_KEY=${FLOWFORGE_ENCRYPTION_KEY:-flowforge-dev-encryption-key-change-in-prod}
+      - FLOWFORGE_ENCRYPTION_SALT=${FLOWFORGE_ENCRYPTION_SALT:-}
+      # CORS: Configure for production
+      - FLOWFORGE_CORS_ALLOWED_ORIGINS=${FLOWFORGE_CORS_ALLOWED_ORIGINS:-}
+      # Rate limiting
+      - FLOWFORGE_LOGIN_RATE_LIMIT=${FLOWFORGE_LOGIN_RATE_LIMIT:-10}
+      - FLOWFORGE_LOGIN_LOCKOUT_THRESHOLD=${FLOWFORGE_LOGIN_LOCKOUT_THRESHOLD:-5}
+      - FLOWFORGE_LOGIN_LOCKOUT_DURATION=${FLOWFORGE_LOGIN_LOCKOUT_DURATION:-900}
     depends_on:
       postgres:
         condition: service_healthy
@@ -63,12 +74,15 @@ services:
       context: ./server
       dockerfile: Dockerfile
     container_name: flowforge-runner
+    # Dockerfile sets USER flowforge (uid 1000)
     command: python -u -m flowforge_server.services.runner
     environment:
       - PYTHONUNBUFFERED=1
-      - FLOWFORGE_ENV=development
-      - FLOWFORGE_DATABASE_URL=postgresql+asyncpg://flowforge:flowforge@postgres:5432/flowforge
+      - FLOWFORGE_ENV=${FLOWFORGE_ENV:-development}
+      - FLOWFORGE_DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-flowforge}:${POSTGRES_PASSWORD:-flowforge}@postgres:5432/${POSTGRES_DB:-flowforge}
       - FLOWFORGE_REDIS_URL=redis://redis:6379/0
+      - FLOWFORGE_ENCRYPTION_KEY=${FLOWFORGE_ENCRYPTION_KEY:-flowforge-dev-encryption-key-change-in-prod}
+      - FLOWFORGE_ENCRYPTION_SALT=${FLOWFORGE_ENCRYPTION_SALT:-}
     depends_on:
       server:
         condition: service_healthy
@@ -79,14 +93,21 @@ services:
       context: ./server
       dockerfile: Dockerfile
     container_name: flowforge-executor
+    # Dockerfile sets USER flowforge (uid 1000)
     command: python -u -m flowforge_server.services.executor
     environment:
       - PYTHONUNBUFFERED=1
-      - FLOWFORGE_ENV=development
-      - FLOWFORGE_DATABASE_URL=postgresql+asyncpg://flowforge:flowforge@postgres:5432/flowforge
+      - FLOWFORGE_ENV=${FLOWFORGE_ENV:-development}
+      - FLOWFORGE_DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-flowforge}:${POSTGRES_PASSWORD:-flowforge}@postgres:5432/${POSTGRES_DB:-flowforge}
       - FLOWFORGE_REDIS_URL=redis://redis:6379/0
+      - FLOWFORGE_ENCRYPTION_KEY=${FLOWFORGE_ENCRYPTION_KEY:-flowforge-dev-encryption-key-change-in-prod}
+      - FLOWFORGE_ENCRYPTION_SALT=${FLOWFORGE_ENCRYPTION_SALT:-}
+      # AI Provider API Keys
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY:-}
+      - COHERE_API_KEY=${COHERE_API_KEY:-}
     depends_on:
       server:
         condition: service_healthy
@@ -97,10 +118,11 @@ services:
       context: ./dashboard
       dockerfile: Dockerfile
     container_name: flowforge-dashboard
+    # Dockerfile sets USER nextjs (uid 1001)
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}
     depends_on:
       server:
         condition: service_healthy

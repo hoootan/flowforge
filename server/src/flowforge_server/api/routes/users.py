@@ -3,13 +3,19 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status, Response
+from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import update as sql_update
 
 from flowforge_server.db import get_session
 from flowforge_server.db.models.user import User, UserRole
 from flowforge_server.config import get_settings, Settings
+from flowforge_server.middleware.rate_limit import (
+    get_login_rate_limiter,
+    LoginRateLimiter,
+    RateLimitExceeded,
+)
+from flowforge_server.services.token_rotation import get_token_rotation_service
 from flowforge_server.api.schemas.users import (
     UserLogin,
     UserLoginResponse,
@@ -120,9 +126,27 @@ def user_to_response(user: User) -> UserResponse:
     )
 
 
+def _get_client_ip(request: Request) -> str:
+    """Extract client IP from request, handling proxies."""
+    # Check for forwarded headers (common with reverse proxies)
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        # Take the first IP in the chain (original client)
+        return forwarded_for.split(",")[0].strip()
+
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        return real_ip.strip()
+
+    # Fall back to direct connection IP
+    return request.client.host if request.client else "unknown"
+
+
 @router.post("/login", response_model=UserLoginResponse | User2FARequiredResponse)
 async def login(
+    request: Request,
     credentials: UserLogin,
+    response: Response,
     session: AsyncSession = Depends(get_session),
     settings: Settings = Depends(get_settings),
 ) -> UserLoginResponse | User2FARequiredResponse:
@@ -134,7 +158,35 @@ async def login(
 
     The token can be used in the Authorization header as:
     `Authorization: Bearer <token>`
+
+    Rate limited to prevent brute force attacks.
     """
+    client_ip = _get_client_ip(request)
+    rate_limiter = await get_login_rate_limiter()
+
+    # Check for lockout first
+    is_locked, retry_after = await rate_limiter.is_locked_out(client_ip, credentials.email)
+    if is_locked:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many failed login attempts. Please try again later.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    # Check rate limit
+    rate_info = await rate_limiter.check_rate_limit(client_ip)
+    headers = await rate_limiter.get_headers(rate_info)
+    for header, value in headers.items():
+        response.headers[header] = value
+
+    if not rate_info.allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Rate limit exceeded. Please slow down.",
+            headers={"Retry-After": str(rate_info.retry_after)},
+        )
+
+    # Attempt authentication
     user, error = await authenticate_user_any_tenant(
         session,
         credentials.email,
@@ -142,6 +194,18 @@ async def login(
     )
 
     if error:
+        # Record failed attempt
+        failure_count, is_now_locked = await rate_limiter.record_failure(
+            client_ip, credentials.email
+        )
+
+        if is_now_locked:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Account temporarily locked due to too many failed attempts.",
+                headers={"Retry-After": str(settings.login_lockout_duration)},
+            )
+
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=error,
@@ -149,6 +213,9 @@ async def login(
         )
 
     await session.commit()
+
+    # Record successful login (resets failure counters)
+    await rate_limiter.record_success(client_ip, credentials.email)
 
     # Check if 2FA is enabled
     if user.totp_enabled:
@@ -189,7 +256,9 @@ async def logout() -> None:
 
 @router.post("/verify-2fa", response_model=UserLoginResponse)
 async def verify_2fa(
+    http_request: Request,
     request: Verify2FARequest,
+    response: Response,
     session: AsyncSession = Depends(get_session),
     settings: Settings = Depends(get_settings),
 ) -> UserLoginResponse:
@@ -197,7 +266,24 @@ async def verify_2fa(
     Verify 2FA code and complete login.
 
     Uses the temporary token from login and a TOTP code or backup code.
+    Rate limited to prevent brute force attacks on 2FA codes.
     """
+    client_ip = _get_client_ip(http_request)
+    rate_limiter = await get_login_rate_limiter()
+
+    # Check rate limit (2FA verification uses same limits)
+    rate_info = await rate_limiter.check_rate_limit(client_ip)
+    headers = await rate_limiter.get_headers(rate_info)
+    for header, value in headers.items():
+        response.headers[header] = value
+
+    if not rate_info.allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Rate limit exceeded. Please slow down.",
+            headers={"Retry-After": str(rate_info.retry_after)},
+        )
+
     # Decode and validate temp token
     payload = decode_temp_token(request.temp_token, settings)
 
@@ -276,6 +362,7 @@ async def refresh_access_token(
     Refresh an access token using a valid refresh token.
 
     Returns new access and refresh tokens (token rotation).
+    Each refresh token can only be used once - subsequent uses are rejected.
     """
     # Decode and validate refresh token
     payload = decode_refresh_token(request.refresh_token)
@@ -294,6 +381,41 @@ async def refresh_access_token(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid refresh token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Get token's unique ID for rotation tracking
+    jti = payload.get("jti")
+    if not jti:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token format",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Check if this token has been revoked (user-level revocation)
+    token_service = await get_token_rotation_service()
+    issued_at = payload.get("iat", 0)
+    if isinstance(issued_at, float):
+        issued_at = int(issued_at)
+
+    if await token_service.is_user_token_revoked(str(user_id), issued_at):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has been revoked",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Token rotation: mark this token as used
+    # If it was already used, this is a potential token replay attack
+    is_first_use = await token_service.mark_token_used(jti, str(user_id))
+    if not is_first_use:
+        # Token was already used - this could be a replay attack
+        # Invalidate all user tokens as a security measure
+        await token_service.invalidate_user_tokens(str(user_id))
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token has already been used. All sessions have been invalidated for security.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 

@@ -49,9 +49,35 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_format: Literal["json", "console"] = "console"
 
-    # CORS (allow_credentials must be False when using wildcard "*")
-    cors_origins: list[str] = ["*"]
-    cors_allow_credentials: bool = False
+    # CORS Configuration
+    # In production, set FLOWFORGE_CORS_ALLOWED_ORIGINS to comma-separated list
+    # Example: FLOWFORGE_CORS_ALLOWED_ORIGINS=https://app.example.com,https://dashboard.example.com
+    cors_allowed_origins: str = ""  # Comma-separated list for production
+    cors_allow_credentials: bool = True  # Allow credentials when origins are specified
+
+    @property
+    def cors_origins(self) -> list[str]:
+        """
+        Get CORS origins based on environment.
+
+        In development: Allow all origins (wildcard)
+        In production: Use explicitly configured origins only
+        """
+        if self.is_development:
+            return ["*"]
+
+        if self.cors_allowed_origins:
+            return [o.strip() for o in self.cors_allowed_origins.split(",") if o.strip()]
+
+        # Production with no configured origins = no CORS (most secure default)
+        return []
+
+    @property
+    def effective_cors_allow_credentials(self) -> bool:
+        """Credentials must be False when using wildcard origins."""
+        if "*" in self.cors_origins:
+            return False
+        return self.cors_allow_credentials
 
     # AI Provider Configuration
     providers_config_path: str | None = None  # Path to YAML config file
@@ -78,10 +104,16 @@ class Settings(BaseSettings):
     jwt_secret: str | None = None  # Required for JWT token support
     jwt_algorithm: str = "HS256"
     jwt_default_expiry_seconds: int = 3600  # 1 hour
-    jwt_refresh_expiry_seconds: int = 604800  # 7 days
+    jwt_refresh_expiry_seconds: int = 86400  # 24 hours (reduced from 7 days for security)
 
     # Encryption (for storing sensitive data like AI provider API keys)
     encryption_key: str | None = None  # Required for secure credential storage
+    encryption_salt: str | None = None  # Unique salt per installation for key derivation
+
+    # Rate limiting and brute force protection
+    login_rate_limit: int = 10  # Requests per minute per IP
+    login_lockout_threshold: int = 5  # Failed attempts before lockout
+    login_lockout_duration: int = 900  # Lockout duration in seconds (15 min)
 
     @property
     def is_development(self) -> bool:

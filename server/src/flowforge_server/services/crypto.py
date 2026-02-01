@@ -33,22 +33,57 @@ class EncryptionKeyMissing(EncryptionError):
     pass
 
 
-# Salt for PBKDF2 key derivation (fixed per installation)
-# In production, this could be stored separately or derived from installation ID
-_DEFAULT_SALT = b"flowforge_encryption_salt_v1"
+def _get_salt() -> bytes:
+    """
+    Get the encryption salt from configuration.
+
+    Returns:
+        Salt bytes for PBKDF2 key derivation.
+
+    Raises:
+        EncryptionError: If salt is not configured in production.
+    """
+    from flowforge_server.config import get_settings
+
+    settings = get_settings()
+
+    if settings.encryption_salt:
+        # Use configured salt (recommended for production)
+        return settings.encryption_salt.encode()
+
+    # In development, use a default salt with a warning
+    if settings.is_development:
+        import warnings
+
+        warnings.warn(
+            "FLOWFORGE_ENCRYPTION_SALT is not set. Using default salt for development. "
+            "This is insecure for production - set a unique salt per installation.",
+            UserWarning,
+            stacklevel=3,
+        )
+        return b"flowforge_dev_salt_not_for_production"
+
+    # In production, require explicit salt configuration
+    raise EncryptionError(
+        "FLOWFORGE_ENCRYPTION_SALT must be set in production. "
+        "Generate one with: python -c \"import secrets; print(secrets.token_urlsafe(16))\""
+    )
 
 
-def _derive_key(master_key: str, salt: bytes = _DEFAULT_SALT) -> bytes:
+def _derive_key(master_key: str, salt: bytes | None = None) -> bytes:
     """
     Derive a Fernet-compatible key from a master key using PBKDF2.
 
     Args:
         master_key: The master encryption key (from env var)
-        salt: Salt for key derivation
+        salt: Salt for key derivation. If None, uses configured salt.
 
     Returns:
         32-byte key suitable for Fernet (base64 encoded to 44 bytes)
     """
+    if salt is None:
+        salt = _get_salt()
+
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
         length=32,

@@ -1,6 +1,7 @@
 """Redis-based queue implementation."""
 
 import json
+import random
 import time
 from datetime import datetime
 from typing import Any
@@ -218,8 +219,13 @@ class RedisQueue(Queue):
             job.attempt += 1
             job.status = JobStatus.RETRYING
 
-            # Exponential backoff: 2^attempt seconds (2, 4, 8, 16, ...)
-            backoff = min(2 ** job.attempt, 300)  # Max 5 minutes
+            # Exponential backoff with jitter to prevent thundering herd
+            # Base backoff: 2^attempt (2, 4, 8, 16, ...)
+            # Jitter: multiply by random factor between 0.5 and 1.5
+            # Cap at 5 minutes (300 seconds)
+            base_backoff = 2 ** job.attempt
+            jitter_factor = 0.5 + random.random()  # 0.5 to 1.5
+            backoff = min(base_backoff * jitter_factor, 300)
 
             pipe = client.pipeline()
             pipe.set(self._job_key(job_id), json.dumps(job.to_dict()))

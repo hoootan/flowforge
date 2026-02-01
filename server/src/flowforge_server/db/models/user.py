@@ -5,7 +5,7 @@ from enum import Enum
 from typing import TYPE_CHECKING
 import uuid
 
-from sqlalchemy import String, Text, Boolean, ForeignKey, DateTime
+from sqlalchemy import String, Text, Boolean, ForeignKey, DateTime, Index, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, ARRAY
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -32,6 +32,14 @@ class User(Base, TimestampMixin):
     """
 
     __tablename__ = "users"
+
+    # Constraints and indexes
+    __table_args__ = (
+        # Email must be unique within a tenant
+        UniqueConstraint("tenant_id", "email", name="uq_users_tenant_email"),
+        # For listing users by tenant, filtered by active status
+        Index("ix_users_tenant_active", "tenant_id", "is_active"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

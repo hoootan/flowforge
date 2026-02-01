@@ -5,7 +5,7 @@ from enum import Enum
 from typing import Any, TYPE_CHECKING
 import uuid
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -36,6 +36,14 @@ class Run(Base, TimestampMixin):
     """
 
     __tablename__ = "runs"
+
+    # Composite indexes for common query patterns
+    __table_args__ = (
+        # For listing runs by tenant, filtered by status, ordered by date
+        Index("ix_runs_tenant_status_created", "tenant_id", "status", "created_at"),
+        # For finding runs to resume (paused runs past their resume time)
+        Index("ix_runs_status_resume", "status", "resume_at"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

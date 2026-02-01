@@ -1,5 +1,9 @@
 FROM python:3.11-slim
 
+# Create non-root user for security
+RUN groupadd --gid 1000 flowforge && \
+    useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash flowforge
+
 WORKDIR /app
 
 # Install curl for healthcheck and image libraries for Pillow (QR code generation)
@@ -18,8 +22,14 @@ COPY migrations/ /app/migrations/
 # Install dependencies (including auth extras for JWT and bcrypt)
 RUN pip install --no-cache-dir ".[auth]"
 
+# Change ownership of app directory to non-root user
+RUN chown -R flowforge:flowforge /app
+
 # Set migrations directory for Docker
 ENV FLOWFORGE_MIGRATIONS_DIR=/app/migrations
+
+# Switch to non-root user
+USER flowforge
 
 # Expose port
 EXPOSE 8000

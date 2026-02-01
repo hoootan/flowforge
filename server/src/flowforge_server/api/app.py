@@ -26,6 +26,8 @@ from flowforge_server.api.routes import (
     usage_router,
     model_pricing_router,
 )
+from flowforge_server.api.error_handlers import register_error_handlers
+from flowforge_server.middleware.correlation import add_correlation_middleware
 
 
 @asynccontextmanager
@@ -147,13 +149,17 @@ FlowForge provides durable execution for AI-powered workflows with:
     )
 
     # CORS middleware
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.cors_origins,
-        allow_credentials=settings.cors_allow_credentials,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+    # In production, only configured origins are allowed
+    # In development, all origins are allowed for convenience
+    cors_origins = settings.cors_origins
+    if cors_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=cors_origins,
+            allow_credentials=settings.effective_cors_allow_credentials,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
 
     # Include routers
     app.include_router(health_router, prefix="/api/v1")
@@ -169,6 +175,12 @@ FlowForge provides durable execution for AI-powered workflows with:
     app.include_router(ai_providers_router, prefix="/api/v1")
     app.include_router(usage_router, prefix="/api/v1")
     app.include_router(model_pricing_router, prefix="/api/v1")
+
+    # Register global error handlers
+    register_error_handlers(app)
+
+    # Add correlation ID middleware (must be added after error handlers)
+    add_correlation_middleware(app)
 
     return app
 
