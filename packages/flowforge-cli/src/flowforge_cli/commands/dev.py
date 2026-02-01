@@ -1,6 +1,9 @@
 """Development server command."""
 
 import importlib.util
+import os
+import signal
+import subprocess
 import sys
 from pathlib import Path
 from typing import Optional
@@ -10,6 +13,13 @@ from rich.console import Console
 
 app = typer.Typer()
 console = Console()
+
+# Check if watchfiles is available
+try:
+    import watchfiles
+    WATCHFILES_AVAILABLE = True
+except ImportError:
+    WATCHFILES_AVAILABLE = False
 
 
 def load_module_from_file(file_path: Path) -> object:
@@ -146,8 +156,112 @@ async def hello_world(ctx: Context):
 
     # Start server
     if watch:
-        console.print("[yellow]Watch mode enabled - restart on file changes[/yellow]\n")
-        # TODO: Implement watch mode with watchfiles
-        run_dev_server(flowforge, functions, host=host, port=port)
+        if not WATCHFILES_AVAILABLE:
+            console.print(
+                "[red]Error:[/red] Watch mode requires the 'watchfiles' package. "
+                "Install with: pip install watchfiles"
+            )
+            raise typer.Exit(1)
+
+        console.print("[yellow]Watch mode enabled - will restart on file changes[/yellow]\n")
+        run_with_watch(directory, host, port, app_id)
     else:
         run_dev_server(flowforge, functions, host=host, port=port)
+
+
+def run_with_watch(directory: Path, host: str, port: int, app_id: str) -> None:
+    """Run the dev server with file watching and auto-restart."""
+    import watchfiles
+
+    # Build the command to run the dev server without watch mode
+    cmd = [
+        sys.executable, "-m", "flowforge_cli",
+        "dev", str(directory.absolute()),
+        "--host", host,
+        "--port", str(port),
+        "--app-id", app_id,
+        # Note: no --watch flag to avoid recursion
+    ]
+
+    process: Optional[subprocess.Popen] = None
+
+    def start_server() -> subprocess.Popen:
+        """Start a new server process."""
+        console.print("[dim]Starting development server...[/dim]")
+        return subprocess.Popen(
+            cmd,
+            env={**os.environ},
+            # Pass through stdin/stdout/stderr
+            stdin=sys.stdin,
+            stdout=sys.stdout,
+            stderr=sys.stderr,
+        )
+
+    def stop_server(proc: Optional[subprocess.Popen]) -> None:
+        """Stop the server process gracefully."""
+        if proc is None:
+            return
+
+        console.print("\n[dim]Stopping server...[/dim]")
+        try:
+            # Try graceful shutdown first
+            proc.send_signal(signal.SIGTERM)
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            # Force kill if graceful shutdown fails
+            proc.kill()
+            proc.wait()
+        except Exception:
+            pass
+
+    def handle_shutdown(signum, frame):
+        """Handle shutdown signals."""
+        stop_server(process)
+        raise typer.Exit(0)
+
+    # Register signal handlers
+    signal.signal(signal.SIGINT, handle_shutdown)
+    signal.signal(signal.SIGTERM, handle_shutdown)
+
+    # Start initial server
+    process = start_server()
+
+    # Watch for changes
+    watch_patterns = ["*.py"]
+    ignore_patterns = [
+        "__pycache__",
+        ".git",
+        ".venv",
+        "venv",
+        ".env",
+        "*.pyc",
+        "*.pyo",
+    ]
+
+    try:
+        console.print(f"[dim]Watching {directory} for changes...[/dim]\n")
+
+        for changes in watchfiles.watch(
+            directory,
+            watch_filter=lambda change, path: (
+                path.endswith(".py")
+                and not any(pat in path for pat in ignore_patterns)
+            ),
+        ):
+            # Log what changed
+            for change_type, path in changes:
+                relative_path = Path(path).relative_to(directory)
+                change_name = change_type.name.lower()
+                console.print(
+                    f"\n[cyan]File {change_name}:[/cyan] {relative_path}"
+                )
+
+            # Restart server
+            console.print("[yellow]Reloading...[/yellow]")
+            stop_server(process)
+            process = start_server()
+
+    except KeyboardInterrupt:
+        stop_server(process)
+    finally:
+        stop_server(process)

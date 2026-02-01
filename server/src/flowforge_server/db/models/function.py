@@ -13,6 +13,7 @@ from flowforge_server.db.models.base import Base, TimestampMixin
 if TYPE_CHECKING:
     from flowforge_server.db.models.tenant import Tenant
     from flowforge_server.db.models.run import Run
+    from flowforge_server.db.models.function_version import FunctionVersion
 
 
 class Function(Base, TimestampMixin):
@@ -105,6 +106,13 @@ class Function(Base, TimestampMixin):
         "Run",
         back_populates="function",
         lazy="selectin",
+    )
+
+    versions: Mapped[list["FunctionVersion"]] = relationship(
+        "FunctionVersion",
+        back_populates="function",
+        lazy="selectin",
+        order_by="desc(FunctionVersion.version)",
     )
 
     def __repr__(self) -> str:

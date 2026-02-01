@@ -25,6 +25,7 @@ import {
   Plus,
   Lock,
   DollarSign,
+  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore, usePermissions } from "@/stores/auth-store";
@@ -34,6 +35,7 @@ import { ApiKeysTab } from "@/components/settings/api-keys-tab";
 import { AIProvidersTab } from "@/components/settings/ai-providers-tab";
 import { SecurityTab } from "@/components/settings/security-tab";
 import { ModelPricingTab } from "@/components/settings/model-pricing-tab";
+import { AuditLogTab } from "@/components/settings/audit-log-tab";
 import type { User } from "@/lib/api";
 
 interface SettingsData {
@@ -121,6 +123,7 @@ export default function SettingsPage() {
 
   // Determine which tabs to show
   const showUsersTab = isAdmin;
+  const showAuditTab = isAdmin;
 
   return (
     <div className="flex h-full flex-col space-y-6 animate-fade-in">
@@ -134,7 +137,7 @@ export default function SettingsPage() {
 
       {/* Tabbed Settings Interface */}
       <Tabs defaultValue="general" className="flex-1">
-        <TabsList className={`grid w-full max-w-3xl ${showUsersTab ? "grid-cols-7" : "grid-cols-6"}`}>
+        <TabsList className={`grid w-full max-w-4xl ${showUsersTab ? "grid-cols-8" : "grid-cols-6"}`}>
           <TabsTrigger value="general" className="gap-1.5">
             <Settings className="h-4 w-4" />
             <span className="hidden sm:inline">General</span>
@@ -161,6 +164,12 @@ export default function SettingsPage() {
             <DollarSign className="h-4 w-4" />
             <span className="hidden sm:inline">Pricing</span>
           </TabsTrigger>
+          {showAuditTab && (
+            <TabsTrigger value="audit" className="gap-1.5">
+              <FileText className="h-4 w-4" />
+              <span className="hidden sm:inline">Audit</span>
+            </TabsTrigger>
+          )}
           <TabsTrigger value="appearance" className="gap-1.5">
             <Palette className="h-4 w-4" />
             <span className="hidden sm:inline">Theme</span>
@@ -333,6 +342,13 @@ export default function SettingsPage() {
         <TabsContent value="pricing" className="mt-6 space-y-6">
           <ModelPricingTab />
         </TabsContent>
+
+        {/* Audit Log Tab (Admin only) */}
+        {showAuditTab && (
+          <TabsContent value="audit" className="mt-6 space-y-6">
+            <AuditLogTab />
+          </TabsContent>
+        )}
 
         {/* Appearance Tab */}
         <TabsContent value="appearance" className="mt-6 space-y-6">

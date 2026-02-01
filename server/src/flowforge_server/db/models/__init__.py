@@ -3,8 +3,9 @@
 from flowforge_server.db.models.base import Base, TimestampMixin
 from flowforge_server.db.models.tenant import Tenant
 from flowforge_server.db.models.function import Function
+from flowforge_server.db.models.function_version import FunctionVersion
 from flowforge_server.db.models.event import Event
-from flowforge_server.db.models.run import Run, RunStatus
+from flowforge_server.db.models.run import Run, RunStatus, InvalidStateTransition, VALID_TRANSITIONS
 from flowforge_server.db.models.step import Step, StepStatus, StepType
 from flowforge_server.db.models.tool import Tool
 from flowforge_server.db.models.tool_approval import ToolApproval, ApprovalStatus
@@ -13,15 +14,19 @@ from flowforge_server.db.models.api_key import ApiKey, ApiKeyType, DEFAULT_SCOPE
 from flowforge_server.db.models.user import User, UserRole
 from flowforge_server.db.models.ai_provider import AIProvider
 from flowforge_server.db.models.model_pricing import ModelPricing
+from flowforge_server.db.models.audit_log import AuditLog, AuditAction
 
 __all__ = [
     "Base",
     "TimestampMixin",
     "Tenant",
     "Function",
+    "FunctionVersion",
     "Event",
     "Run",
     "RunStatus",
+    "InvalidStateTransition",
+    "VALID_TRANSITIONS",
     "Step",
     "StepStatus",
     "StepType",
@@ -37,4 +42,6 @@ __all__ = [
     "UserRole",
     "AIProvider",
     "ModelPricing",
+    "AuditLog",
+    "AuditAction",
 ]

@@ -27,6 +27,44 @@ class RunStatus(str, Enum):
     PAUSED = "paused"  # Waiting for event or sleeping
 
 
+class InvalidStateTransition(Exception):
+    """Raised when an invalid state transition is attempted."""
+
+    def __init__(self, current: RunStatus, target: RunStatus):
+        self.current = current
+        self.target = target
+        super().__init__(
+            f"Invalid state transition: {current.value} -> {target.value}"
+        )
+
+
+# Valid state transitions for runs
+# Key: current state, Value: set of valid target states
+VALID_TRANSITIONS: dict[RunStatus, set[RunStatus]] = {
+    RunStatus.PENDING: {
+        RunStatus.RUNNING,  # Started execution
+        RunStatus.CANCELLED,  # Cancelled before start
+    },
+    RunStatus.RUNNING: {
+        RunStatus.COMPLETED,  # Finished successfully
+        RunStatus.FAILED,  # Execution failed
+        RunStatus.CANCELLED,  # Cancelled during execution
+        RunStatus.PAUSED,  # Waiting for event/sleep
+        RunStatus.PENDING,  # Re-queued for retry
+    },
+    RunStatus.PAUSED: {
+        RunStatus.RUNNING,  # Resumed after event/sleep
+        RunStatus.CANCELLED,  # Cancelled while paused
+        RunStatus.FAILED,  # Timeout or error while paused
+    },
+    RunStatus.COMPLETED: set(),  # Terminal state - no transitions allowed
+    RunStatus.FAILED: {
+        RunStatus.PENDING,  # Manual retry (re-queue)
+    },
+    RunStatus.CANCELLED: set(),  # Terminal state - no transitions allowed
+}
+
+
 class Run(Base, TimestampMixin):
     """
     A single execution of a function.
@@ -158,6 +196,40 @@ class Run(Base, TimestampMixin):
             for step in self.steps
             if step.status == "completed" and step.output is not None
         }
+
+    def can_transition_to(self, target: RunStatus) -> bool:
+        """
+        Check if a transition to the target state is valid.
+
+        Args:
+            target: The desired target state
+
+        Returns:
+            True if the transition is valid, False otherwise
+        """
+        valid_targets = VALID_TRANSITIONS.get(self.status, set())
+        return target in valid_targets
+
+    def transition_to(self, target: RunStatus) -> None:
+        """
+        Transition to a new state with validation.
+
+        Args:
+            target: The desired target state
+
+        Raises:
+            InvalidStateTransition: If the transition is not valid
+        """
+        if not self.can_transition_to(target):
+            raise InvalidStateTransition(self.status, target)
+
+        self.status = target
+
+        # Update timestamps based on transition
+        if target == RunStatus.RUNNING and self.started_at is None:
+            self.started_at = datetime.utcnow()
+        elif target in (RunStatus.COMPLETED, RunStatus.FAILED, RunStatus.CANCELLED):
+            self.ended_at = datetime.utcnow()
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for API response."""

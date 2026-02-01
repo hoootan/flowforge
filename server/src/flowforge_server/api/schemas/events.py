@@ -64,3 +64,34 @@ class EventsResponse(BaseModel):
     total: int
     page: int = 1
     page_size: int = 50
+
+
+class BatchEventCreate(BaseModel):
+    """Schema for creating multiple events in a batch."""
+
+    events: list[EventCreate] = Field(
+        ...,
+        description="List of events to create",
+        min_length=1,
+        max_length=100,
+    )
+
+
+class BatchEventResult(BaseModel):
+    """Result for a single event in a batch."""
+
+    index: int = Field(..., description="Index of the event in the batch")
+    success: bool = Field(..., description="Whether the event was created successfully")
+    id: str | None = Field(None, description="Internal event ID if successful")
+    event_id: str | None = Field(None, description="Event ID if successful")
+    run_id: str | None = Field(None, description="Run ID if a function was triggered")
+    error: str | None = Field(None, description="Error message if failed")
+
+
+class BatchEventResponse(BaseModel):
+    """Response for batch event creation."""
+
+    total: int = Field(..., description="Total events in batch")
+    success_count: int = Field(..., description="Number of successfully created events")
+    failure_count: int = Field(..., description="Number of failed events")
+    results: list[BatchEventResult] = Field(..., description="Results for each event")

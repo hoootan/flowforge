@@ -13,6 +13,8 @@ from flowforge_server.api.routes.stats import router as stats_router
 from flowforge_server.api.routes.ai_providers import router as ai_providers_router
 from flowforge_server.api.routes.usage import router as usage_router
 from flowforge_server.api.routes.model_pricing import router as model_pricing_router
+from flowforge_server.api.routes.audit import router as audit_router
+from flowforge_server.api.routes.dlq import router as dlq_router
 
 __all__ = [
     "events_router",
@@ -28,4 +30,6 @@ __all__ = [
     "ai_providers_router",
     "usage_router",
     "model_pricing_router",
+    "audit_router",
+    "dlq_router",
 ]

@@ -115,6 +115,11 @@ class Settings(BaseSettings):
     login_lockout_threshold: int = 5  # Failed attempts before lockout
     login_lockout_duration: int = 900  # Lockout duration in seconds (15 min)
 
+    # OpenTelemetry / Observability
+    otlp_endpoint: str | None = None  # OTLP collector endpoint (e.g., "http://localhost:4317")
+    otlp_insecure: bool = True  # Use insecure connection for local development
+    service_name: str = "flowforge-server"  # Service name for traces
+
     @property
     def is_development(self) -> bool:
         return self.env == "development"

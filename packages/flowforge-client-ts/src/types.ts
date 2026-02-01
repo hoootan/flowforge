@@ -347,4 +347,27 @@ export interface ClientOptions {
 
   /** Custom fetch implementation (for testing or custom environments) */
   fetch?: typeof fetch;
+
+  /**
+   * Request timeout in milliseconds.
+   * Requests will be aborted if they exceed this duration.
+   * Default: 30000 (30 seconds)
+   */
+  timeout?: number;
+
+  /**
+   * Retry configuration for failed requests.
+   */
+  retry?: {
+    /** Maximum number of retry attempts (default: 3) */
+    maxAttempts?: number;
+    /** Base delay in milliseconds for exponential backoff (default: 1000) */
+    baseDelay?: number;
+    /** Maximum delay in milliseconds (default: 30000) */
+    maxDelay?: number;
+    /** Whether to retry on timeout errors (default: true) */
+    retryOnTimeout?: boolean;
+    /** HTTP status codes that should trigger a retry (default: [429, 500, 502, 503, 504]) */
+    retryableStatuses?: number[];
+  };
 }

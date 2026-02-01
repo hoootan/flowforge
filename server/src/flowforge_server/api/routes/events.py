@@ -15,6 +15,9 @@ from flowforge_server.api.schemas.events import (
     EventCreate,
     EventResponse,
     EventsResponse,
+    BatchEventCreate,
+    BatchEventResult,
+    BatchEventResponse,
 )
 from flowforge_server.api.deps import TenantWithDevFallback
 from flowforge_server.services.container import get_services
@@ -143,6 +146,153 @@ async def create_event(
         user_id=event.user_id,
         processed=event.processed,
         run_id=run_id,
+    )
+
+
+@router.post("/batch", response_model=BatchEventResponse, status_code=201)
+async def create_events_batch(
+    request: Request,
+    batch_data: BatchEventCreate,
+    tenant: TenantWithDevFallback,
+    session: AsyncSession = Depends(get_session),
+) -> BatchEventResponse:
+    """
+    Ingest multiple events in a single request.
+
+    Processes up to 100 events atomically. If any event fails validation,
+    that specific event is marked as failed but others will still be processed.
+
+    Returns detailed results for each event including any triggered run IDs.
+    """
+    results: list[BatchEventResult] = []
+    success_count = 0
+    failure_count = 0
+    now = datetime.utcnow()
+
+    services = get_services(request)
+
+    # Pre-load matching functions for all event names in batch
+    event_names = list(set(e.name for e in batch_data.events))
+    fn_result = await session.execute(
+        select(Function).where(
+            Function.tenant_id == tenant.id,
+            Function.trigger_type == "event",
+            Function.trigger_value.in_(event_names),
+            Function.is_active == True,
+        )
+    )
+    functions_by_name = {fn.trigger_value: fn for fn in fn_result.scalars().all()}
+
+    for idx, event_data in enumerate(batch_data.events):
+        try:
+            # Generate event ID if not provided
+            event_id = event_data.id or str(uuid.uuid4())
+
+            # Check for duplicate event ID (idempotency)
+            existing = await session.execute(
+                select(Event).where(
+                    Event.tenant_id == tenant.id,
+                    Event.event_id == event_id,
+                )
+            )
+            if existing.scalar_one_or_none():
+                results.append(BatchEventResult(
+                    index=idx,
+                    success=False,
+                    error=f"Event with ID '{event_id}' already exists",
+                ))
+                failure_count += 1
+                continue
+
+            # Create event record
+            event = Event(
+                tenant_id=tenant.id,
+                event_id=event_id,
+                name=event_data.name,
+                data=event_data.data,
+                timestamp=event_data.timestamp or now,
+                received_at=now,
+                user_id=event_data.user_id,
+                processed=False,
+            )
+            session.add(event)
+            await session.flush()
+
+            # Check for matching function
+            run_id: str | None = None
+            fn = functions_by_name.get(event_data.name)
+
+            if fn:
+                run = Run(
+                    tenant_id=tenant.id,
+                    function_id=fn.id,
+                    event_id=event.id,
+                    status=RunStatus.PENDING,
+                    trigger_type="event",
+                    trigger_data={
+                        "event": {
+                            "id": event_id,
+                            "name": event_data.name,
+                            "data": event_data.data,
+                            "timestamp": event.timestamp.isoformat(),
+                        }
+                    },
+                    attempt=1,
+                    max_attempts=fn.retries + 1 if hasattr(fn, 'retries') else 3,
+                )
+                session.add(run)
+                await session.flush()
+                run_id = str(run.id)
+
+            # Publish to event stream
+            message = StreamMessage(
+                id=str(event.id),
+                event_name=event_data.name,
+                event_id=event_id,
+                event_data=event_data.data,
+                tenant_id=str(tenant.id),
+                timestamp=event.timestamp,
+                run_id=run_id,
+            )
+
+            try:
+                await services.event_stream.publish(message)
+                event.processed = True
+            except Exception as e:
+                log.warning("event_stream_publish_failed", event_id=event_id, error=str(e))
+
+            results.append(BatchEventResult(
+                index=idx,
+                success=True,
+                id=str(event.id),
+                event_id=event_id,
+                run_id=run_id,
+            ))
+            success_count += 1
+
+        except Exception as e:
+            results.append(BatchEventResult(
+                index=idx,
+                success=False,
+                error=str(e),
+            ))
+            failure_count += 1
+            log.error("batch_event_failed", index=idx, error=str(e))
+
+    await session.commit()
+
+    log.info(
+        "batch_events_created",
+        total=len(batch_data.events),
+        success_count=success_count,
+        failure_count=failure_count,
+    )
+
+    return BatchEventResponse(
+        total=len(batch_data.events),
+        success_count=success_count,
+        failure_count=failure_count,
+        results=results,
     )
 
 

@@ -25,9 +25,18 @@ from flowforge_server.api.routes import (
     ai_providers_router,
     usage_router,
     model_pricing_router,
+    audit_router,
+    dlq_router,
 )
 from flowforge_server.api.error_handlers import register_error_handlers
 from flowforge_server.middleware.correlation import add_correlation_middleware
+from flowforge_server.telemetry.metrics import metrics_router, add_metrics_middleware
+from flowforge_server.telemetry.tracing import (
+    init_tracing,
+    instrument_app,
+    instrument_httpx,
+    OTEL_AVAILABLE,
+)
 
 
 @asynccontextmanager
@@ -40,6 +49,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Startup
     settings = get_settings()
     log.info("starting_application", env=settings.env)
+
+    # Initialize OpenTelemetry tracing if configured
+    if settings.otlp_endpoint:
+        init_tracing(service_name=settings.service_name, otlp_endpoint=settings.otlp_endpoint)
+        instrument_httpx()  # Instrument HTTPX for AI provider calls
+        if OTEL_AVAILABLE:
+            log.info("opentelemetry_initialized", endpoint=settings.otlp_endpoint)
 
     if settings.is_development:
         # Initialize database tables in development
@@ -175,12 +191,25 @@ FlowForge provides durable execution for AI-powered workflows with:
     app.include_router(ai_providers_router, prefix="/api/v1")
     app.include_router(usage_router, prefix="/api/v1")
     app.include_router(model_pricing_router, prefix="/api/v1")
+    app.include_router(audit_router, prefix="/api/v1")
+    app.include_router(dlq_router, prefix="/api/v1")
+
+    # Prometheus metrics (no prefix - exposed at /metrics)
+    app.include_router(metrics_router)
 
     # Register global error handlers
     register_error_handlers(app)
 
     # Add correlation ID middleware (must be added after error handlers)
     add_correlation_middleware(app)
+
+    # Add metrics middleware (tracks request duration/count)
+    add_metrics_middleware(app)
+
+    # Instrument FastAPI with OpenTelemetry (if configured)
+    settings = get_settings()
+    if settings.otlp_endpoint:
+        instrument_app(app)
 
     return app
 
