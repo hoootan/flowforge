@@ -421,6 +421,8 @@ class AIService:
                 # Add credential override based on auth type
                 if credential_override:
                     if credential_auth_type == "oauth_token":
+                        # OAuth tokens go as Authorization: Bearer, not x-api-key
+                        completion_params["api_key"] = "oauth-via-header"
                         completion_params["extra_headers"] = {
                             "Authorization": f"Bearer {credential_override}"
                         }

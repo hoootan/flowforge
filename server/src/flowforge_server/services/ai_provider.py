@@ -483,18 +483,23 @@ class AIProviderService:
                     "message": "Cannot automatically test custom providers",
                 }
 
-            # Build completion params — pass api_key directly to litellm
+            # Build completion params
             completion_params: dict[str, Any] = {
                 "model": test_model,
                 "messages": [{"role": "user", "content": "Hi"}],
                 "max_tokens": 1,
-                "api_key": credential,
             }
 
             if auth_type == "oauth_token":
+                # OAuth tokens must go as Authorization: Bearer, NOT as x-api-key.
+                # Pass a dummy api_key so litellm doesn't error about missing key,
+                # and send the real token via Authorization header.
+                completion_params["api_key"] = "oauth-via-header"
                 completion_params["extra_headers"] = {
                     "Authorization": f"Bearer {credential}"
                 }
+            else:
+                completion_params["api_key"] = credential
 
             response = await litellm.acompletion(**completion_params)
             return {
