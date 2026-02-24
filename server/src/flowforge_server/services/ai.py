@@ -418,16 +418,10 @@ class AIService:
                     **kwargs,
                 }
 
-                # Add credential override based on auth type
+                # Add credential override — Anthropic accepts both API keys
+                # and OAuth tokens via the api_key parameter (x-api-key header)
                 if credential_override:
-                    if credential_auth_type == "oauth_token":
-                        # OAuth tokens go as Authorization: Bearer, not x-api-key
-                        completion_params["api_key"] = "oauth-via-header"
-                        completion_params["extra_headers"] = {
-                            "Authorization": f"Bearer {credential_override}"
-                        }
-                    else:
-                        completion_params["api_key"] = credential_override
+                    completion_params["api_key"] = credential_override
 
                 # Add tools if provided
                 if tool_schemas:
