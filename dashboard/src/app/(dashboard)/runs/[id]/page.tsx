@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CollapsibleJson } from "@/components/ui/collapsible-json";
 import {
   ArrowLeft,
   CheckCircle,
@@ -278,9 +279,10 @@ export default function RunDetailPage({
                 <CardTitle>Trigger Data</CardTitle>
               </CardHeader>
               <CardContent>
-                <pre className="rounded-lg border bg-muted/50 p-3 text-xs overflow-auto max-h-64">
-                  {JSON.stringify(triggerData.event?.data || run.trigger_data, null, 2)}
-                </pre>
+                <CollapsibleJson
+                  value={triggerData.event?.data || run.trigger_data}
+                  maxHeightClassName="max-h-64"
+                />
               </CardContent>
             </Card>
 
@@ -291,9 +293,11 @@ export default function RunDetailPage({
                   <CardTitle className="text-red-600">Error</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <pre className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-600 overflow-auto max-h-64">
-                    {JSON.stringify(run.error, null, 2)}
-                  </pre>
+                  <CollapsibleJson
+                    value={run.error}
+                    maxHeightClassName="max-h-64"
+                    className="border-red-200 bg-red-50 text-red-600"
+                  />
                 </CardContent>
               </Card>
             )}
@@ -366,19 +370,19 @@ export default function RunDetailPage({
                                 </div>
                               </div>
                             ) : (
-                              <pre className="text-xs overflow-auto">
-                                {JSON.stringify(step.output, null, 2)}
-                              </pre>
+                              <CollapsibleJson value={step.output} maxHeightClassName="max-h-64" />
                             )}
                           </div>
                         )}
 
                         {/* Step error */}
                         {step.error && (
-                          <div className="rounded-lg border border-red-200 bg-red-50 p-3 mt-2">
-                            <pre className="text-xs text-red-600 overflow-auto">
-                              {JSON.stringify(step.error, null, 2)}
-                            </pre>
+                          <div className="mt-2">
+                            <CollapsibleJson
+                              value={step.error}
+                              maxHeightClassName="max-h-64"
+                              className="border-red-200 bg-red-50 text-red-600"
+                            />
                           </div>
                         )}
                       </div>
@@ -448,14 +452,16 @@ export default function RunDetailPage({
                   <TabsTrigger value="output">Output</TabsTrigger>
                 </TabsList>
                 <TabsContent value="input" className="mt-4">
-                  <pre className="rounded-lg border bg-muted/50 p-3 text-xs overflow-auto max-h-64">
-                    {JSON.stringify(triggerData.event?.data || run.trigger_data, null, 2)}
-                  </pre>
+                  <CollapsibleJson
+                    value={triggerData.event?.data || run.trigger_data}
+                    maxHeightClassName="max-h-64"
+                  />
                 </TabsContent>
                 <TabsContent value="output" className="mt-4">
-                  <pre className="rounded-lg border bg-muted/50 p-3 text-xs overflow-auto max-h-64">
-                    {run.output ? JSON.stringify(run.output, null, 2) : "No output yet"}
-                  </pre>
+                  <CollapsibleJson
+                    value={run.output ?? "No output yet"}
+                    maxHeightClassName="max-h-64"
+                  />
                 </TabsContent>
               </Tabs>
             </CardContent>
@@ -468,9 +474,11 @@ export default function RunDetailPage({
                 <CardTitle className="text-red-600">Error</CardTitle>
               </CardHeader>
               <CardContent>
-                <pre className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-600 overflow-auto max-h-64">
-                  {JSON.stringify(run.error, null, 2)}
-                </pre>
+                <CollapsibleJson
+                  value={run.error}
+                  maxHeightClassName="max-h-64"
+                  className="border-red-200 bg-red-50 text-red-600"
+                />
               </CardContent>
             </Card>
           )}

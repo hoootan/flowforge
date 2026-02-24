@@ -3,6 +3,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { CollapsibleJson } from "@/components/ui/collapsible-json";
 import { CheckCircle, XCircle, Clock, AlertCircle } from "lucide-react";
 
 interface ToolCallDetailProps {
@@ -65,9 +66,7 @@ export function ToolCallDetail({ toolCall }: ToolCallDetailProps) {
             <span className="text-sm font-medium">Arguments</span>
             <Badge variant="outline" className="text-xs">JSON</Badge>
           </div>
-          <pre className="rounded-lg border bg-muted/50 p-3 text-xs overflow-auto max-h-48">
-            {JSON.stringify(toolCall.arguments, null, 2)}
-          </pre>
+          <CollapsibleJson value={toolCall.arguments} maxHeightClassName="max-h-48" />
         </div>
 
         <Separator />
@@ -79,9 +78,11 @@ export function ToolCallDetail({ toolCall }: ToolCallDetailProps) {
               <AlertCircle className="h-4 w-4 text-red-500" />
               <span className="text-sm font-medium text-red-600">Error</span>
             </div>
-            <pre className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-600 overflow-auto max-h-48 dark:bg-red-900/20 dark:border-red-900">
-              {toolCall.error}
-            </pre>
+            <CollapsibleJson
+              value={toolCall.error}
+              maxHeightClassName="max-h-48"
+              className="border-red-200 bg-red-50 text-red-600 dark:bg-red-900/20 dark:border-red-900"
+            />
           </div>
         ) : toolCall.result !== undefined ? (
           <div>
@@ -89,11 +90,7 @@ export function ToolCallDetail({ toolCall }: ToolCallDetailProps) {
               <CheckCircle className="h-4 w-4 text-green-500" />
               <span className="text-sm font-medium">Result</span>
             </div>
-            <pre className="rounded-lg border bg-muted/50 p-3 text-xs overflow-auto max-h-48">
-              {typeof toolCall.result === "string"
-                ? toolCall.result
-                : JSON.stringify(toolCall.result, null, 2)}
-            </pre>
+            <CollapsibleJson value={toolCall.result} maxHeightClassName="max-h-48" />
           </div>
         ) : (
           <div className="flex items-center gap-2 text-muted-foreground">
