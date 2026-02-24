@@ -45,7 +45,7 @@ class UsageTracker:
         Args:
             session: Database session
             tenant_id: Tenant UUID
-            model: Model name (e.g., "gpt-4o")
+            model: Model name (e.g., "gpt-5")
             provider: Provider name (e.g., "openai")
             prompt_tokens: Number of input tokens
             completion_tokens: Number of output tokens

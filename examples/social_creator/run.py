@@ -193,7 +193,7 @@ async def create_social_post(ctx: Context) -> dict[str, Any]:
     result = await step.agent(
         "social-creator-agent",
         task=prompt,
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         system=SOCIAL_CREATOR_SYSTEM_PROMPT,
         tools=[
             web_search,

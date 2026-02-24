@@ -119,7 +119,7 @@ Use web_search to find relevant sources, then fetch_article to get detailed cont
 Save your findings to state so other agents can use them.
 When you have enough information, indicate that research is complete.""",
     tools=[web_search, fetch_article, save_findings],
-    model="claude-sonnet-4-20250514",
+    model="claude-sonnet-4-6",
 )
 
 analyst = agent_def(
@@ -129,7 +129,7 @@ Use analyze_data to identify patterns, trends, and key insights.
 Synthesize the information into clear, actionable insights.
 Store your analysis results in state for the writer.""",
     tools=[analyze_data, save_findings],
-    model="claude-sonnet-4-20250514",
+    model="claude-sonnet-4-6",
 )
 
 writer = agent_def(
@@ -139,7 +139,7 @@ Create a polished, well-structured final report or article.
 Include an executive summary, key findings, and recommendations.
 Set state.set('complete', True) when done.""",
     tools=[],
-    model="gpt-4o",
+    model="gpt-5",
 )
 
 
@@ -149,7 +149,7 @@ research_network = network(
     name="research",
     agents=[researcher, analyst, writer],
     router=llm(
-        model="gpt-4o-mini",
+        model="gpt-5-mini",
         prompt="""You are routing a research workflow. Based on the current state and progress:
 - If initial research is needed, route to 'researcher'
 - If data needs analysis, route to 'analyst'
@@ -163,7 +163,7 @@ Last result: {last_result}
 Respond with ONLY the agent name or DONE.""",
         temperature=0.3,
     ),
-    default_model="claude-sonnet-4-20250514",
+    default_model="claude-sonnet-4-6",
 )
 
 

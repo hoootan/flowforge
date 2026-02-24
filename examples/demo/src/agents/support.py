@@ -62,7 +62,7 @@ Instructions:
 
 Be helpful, empathetic, and professional.
 """,
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         system="""You are a friendly and helpful customer support agent. Your goals are:
 - Understand the customer's issue completely
 - Find the best solution from the knowledge base

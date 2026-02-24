@@ -289,7 +289,7 @@ class TestLLMRouter:
         """Test LLM router with default parameters."""
         router = LLMRouter()
 
-        assert router.model == "gpt-4o-mini"
+        assert router.model == "gpt-5-mini"
         assert router.temperature == 0.3
         assert router.prompt is not None
 
@@ -298,12 +298,12 @@ class TestLLMRouter:
         custom_prompt = "Select the best agent: {agents}"
 
         router = LLMRouter(
-            model="gpt-4o",
+            model="gpt-5",
             prompt=custom_prompt,
             temperature=0.5,
         )
 
-        assert router.model == "gpt-4o"
+        assert router.model == "gpt-5"
         assert router.prompt == custom_prompt
         assert router.temperature == 0.5
 
@@ -367,18 +367,18 @@ class TestRouterFactoryFunctions:
         router = llm()
 
         assert isinstance(router, LLMRouter)
-        assert router.model == "gpt-4o-mini"
+        assert router.model == "gpt-5-mini"
 
     def test_llm_factory_with_custom_parameters(self):
         """Test llm() factory with custom parameters."""
         router = llm(
-            model="gpt-4o",
+            model="gpt-5",
             prompt="Custom prompt",
             temperature=0.7,
         )
 
         assert isinstance(router, LLMRouter)
-        assert router.model == "gpt-4o"
+        assert router.model == "gpt-5"
         assert router.prompt == "Custom prompt"
         assert router.temperature == 0.7
 
@@ -386,7 +386,7 @@ class TestRouterFactoryFunctions:
         """Test llm() factory with defaults."""
         router = llm()
 
-        assert router.model == "gpt-4o-mini"
+        assert router.model == "gpt-5-mini"
         assert router.temperature == 0.3
         assert router.prompt is not None
 

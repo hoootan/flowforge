@@ -32,9 +32,9 @@ class AgentConfigSchema(BaseModel):
     """Schema for agent configuration in inline functions."""
 
     model: str = Field(
-        default="claude-sonnet-4-5-20250514",
+        default="claude-sonnet-4-6",
         description="AI model to use",
-        examples=["claude-sonnet-4-5-20250514", "gpt-4o"],
+        examples=["claude-sonnet-4-6", "gpt-5"],
     )
 
     max_iterations: int = Field(

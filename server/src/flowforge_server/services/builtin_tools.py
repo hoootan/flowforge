@@ -61,73 +61,6 @@ BUILTIN_TOOLS: list[BuiltinToolDefinition] = [
         },
     ),
 
-    # Social Media Posting Tools
-    BuiltinToolDefinition(
-        name="post_to_twitter",
-        description="Post content to Twitter/X. Maximum 280 characters. Requires user approval before posting.",
-        parameters={
-            "type": "object",
-            "properties": {
-                "content": {
-                    "type": "string",
-                    "description": "The text content to post (max 280 characters)",
-                    "maxLength": 280,
-                },
-                "image_url": {
-                    "type": "string",
-                    "description": "Optional URL of an image to attach",
-                },
-            },
-            "required": ["content"],
-        },
-        requires_approval=True,
-        approval_timeout="1h",
-    ),
-
-    BuiltinToolDefinition(
-        name="post_to_linkedin",
-        description="Post content to LinkedIn. Professional tone recommended. Maximum 3000 characters. Requires user approval before posting.",
-        parameters={
-            "type": "object",
-            "properties": {
-                "content": {
-                    "type": "string",
-                    "description": "The text content to post (max 3000 characters)",
-                    "maxLength": 3000,
-                },
-                "image_url": {
-                    "type": "string",
-                    "description": "Optional URL of an image to attach",
-                },
-            },
-            "required": ["content"],
-        },
-        requires_approval=True,
-        approval_timeout="1h",
-    ),
-
-    BuiltinToolDefinition(
-        name="post_to_instagram",
-        description="Post content to Instagram. Requires an image. Maximum 2200 characters for caption. Requires user approval before posting.",
-        parameters={
-            "type": "object",
-            "properties": {
-                "content": {
-                    "type": "string",
-                    "description": "The caption text (max 2200 characters)",
-                    "maxLength": 2200,
-                },
-                "image_url": {
-                    "type": "string",
-                    "description": "URL of the image to post (required)",
-                },
-            },
-            "required": ["content", "image_url"],
-        },
-        requires_approval=True,
-        approval_timeout="1h",
-    ),
-
     # User Interaction Tools
     BuiltinToolDefinition(
         name="ask_user",
@@ -251,57 +184,6 @@ async def execute_generate_image(prompt: str, style: str = "professional", **kwa
     }
 
 
-async def execute_post_to_twitter(content: str, image_url: str | None = None, **kwargs) -> dict[str, Any]:
-    """Execute Twitter post (simulated - real implementation would use Twitter API)."""
-    if len(content) > 280:
-        return {"status": "error", "error": f"Content exceeds 280 chars ({len(content)})"}
-
-    # TODO: Implement real Twitter API integration
-    return {
-        "status": "posted",
-        "platform": "twitter",
-        "content": content,
-        "image_url": image_url,
-        "post_url": "https://twitter.com/user/status/simulated123",
-        "simulated": True,
-    }
-
-
-async def execute_post_to_linkedin(content: str, image_url: str | None = None, **kwargs) -> dict[str, Any]:
-    """Execute LinkedIn post (simulated - real implementation would use LinkedIn API)."""
-    if len(content) > 3000:
-        return {"status": "error", "error": f"Content exceeds 3000 chars ({len(content)})"}
-
-    # TODO: Implement real LinkedIn API integration
-    return {
-        "status": "posted",
-        "platform": "linkedin",
-        "content": content,
-        "image_url": image_url,
-        "post_url": "https://linkedin.com/feed/update/simulated456",
-        "simulated": True,
-    }
-
-
-async def execute_post_to_instagram(content: str, image_url: str, **kwargs) -> dict[str, Any]:
-    """Execute Instagram post (simulated - real implementation would use Instagram API)."""
-    if len(content) > 2200:
-        return {"status": "error", "error": f"Caption exceeds 2200 chars ({len(content)})"}
-
-    if not image_url:
-        return {"status": "error", "error": "Instagram requires an image"}
-
-    # TODO: Implement real Instagram API integration
-    return {
-        "status": "posted",
-        "platform": "instagram",
-        "content": content,
-        "image_url": image_url,
-        "post_url": "https://instagram.com/p/simulated789",
-        "simulated": True,
-    }
-
-
 async def execute_ask_user(question: str, context: str | None = None, options: list[str] | None = None, **kwargs) -> dict[str, Any]:
     """
     Execute ask_user tool.
@@ -329,9 +211,6 @@ async def execute_ask_user(question: str, context: str | None = None, options: l
 TOOL_EXECUTORS: dict[str, callable] = {
     "web_search": execute_web_search,
     "generate_image": execute_generate_image,
-    "post_to_twitter": execute_post_to_twitter,
-    "post_to_linkedin": execute_post_to_linkedin,
-    "post_to_instagram": execute_post_to_instagram,
     "ask_user": execute_ask_user,
 }
 

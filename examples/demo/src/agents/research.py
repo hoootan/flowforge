@@ -43,7 +43,7 @@ Instructions:
 
 Depth level: {depth}
 """,
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         system="""You are an expert research assistant. Your job is to:
 - Gather accurate, up-to-date information
 - Analyze sources critically

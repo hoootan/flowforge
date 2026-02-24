@@ -75,7 +75,7 @@ async def register_function():
                 "post_to_instagram",
             ],
             "agent_config": {
-                "model": "claude-sonnet-4-20250514",
+                "model": "claude-sonnet-4-6",
                 "max_iterations": 30,
                 "max_tool_calls": 50,
             },

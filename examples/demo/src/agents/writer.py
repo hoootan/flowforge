@@ -29,7 +29,7 @@ Create a well-structured article with:
 - Actionable conclusion
 
 Save your final article using the save_notes tool.""",
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         system="""You are an expert content writer. You write clear, engaging,
 and well-researched articles. Your writing is accessible yet authoritative.
 Always cite sources when available.""",

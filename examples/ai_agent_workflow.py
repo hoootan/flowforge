@@ -41,7 +41,7 @@ async def process_support_ticket(ctx: Context) -> dict:
     # Step 1: Categorize the ticket
     categorization = await step.ai(
         "categorize-ticket",
-        model="gpt-4o-mini",  # Fast model for categorization
+        model="gpt-5-mini",  # Fast model for categorization
         prompt=f"""Categorize this support ticket:
 
 Subject: {ticket.get('subject')}
@@ -60,7 +60,7 @@ Respond with JSON:
     # Step 2: Generate draft response using a more capable model
     draft_response = await step.ai(
         "generate-response",
-        model="claude-3-sonnet-20240229",  # Use Claude for better writing
+        model="claude-sonnet-4-6",  # Use Claude for better writing
         messages=[
             {
                 "role": "system",

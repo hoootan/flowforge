@@ -118,7 +118,7 @@ async def test_function(test_session: AsyncSession, test_tenant: Tenant) -> Func
         is_inline=True,
         system_prompt="You are a helpful assistant.",
         tools_config=["web_search"],
-        agent_config={"model": "gpt-4o-mini", "max_iterations": 5},
+        agent_config={"model": "gpt-5-mini", "max_iterations": 5},
         config={},
         is_active=True,
     )
@@ -179,7 +179,7 @@ def mock_ai_service():
     mock = AsyncMock()
     mock.complete.return_value = MagicMock(
         content="Test response",
-        model="gpt-4o-mini",
+        model="gpt-5-mini",
         provider="openai",
         usage=MagicMock(
             prompt_tokens=100,
@@ -311,7 +311,7 @@ class Factory:
             "trigger": {"type": "event", "value": trigger_event},
             "system_prompt": "You are a helpful assistant.",
             "tools": tools or [],
-            "agent_config": {"model": "gpt-4o-mini", "max_iterations": 5},
+            "agent_config": {"model": "gpt-5-mini", "max_iterations": 5},
             "config": {},
         }
 

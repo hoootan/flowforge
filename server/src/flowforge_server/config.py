@@ -83,7 +83,7 @@ class Settings(BaseSettings):
     providers_config_path: str | None = None  # Path to YAML config file
 
     # Default AI settings
-    default_ai_model: str = "claude-sonnet-4-5-20250514"
+    default_ai_model: str = "claude-sonnet-4-6"
     default_fallback_chain: str = "default"  # default, fast, smart
     enable_provider_fallback: bool = True
     enable_provider_health_check: bool = True

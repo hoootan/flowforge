@@ -322,9 +322,9 @@ class HealthChecker:
     def _get_test_model(self, provider: str) -> str | None:
         """Get a minimal test model for a provider."""
         test_models = {
-            "openai": "gpt-4o-mini",
-            "anthropic": "claude-3-haiku-20240307",
-            "google": "gemini-1.5-flash",
+            "openai": "gpt-5-mini",
+            "anthropic": "claude-haiku-4-5-20251001",
+            "google": "gemini-2.5-flash",
             "mistral": "mistral-small-latest",
             "cohere": "command-light",
         }

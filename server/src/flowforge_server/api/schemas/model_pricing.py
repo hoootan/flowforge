@@ -15,10 +15,10 @@ class ModelPricingCreate(BaseModel):
 
     model_id: str = Field(
         ...,
-        description="Model identifier (e.g., 'gpt-4o', 'claude-3-5-sonnet-20241022')",
+        description="Model identifier (e.g., 'gpt-5', 'claude-sonnet-4-6')",
         min_length=1,
         max_length=255,
-        examples=["gpt-4o", "claude-3-5-sonnet-20241022", "ft:gpt-4o:my-company:custom:abc123"],
+        examples=["gpt-5", "claude-sonnet-4-6", "ft:gpt-4.1:my-company:custom:abc123"],
     )
 
     provider: str = Field(

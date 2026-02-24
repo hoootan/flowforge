@@ -256,7 +256,7 @@ def tool(
         # Use in step.ai()
         result = await step.ai(
             "search-step",
-            model="gpt-4o",
+            model="gpt-5",
             prompt="Find customer john@example.com",
             tools=[search_database],
         )

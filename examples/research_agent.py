@@ -189,7 +189,7 @@ async def research_agent(ctx: Context) -> dict:
     result = await flowforge.step.agent(
         "research-topic",
         task=task,
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         system=(
             "You are a research assistant helping to compile comprehensive, well-sourced information on topics. "
             "Your research should be:\n"
@@ -258,7 +258,7 @@ async def comparative_research(ctx: Context) -> dict:
             f"4. Provide a side-by-side comparison table\n"
             f"5. Conclude with recommendations based on different use cases"
         ),
-        model="gpt-4o",
+        model="gpt-5",
         system="You are a research analyst specializing in comparative analysis. Provide balanced, objective comparisons.",
         tools=[web_search, search_academic_papers, get_wikipedia_summary],
         max_iterations=15,

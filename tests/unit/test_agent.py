@@ -21,9 +21,9 @@ class TestAgentConfig:
 
     def test_config_initialization_minimal(self):
         """Test creating config with minimal required parameters."""
-        config = AgentConfig(model="gpt-4o")
+        config = AgentConfig(model="gpt-5")
 
-        assert config.model == "gpt-4o"
+        assert config.model == "gpt-5"
         assert config.system == ""
         assert config.tools == []
         assert config.max_iterations == 20
@@ -34,7 +34,7 @@ class TestAgentConfig:
     def test_config_initialization_full(self):
         """Test creating config with all parameters."""
         config = AgentConfig(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             system="You are a helpful assistant",
             tools=[test_tool, another_tool],
             max_iterations=30,
@@ -43,7 +43,7 @@ class TestAgentConfig:
             temperature=0.5,
         )
 
-        assert config.model == "claude-sonnet-4-20250514"
+        assert config.model == "claude-sonnet-4-6"
         assert config.system == "You are a helpful assistant"
         assert len(config.tools) == 2
         assert config.max_iterations == 30
@@ -57,7 +57,7 @@ class TestAgentConfig:
 
         for strategy in strategies:
             config = AgentConfig(
-                model="gpt-4o",
+                model="gpt-5",
                 checkpoint_strategy=strategy,
             )
             assert config.checkpoint_strategy == strategy
@@ -65,7 +65,7 @@ class TestAgentConfig:
     def test_config_tools_list(self):
         """Test that tools can be provided as a list."""
         tools = [test_tool, another_tool]
-        config = AgentConfig(model="gpt-4o", tools=tools)
+        config = AgentConfig(model="gpt-5", tools=tools)
 
         assert len(config.tools) == 2
         assert config.tools[0] is test_tool
@@ -73,7 +73,7 @@ class TestAgentConfig:
 
     def test_config_empty_system_prompt(self):
         """Test config with empty system prompt."""
-        config = AgentConfig(model="gpt-4o", system="")
+        config = AgentConfig(model="gpt-5", system="")
         assert config.system == ""
 
 

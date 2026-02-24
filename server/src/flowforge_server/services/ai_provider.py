@@ -29,25 +29,22 @@ if TYPE_CHECKING:
 KNOWN_PROVIDERS = {
     "openai": {
         "display_name": "OpenAI",
-        "models": ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo", "o1-preview", "o1-mini"],
-        "default_model": "gpt-4o",
+        "models": ["gpt-5.2", "gpt-5.1", "gpt-5", "gpt-5-mini", "gpt-5-nano", "gpt-4.1", "gpt-4.1-mini", "o3", "o4-mini", "o3-mini"],
+        "default_model": "gpt-5",
     },
     "anthropic": {
         "display_name": "Anthropic",
         "models": [
-            "claude-opus-4-5-20250514",
-            "claude-sonnet-4-5-20250514",
-            "claude-sonnet-4-20250514",
-            "claude-3-5-sonnet-20241022",
-            "claude-3-opus-20240229",
-            "claude-3-haiku-20240307",
+            "claude-opus-4-6",
+            "claude-sonnet-4-6",
+            "claude-haiku-4-5-20251001",
         ],
-        "default_model": "claude-sonnet-4-5-20250514",
+        "default_model": "claude-sonnet-4-6",
     },
     "google": {
         "display_name": "Google AI",
-        "models": ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-pro"],
-        "default_model": "gemini-1.5-pro",
+        "models": ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"],
+        "default_model": "gemini-2.5-pro",
     },
     "mistral": {
         "display_name": "Mistral AI",
@@ -448,11 +445,11 @@ class AIProviderService:
             # Use a minimal model call based on provider
             test_model = None
             if provider_name == "openai":
-                test_model = "gpt-3.5-turbo"
+                test_model = "gpt-5-nano"
             elif provider_name == "anthropic":
-                test_model = "claude-3-haiku-20240307"
+                test_model = "claude-haiku-4-5-20251001"
             elif provider_name == "google":
-                test_model = "gemini-pro"
+                test_model = "gemini-2.0-flash"
             elif provider_name == "mistral":
                 test_model = "mistral-small-latest"
             else:

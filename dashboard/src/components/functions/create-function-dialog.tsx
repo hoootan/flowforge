@@ -40,10 +40,10 @@ interface CreateFunctionDialogProps {
 }
 
 const MODEL_OPTIONS = [
-  { value: "claude-sonnet-4-5-20250514", label: "Claude 4.5 Sonnet" },
-  { value: "claude-3-5-sonnet-20241022", label: "Claude 3.5 Sonnet" },
-  { value: "gpt-4o", label: "GPT-4o" },
-  { value: "gpt-4o-mini", label: "GPT-4o Mini" },
+  { value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
+  { value: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5" },
+  { value: "gpt-5", label: "GPT-5" },
+  { value: "gpt-5-mini", label: "GPT-5 Mini" },
 ];
 
 const TRIGGER_TYPES = [
@@ -95,7 +95,7 @@ export function CreateFunctionDialog({
   const [triggerValue, setTriggerValue] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
   const [selectedTools, setSelectedTools] = useState<string[]>([]);
-  const [model, setModel] = useState("claude-sonnet-4-5-20250514");
+  const [model, setModel] = useState("claude-sonnet-4-6");
   const [endpointUrl, setEndpointUrl] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -116,7 +116,7 @@ export function CreateFunctionDialog({
     setTriggerValue("");
     setSystemPrompt("");
     setSelectedTools([]);
-    setModel("claude-sonnet-4-5-20250514");
+    setModel("claude-sonnet-4-6");
     setEndpointUrl("");
     setErrors({});
   };

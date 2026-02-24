@@ -119,7 +119,7 @@ async def travel_planner(ctx: flowforge.Context) -> dict:
         "plan-trip",
         task=f"Research {destination} and create a detailed {duration_days}-day travel itinerary. "
              f"Include weather, top attractions to visit each day, and restaurant recommendations.",
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         system="You are an expert travel planning assistant. Create comprehensive, "
                "practical travel itineraries with specific recommendations.",
         tools=[web_search, get_weather, get_attractions, book_restaurant],
@@ -155,7 +155,7 @@ async def research_agent(ctx: flowforge.Context) -> dict:
     result = await flowforge.step.agent(
         "research",
         task=f"Research {topic} and provide a comprehensive summary with key findings.",
-        model="gpt-4o",
+        model="gpt-5",
         system="You are a research assistant. Provide accurate, well-sourced information.",
         tools=[web_search],
         max_iterations=10,

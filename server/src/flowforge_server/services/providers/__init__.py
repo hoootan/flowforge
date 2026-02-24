@@ -240,7 +240,7 @@ class ProviderRegistry:
             "default": "gpt-5",
             "fast": "gpt-5-mini",
             "smart": "gpt-5.2",
-            "coding": "claude-sonnet-4-5-20250514",
+            "coding": "claude-sonnet-4-6",
             "cheap": "gpt-5-nano",
             "reasoning": "o3",
         }

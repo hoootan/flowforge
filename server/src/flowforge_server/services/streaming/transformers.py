@@ -44,7 +44,7 @@ class TokenCounterTransformer(StreamTransformer):
     Falls back to character-based estimation for other providers.
     """
 
-    def __init__(self, model: str = "gpt-4o") -> None:
+    def __init__(self, model: str = "gpt-5") -> None:
         """
         Initialize the token counter.
 

@@ -181,7 +181,7 @@ export function ModelPricingDialog({
                     id="model-id"
                     value={modelId}
                     onChange={(e) => setModelId(e.target.value)}
-                    placeholder="e.g., gpt-4o or my-custom-model"
+                    placeholder="e.g., gpt-5 or my-custom-model"
                     className="font-mono flex-1"
                     list="model-suggestions"
                   />

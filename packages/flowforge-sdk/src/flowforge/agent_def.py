@@ -26,7 +26,7 @@ class AgentDefinition:
             name="classifier",
             system="You classify customer inquiries...",
             tools=[classify_tool],
-            model="gpt-4o-mini",
+            model="gpt-5-mini",
         )
     """
 
@@ -65,7 +65,7 @@ def agent_def(
             name="support",
             system="Provide customer support using the knowledge base",
             tools=[search_kb],
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
         )
     """
     return AgentDefinition(

@@ -72,7 +72,7 @@ class InlineExecutor:
 
         # Get configuration
         agent_config = fn.agent_config or {}
-        model = agent_config.get("model", "claude-sonnet-4-5-20250514")
+        model = agent_config.get("model", "claude-sonnet-4-6")
         max_iterations = agent_config.get("max_iterations", 30)
         max_tool_calls = agent_config.get("max_tool_calls", 50)
 

@@ -88,54 +88,33 @@ class AIResponse:
         return result
 
 
-# Model pricing (per 1M tokens) - updated January 2026
+# Model pricing (per 1M tokens) - updated February 2026
 MODEL_PRICING = {
     # OpenAI GPT-5 Family
+    "gpt-5.2": {"input": 1.75, "output": 14.00},
+    "gpt-5.1": {"input": 1.25, "output": 10.00},
     "gpt-5": {"input": 1.25, "output": 10.00},
     "gpt-5-mini": {"input": 0.25, "output": 2.00},
     "gpt-5-nano": {"input": 0.05, "output": 0.40},
-    "gpt-5-pro": {"input": 15.00, "output": 120.00},
-    "gpt-5.1": {"input": 1.25, "output": 10.00},
-    "gpt-5.2": {"input": 1.25, "output": 10.00},
     # OpenAI GPT-4.1 Family
     "gpt-4.1": {"input": 2.00, "output": 8.00},
     "gpt-4.1-mini": {"input": 0.40, "output": 1.60},
-    "gpt-4.1-nano": {"input": 0.10, "output": 0.40},
-    # OpenAI GPT-4o Family (Legacy)
-    "gpt-4o": {"input": 2.50, "output": 10.00},
-    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
-    "gpt-4-turbo": {"input": 10.00, "output": 30.00},
-    "gpt-4": {"input": 30.00, "output": 60.00},
-    "gpt-3.5-turbo": {"input": 0.50, "output": 1.50},
     # OpenAI O-Series (Reasoning)
     "o1": {"input": 15.00, "output": 60.00},
-    "o1-mini": {"input": 3.00, "output": 12.00},
-    "o3": {"input": 0.40, "output": 1.60},
+    "o3": {"input": 2.00, "output": 8.00},
     "o3-mini": {"input": 1.10, "output": 4.40},
     "o4-mini": {"input": 1.10, "output": 4.40},
-    # Anthropic Claude 4.5 Series
-    "claude-opus-4-5-20250514": {"input": 5.00, "output": 25.00},
-    "claude-sonnet-4-5-20250514": {"input": 3.00, "output": 15.00},
-    "claude-haiku-4-5-20250514": {"input": 1.00, "output": 5.00},
-    # Anthropic Claude 4 Series
-    "claude-sonnet-4-20250514": {"input": 3.00, "output": 15.00},
-    # Anthropic Claude 3.x Series (Legacy)
-    "claude-3-opus-20240229": {"input": 15.00, "output": 75.00},
-    "claude-3-sonnet-20240229": {"input": 3.00, "output": 15.00},
-    "claude-3-haiku-20240307": {"input": 0.25, "output": 1.25},
-    "claude-3-5-sonnet-20241022": {"input": 3.00, "output": 15.00},
-    # Google Gemini 3 Series
-    "gemini-3-pro": {"input": 2.00, "output": 12.00},
+    # Anthropic Claude (Latest)
+    "claude-opus-4-6": {"input": 5.00, "output": 25.00},
+    "claude-sonnet-4-6": {"input": 3.00, "output": 15.00},
+    "claude-haiku-4-5-20251001": {"input": 1.00, "output": 5.00},
     # Google Gemini 2.5 Series
     "gemini-2.5-pro": {"input": 1.25, "output": 10.00},
     "gemini-2.5-flash": {"input": 0.30, "output": 2.50},
+    "gemini-2.5-flash-lite": {"input": 0.10, "output": 0.40},
     # Google Gemini 2.0 Series
     "gemini-2.0-flash": {"input": 0.10, "output": 0.40},
-    "gemini-2.0-flash-lite": {"input": 0.10, "output": 0.40},
-    # Google Gemini 1.5 Series (Legacy)
-    "gemini-1.5-pro": {"input": 1.25, "output": 5.00},
-    "gemini-1.5-flash": {"input": 0.075, "output": 0.30},
-    "gemini-pro": {"input": 0.50, "output": 1.50},
+    "gemini-2.0-flash-lite": {"input": 0.075, "output": 0.30},
 }
 
 
@@ -162,7 +141,7 @@ def detect_provider(model: str) -> str:
     """Detect the provider from the model name."""
     model_lower = model.lower()
 
-    if model_lower.startswith("gpt") or model_lower.startswith("o1"):
+    if model_lower.startswith(("gpt", "o3", "o4")):
         return "openai"
     elif model_lower.startswith("claude"):
         return "anthropic"
@@ -344,7 +323,7 @@ class AIService:
         Generate a completion from an AI model.
 
         Args:
-            model: Model identifier (e.g., "gpt-4o", "claude-3-sonnet-20240229").
+            model: Model identifier (e.g., "gpt-5", "claude-sonnet-4-6").
             messages: List of message dicts with 'role' and 'content'.
             max_tokens: Maximum tokens to generate.
             temperature: Sampling temperature.
@@ -590,7 +569,7 @@ class AIService:
         Stream a completion from an AI model token by token.
 
         Args:
-            model: Model identifier (e.g., "gpt-4o", "claude-3-sonnet-20240229").
+            model: Model identifier (e.g., "gpt-5", "claude-sonnet-4-6").
             messages: List of message dicts with 'role' and 'content'.
             max_tokens: Maximum tokens to generate.
             temperature: Sampling temperature.

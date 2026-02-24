@@ -223,7 +223,7 @@ async def customer_support_agent(ctx: Context) -> dict:
     result = await flowforge.step.agent(
         "support-agent",
         task=f"{context_info}\nCustomer Message: {customer_message}\n\nPlease help the customer resolve their issue.",
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         system=(
             "You are a friendly and helpful customer support agent. Your goals are:\n"
             "1. Understand the customer's issue clearly\n"
@@ -282,7 +282,7 @@ async def faq_bot(ctx: Context) -> dict:
     result = await flowforge.step.agent(
         "faq-search",
         task=f"Answer this question using the knowledge base: {question}",
-        model="gpt-4o-mini",
+        model="gpt-5-mini",
         system="You are a helpful FAQ bot. Search the knowledge base and provide a clear, concise answer.",
         tools=[search_knowledge_base],
         max_iterations=5,

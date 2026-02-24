@@ -198,7 +198,7 @@ async def plan_travel(ctx: Context) -> dict:
     result = await flowforge.step.agent(
         "travel-planner-agent",
         task=task_description,
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         system=(
             "You are an expert travel planning assistant with deep knowledge of destinations worldwide. "
             "Create comprehensive, practical travel itineraries that are well-researched and personalized. "
@@ -252,7 +252,7 @@ async def weather_based_planner(ctx: Context) -> dict:
     result = await flowforge.step.agent(
         "weather-activities",
         task=f"Check the weather for {destination} and recommend appropriate activities for each day",
-        model="gpt-4o",
+        model="gpt-5",
         system="You are a travel assistant. Recommend indoor activities for rainy days and outdoor activities for sunny days.",
         tools=[get_weather, get_attractions],
         max_iterations=10,

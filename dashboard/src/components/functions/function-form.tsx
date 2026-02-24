@@ -54,10 +54,10 @@ interface FunctionFormProps {
 }
 
 const MODEL_OPTIONS = [
-  { value: "claude-sonnet-4-5-20250514", label: "Claude Sonnet 4.5" },
-  { value: "claude-3-5-sonnet-20241022", label: "Claude 3.5 Sonnet" },
-  { value: "gpt-4o", label: "GPT-4o" },
-  { value: "gpt-4o-mini", label: "GPT-4o Mini" },
+  { value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
+  { value: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5" },
+  { value: "gpt-5", label: "GPT-5" },
+  { value: "gpt-5-mini", label: "GPT-5 Mini" },
 ];
 
 export function FunctionForm({
@@ -79,7 +79,7 @@ export function FunctionForm({
   // Inline mode fields
   const [systemPrompt, setSystemPrompt] = useState("");
   const [selectedTools, setSelectedTools] = useState<string[]>([]);
-  const [model, setModel] = useState("claude-sonnet-4-5-20250514");
+  const [model, setModel] = useState("claude-sonnet-4-6");
   const [maxIterations, setMaxIterations] = useState(30);
   const [maxToolCalls, setMaxToolCalls] = useState(50);
 
@@ -102,7 +102,7 @@ export function FunctionForm({
         setSelectedTools(func.tools_config || []);
         const agentConfig = func.agent_config as Record<string, unknown> | null;
         if (agentConfig) {
-          setModel((agentConfig.model as string) || "claude-sonnet-4-5-20250514");
+          setModel((agentConfig.model as string) || "claude-sonnet-4-6");
           setMaxIterations((agentConfig.max_iterations as number) || 30);
           setMaxToolCalls((agentConfig.max_tool_calls as number) || 50);
         }

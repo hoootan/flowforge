@@ -49,7 +49,7 @@ class ModelPricing(Base, TimestampMixin):
         index=True,
     )
 
-    # Model identifier (e.g., "gpt-4o", "claude-3-5-sonnet-20241022")
+    # Model identifier (e.g., "gpt-5", "claude-sonnet-4-6")
     model_id: Mapped[str] = mapped_column(
         String(255),
         nullable=False,

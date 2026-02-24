@@ -21,10 +21,10 @@ import { useState } from "react";
 import type { FunctionMode } from "./function-step-type";
 
 const MODEL_OPTIONS = [
-  { value: "claude-sonnet-4-5-20250514", label: "Claude 4.5 Sonnet", desc: "Best balance of speed and quality" },
-  { value: "claude-3-5-sonnet-20241022", label: "Claude 3.5 Sonnet", desc: "Fast and capable" },
-  { value: "gpt-4o", label: "GPT-4o", desc: "OpenAI flagship" },
-  { value: "gpt-4o-mini", label: "GPT-4o Mini", desc: "Faster, lower cost" },
+  { value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6", desc: "Best balance of speed and quality" },
+  { value: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5", desc: "Fastest and most affordable" },
+  { value: "gpt-5", label: "GPT-5", desc: "OpenAI flagship" },
+  { value: "gpt-5-mini", label: "GPT-5 Mini", desc: "Faster, lower cost" },
 ];
 
 interface FunctionStepConfigProps {

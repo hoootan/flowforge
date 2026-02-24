@@ -76,7 +76,7 @@ class Network:
             name="support-network",
             agents=[classifier, support, escalation],
             router=code_router(my_router_fn),
-            default_model="claude-sonnet-4-20250514",
+            default_model="claude-sonnet-4-6",
         )
     """
 
@@ -85,7 +85,7 @@ class Network:
         name: str,
         agents: list["AgentDefinition"],
         router: "Router",
-        default_model: str = "claude-sonnet-4-20250514",
+        default_model: str = "claude-sonnet-4-6",
         default_system: str = "",
     ):
         """
@@ -110,7 +110,7 @@ def network(
     name: str,
     agents: list["AgentDefinition"],
     router: "Router",
-    default_model: str = "claude-sonnet-4-20250514",
+    default_model: str = "claude-sonnet-4-6",
 ) -> Network:
     """
     Create a multi-agent network.

@@ -104,7 +104,7 @@ classifier = agent_def(
 After classification, set the category in network state using state.set('category', <category>).
 Return the classification results.""",
     tools=[classify_ticket],
-    model="gpt-4o-mini",
+    model="gpt-5-mini",
 )
 
 support = agent_def(
@@ -113,7 +113,7 @@ support = agent_def(
 If you can resolve the issue, set state.set('resolved', True).
 If the issue needs escalation, use the escalate tool.""",
     tools=[search_kb, escalate],
-    model="claude-sonnet-4-20250514",
+    model="claude-sonnet-4-6",
 )
 
 escalation = agent_def(
@@ -122,7 +122,7 @@ escalation = agent_def(
 Provide instructions to the customer on next steps and timeline for human review.
 Set state.set('resolved', True) when complete.""",
     tools=[],
-    model="claude-sonnet-4-20250514",
+    model="claude-sonnet-4-6",
 )
 
 
@@ -167,7 +167,7 @@ support_network = network(
     name="support",
     agents=[classifier, support, escalation],
     router=code(support_router),
-    default_model="gpt-4o-mini",
+    default_model="gpt-5-mini",
 )
 
 

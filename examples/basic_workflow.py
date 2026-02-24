@@ -83,7 +83,7 @@ async def process_order(ctx: Context) -> dict:
     # Step 2: AI-powered fraud check
     fraud_check = await step.ai(
         "fraud-check",
-        model="gpt-4o",
+        model="gpt-5",
         prompt=f"""Analyze this order for fraud indicators:
         Order ID: {order.get('order_id')}
         Customer: {order.get('customer')}

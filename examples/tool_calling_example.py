@@ -68,7 +68,7 @@ async def tool_calling_demo(ctx: flowforge.Context, step: flowforge.step) -> dic
     # Example 1: LLM with tools (auto choice)
     result1 = await step.ai(
         "search-customer",
-        model="gpt-4o",
+        model="gpt-5",
         prompt="Find the customer with email john@example.com",
         tools=[search_database],
         tool_choice="auto",
@@ -81,7 +81,7 @@ async def tool_calling_demo(ctx: flowforge.Context, step: flowforge.step) -> dic
     # Example 2: Multiple tools
     result2 = await step.ai(
         "weather-and-search",
-        model="gpt-4o",
+        model="gpt-5",
         prompt="What's the weather in Tokyo and find customer alice@example.com?",
         tools=[search_database, get_weather],
         tool_choice="auto",
@@ -94,7 +94,7 @@ async def tool_calling_demo(ctx: flowforge.Context, step: flowforge.step) -> dic
     # Example 3: Without tools (regular chat)
     result3 = await step.ai(
         "regular-chat",
-        model="gpt-4o",
+        model="gpt-5",
         prompt="What is the capital of France?",
     )
 

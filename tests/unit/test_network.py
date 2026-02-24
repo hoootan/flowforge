@@ -351,7 +351,7 @@ class TestNetworkClass:
             name="test-network",
             agents=[agent1, agent2],
             router=router,
-            default_model="gpt-4o",
+            default_model="gpt-5",
         )
 
         assert net.name == "test-network"
@@ -359,7 +359,7 @@ class TestNetworkClass:
         assert "agent1" in net.agents
         assert "agent2" in net.agents
         assert net.router is router
-        assert net.default_model == "gpt-4o"
+        assert net.default_model == "gpt-5"
         assert isinstance(net.state, NetworkState)
 
     def test_network_agents_dict(self):
@@ -383,10 +383,10 @@ class TestNetworkClass:
             name="test",
             agents=[],
             router=code(lambda ctx: None),
-            default_model="claude-sonnet-4-20250514",
+            default_model="claude-sonnet-4-6",
         )
 
-        assert net.default_model == "claude-sonnet-4-20250514"
+        assert net.default_model == "claude-sonnet-4-6"
 
     def test_network_default_system(self):
         """Test default system prompt."""
@@ -439,12 +439,12 @@ class TestNetworkFactory:
             name="full-network",
             agents=[agent1, agent2],
             router=code(my_router),
-            default_model="gpt-4o-mini",
+            default_model="gpt-5-mini",
         )
 
         assert net.name == "full-network"
         assert len(net.agents) == 2
-        assert net.default_model == "gpt-4o-mini"
+        assert net.default_model == "gpt-5-mini"
         assert isinstance(net.router, CodeRouter)
 
     def test_factory_minimal_parameters(self):
@@ -458,7 +458,7 @@ class TestNetworkFactory:
         )
 
         assert net.name == "minimal"
-        assert net.default_model == "claude-sonnet-4-20250514"  # default
+        assert net.default_model == "claude-sonnet-4-6"  # default
 
 
 class TestNetworkIntegration:

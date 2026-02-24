@@ -12,7 +12,7 @@ class AgentConfig:
     Configuration for agent execution.
 
     Attributes:
-        model: Model to use (e.g., "claude-sonnet-4-20250514", "gpt-4o").
+        model: Model to use (e.g., "claude-sonnet-4-6", "gpt-5").
         system: System prompt for the agent.
         tools: List of tools the agent can use.
         max_iterations: Maximum number of agent loop iterations.

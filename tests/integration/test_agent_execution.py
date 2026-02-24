@@ -75,7 +75,7 @@ class TestBasicAgentExecution:
                 await step_manager.agent(
                     "agent-test",
                     task="Answer this simple question",
-                    model="gpt-4o",
+                    model="gpt-5",
                     tools=[],
                 )
 
@@ -128,7 +128,7 @@ class TestBasicAgentExecution:
                     await step_manager.agent(
                         "agent-test",
                         task="Search for Python",
-                        model="gpt-4o",
+                        model="gpt-5",
                         tools=[search_tool],
                     )
 
@@ -196,7 +196,7 @@ class TestBasicAgentExecution:
                     await step_manager.agent(
                         "agent-test",
                         task="Convert temperature",
-                        model="gpt-4o",
+                        model="gpt-5",
                         tools=[search_tool, calculator_tool],
                     )
 
@@ -237,7 +237,7 @@ class TestAgentLimits:
                     await step_manager.agent(
                         "agent-test",
                         task="Keep searching",
-                        model="gpt-4o",
+                        model="gpt-5",
                         tools=[search_tool],
                         max_iterations=3,
                         max_tool_calls=100,
@@ -279,7 +279,7 @@ class TestAgentLimits:
                     await step_manager.agent(
                         "agent-test",
                         task="Multiple searches",
-                        model="gpt-4o",
+                        model="gpt-5",
                         tools=[search_tool],
                         max_iterations=100,
                         max_tool_calls=5,
@@ -341,7 +341,7 @@ class TestAgentWithHITL:
                         await step_manager.agent(
                             "agent-test",
                             task="Send notification",
-                            model="gpt-4o",
+                            model="gpt-5",
                             tools=[send_notification_tool],
                         )
 
@@ -403,7 +403,7 @@ class TestAgentWithHITL:
                         await step_manager.agent(
                             "agent-test",
                             task="Try to send notification",
-                            model="gpt-4o",
+                            model="gpt-5",
                             tools=[send_notification_tool],
                         )
 
@@ -456,7 +456,7 @@ class TestAgentErrorHandling:
                 await step_manager.agent(
                     "agent-test",
                     task="Use missing tool",
-                    model="gpt-4o",
+                    model="gpt-5",
                     tools=[search_tool],
                 )
 
@@ -513,7 +513,7 @@ class TestAgentErrorHandling:
                     await step_manager.agent(
                         "agent-test",
                         task="Use failing tool",
-                        model="gpt-4o",
+                        model="gpt-5",
                         tools=[failing_tool],
                     )
 
@@ -552,7 +552,7 @@ class TestAgentMemoization:
             result = await step_manager.agent(
                 "cached-agent",
                 task="Test task",
-                model="gpt-4o",
+                model="gpt-5",
                 tools=[],
             )
 

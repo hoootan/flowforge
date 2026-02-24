@@ -108,7 +108,7 @@ classifier = agent_def(
 
 Always use the classify_issue tool first, then use handoff_to_agent to route to either 'technical_support' or 'billing_support'.""",
     tools=[classify_issue, handoff_to_agent],
-    model="gpt-4o-mini",
+    model="gpt-5-mini",
 )
 
 technical_support = agent_def(
@@ -121,7 +121,7 @@ technical_support = agent_def(
 
 Use search_knowledge_base to find solutions. When the issue is resolved, set state['resolved'] = True.""",
     tools=[search_knowledge_base],
-    model="claude-sonnet-4-20250514",
+    model="claude-sonnet-4-6",
 )
 
 billing_support = agent_def(
@@ -134,7 +134,7 @@ billing_support = agent_def(
 
 Use check_billing_history to investigate. When resolved, set state['resolved'] = True.""",
     tools=[check_billing_history],
-    model="claude-sonnet-4-20250514",
+    model="claude-sonnet-4-6",
 )
 
 
@@ -173,7 +173,7 @@ support_network = network(
     name="customer-support",
     agents=[classifier, technical_support, billing_support],
     router=code(support_router),
-    default_model="gpt-4o-mini",
+    default_model="gpt-5-mini",
 )
 
 

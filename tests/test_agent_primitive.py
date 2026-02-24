@@ -56,7 +56,7 @@ async def test_agent_basic_execution(step_manager):
             await step_manager.agent(
                 "test-agent",
                 task="Answer this question",
-                model="gpt-4o",
+                model="gpt-5",
                 tools=[],
                 max_iterations=5,
             )
@@ -109,7 +109,7 @@ async def test_agent_with_tool_calls(step_manager):
                 await step_manager.agent(
                     "test-agent",
                     task="Search for Python",
-                    model="gpt-4o",
+                    model="gpt-5",
                     tools=[search_tool],
                     max_iterations=5,
                 )
@@ -151,7 +151,7 @@ async def test_agent_max_iterations(step_manager):
                 await step_manager.agent(
                     "test-agent",
                     task="Keep searching",
-                    model="gpt-4o",
+                    model="gpt-5",
                     tools=[search_tool],
                     max_iterations=3,
                     max_tool_calls=100,
@@ -192,7 +192,7 @@ async def test_agent_max_tool_calls(step_manager):
                 await step_manager.agent(
                     "test-agent",
                     task="Search",
-                    model="gpt-4o",
+                    model="gpt-5",
                     tools=[search_tool],
                     max_iterations=100,
                     max_tool_calls=3,
@@ -245,7 +245,7 @@ async def test_agent_with_approval_required(step_manager):
                     await step_manager.agent(
                         "test-agent",
                         task="Do sensitive action",
-                        model="gpt-4o",
+                        model="gpt-5",
                         tools=[sensitive_tool],
                         max_iterations=5,
                     )
@@ -278,7 +278,7 @@ async def test_agent_memoization(step_manager):
         result = await step_manager.agent(
             "test-agent",
             task="Test task",
-            model="gpt-4o",
+            model="gpt-5",
             tools=[],
         )
 
@@ -321,7 +321,7 @@ async def test_agent_tool_not_found(step_manager):
             await step_manager.agent(
                 "test-agent",
                 task="Use nonexistent tool",
-                model="gpt-4o",
+                model="gpt-5",
                 tools=[search_tool],  # Only provide search_tool
                 max_iterations=5,
             )

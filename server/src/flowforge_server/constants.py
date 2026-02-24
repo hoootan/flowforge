@@ -11,27 +11,29 @@ from typing import TypedDict
 class AIModel(str, Enum):
     """Supported AI models."""
 
-    # OpenAI models
-    GPT_4O = "gpt-4o"
-    GPT_4O_MINI = "gpt-4o-mini"
-    GPT_4_TURBO = "gpt-4-turbo"
-    GPT_4 = "gpt-4"
-    GPT_35_TURBO = "gpt-3.5-turbo"
+    # OpenAI GPT-5 family
+    GPT_5_2 = "gpt-5.2"
+    GPT_5_1 = "gpt-5.1"
+    GPT_5 = "gpt-5"
+    GPT_5_MINI = "gpt-5-mini"
+    GPT_5_NANO = "gpt-5-nano"
+    # OpenAI GPT-4.1 family
+    GPT_4_1 = "gpt-4.1"
+    GPT_4_1_MINI = "gpt-4.1-mini"
+    # OpenAI reasoning models
+    O1 = "o1"
+    O3 = "o3"
+    O3_MINI = "o3-mini"
+    O4_MINI = "o4-mini"
 
     # Anthropic models
-    CLAUDE_3_OPUS = "claude-3-opus-20240229"
-    CLAUDE_3_SONNET = "claude-3-sonnet-20240229"
-    CLAUDE_3_HAIKU = "claude-3-haiku-20240307"
-    CLAUDE_35_SONNET = "claude-3-5-sonnet-20241022"
-    CLAUDE_SONNET_4 = "claude-sonnet-4-20250514"
-    CLAUDE_SONNET_4_5 = "claude-sonnet-4-5-20250514"
-    CLAUDE_OPUS_4 = "claude-opus-4-20250514"
-    CLAUDE_OPUS_4_5 = "claude-opus-4-5-20250514"
+    CLAUDE_OPUS_4_6 = "claude-opus-4-6"
+    CLAUDE_SONNET_4_6 = "claude-sonnet-4-6"
+    CLAUDE_HAIKU_4_5 = "claude-haiku-4-5-20251001"
 
     # Google models
-    GEMINI_15_PRO = "gemini-1.5-pro"
-    GEMINI_15_FLASH = "gemini-1.5-flash"
-    GEMINI_20_PRO = "gemini-2.0-pro"
+    GEMINI_25_PRO = "gemini-2.5-pro"
+    GEMINI_25_FLASH = "gemini-2.5-flash"
 
     # Mistral models
     MISTRAL_LARGE = "mistral-large-latest"
@@ -46,27 +48,27 @@ class ModelPricing(TypedDict):
     output: float
 
 
-# Model pricing (per 1M tokens) - approximate as of early 2025
+# Model pricing (per 1M tokens) - updated February 2026
 MODEL_PRICING: dict[str, ModelPricing] = {
     # OpenAI
-    AIModel.GPT_4O: {"input": 2.50, "output": 10.00},
-    AIModel.GPT_4O_MINI: {"input": 0.15, "output": 0.60},
-    AIModel.GPT_4_TURBO: {"input": 10.00, "output": 30.00},
-    AIModel.GPT_4: {"input": 30.00, "output": 60.00},
-    AIModel.GPT_35_TURBO: {"input": 0.50, "output": 1.50},
+    AIModel.GPT_5_2: {"input": 1.75, "output": 14.00},
+    AIModel.GPT_5_1: {"input": 1.25, "output": 10.00},
+    AIModel.GPT_5: {"input": 1.25, "output": 10.00},
+    AIModel.GPT_5_MINI: {"input": 0.25, "output": 2.00},
+    AIModel.GPT_5_NANO: {"input": 0.05, "output": 0.40},
+    AIModel.GPT_4_1: {"input": 2.00, "output": 8.00},
+    AIModel.GPT_4_1_MINI: {"input": 0.40, "output": 1.60},
+    AIModel.O1: {"input": 15.00, "output": 60.00},
+    AIModel.O3: {"input": 2.00, "output": 8.00},
+    AIModel.O3_MINI: {"input": 1.10, "output": 4.40},
+    AIModel.O4_MINI: {"input": 1.10, "output": 4.40},
     # Anthropic
-    AIModel.CLAUDE_3_OPUS: {"input": 15.00, "output": 75.00},
-    AIModel.CLAUDE_3_SONNET: {"input": 3.00, "output": 15.00},
-    AIModel.CLAUDE_3_HAIKU: {"input": 0.25, "output": 1.25},
-    AIModel.CLAUDE_35_SONNET: {"input": 3.00, "output": 15.00},
-    AIModel.CLAUDE_SONNET_4: {"input": 3.00, "output": 15.00},
-    AIModel.CLAUDE_SONNET_4_5: {"input": 3.00, "output": 15.00},
-    AIModel.CLAUDE_OPUS_4: {"input": 15.00, "output": 75.00},
-    AIModel.CLAUDE_OPUS_4_5: {"input": 15.00, "output": 75.00},
+    AIModel.CLAUDE_OPUS_4_6: {"input": 5.00, "output": 25.00},
+    AIModel.CLAUDE_SONNET_4_6: {"input": 3.00, "output": 15.00},
+    AIModel.CLAUDE_HAIKU_4_5: {"input": 1.00, "output": 5.00},
     # Google
-    AIModel.GEMINI_15_PRO: {"input": 1.25, "output": 5.00},
-    AIModel.GEMINI_15_FLASH: {"input": 0.075, "output": 0.30},
-    AIModel.GEMINI_20_PRO: {"input": 2.50, "output": 10.00},
+    AIModel.GEMINI_25_PRO: {"input": 1.25, "output": 10.00},
+    AIModel.GEMINI_25_FLASH: {"input": 0.30, "output": 2.50},
     # Mistral
     AIModel.MISTRAL_LARGE: {"input": 4.00, "output": 12.00},
     AIModel.MISTRAL_MEDIUM: {"input": 2.70, "output": 8.10},
@@ -75,7 +77,7 @@ MODEL_PRICING: dict[str, ModelPricing] = {
 
 # Default agent configuration values
 DEFAULT_AGENT_CONFIG = {
-    "model": AIModel.CLAUDE_SONNET_4_5,
+    "model": AIModel.CLAUDE_SONNET_4_6,
     "max_iterations": 30,
     "max_tool_calls": 50,
     "temperature": 0.7,

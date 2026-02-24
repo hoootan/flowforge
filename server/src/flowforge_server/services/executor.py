@@ -567,7 +567,7 @@ class Executor:
 
         elif step_type == "ai":
             # AI step - execute LLM call via AIService
-            model = step_result.get("model", "gpt-4o")
+            model = step_result.get("model", "gpt-5")
             messages = step_result.get("messages", [])
             temperature = step_result.get("temperature", 0.7)
             max_tokens = step_result.get("max_tokens", 1000)

@@ -194,7 +194,7 @@ def get_provider(provider_name: str | None = None, model: str | None = None) -> 
     # Auto-detect from model name
     if model:
         model_lower = model.lower()
-        if model_lower.startswith("gpt") or model_lower.startswith("o1"):
+        if model_lower.startswith(("gpt", "o3", "o4")):
             return OpenAIProvider()
         elif model_lower.startswith("claude"):
             return AnthropicProvider()

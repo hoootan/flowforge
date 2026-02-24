@@ -90,7 +90,7 @@ export function FunctionWizard({ initialData }: FunctionWizardProps) {
   const [name, setName] = useState("");
   const [triggerType, setTriggerType] = useState<TriggerType>("event");
   const [triggerValue, setTriggerValue] = useState("");
-  const [model, setModel] = useState("claude-sonnet-4-5-20250514");
+  const [model, setModel] = useState("claude-sonnet-4-6");
   const [systemPrompt, setSystemPrompt] = useState("");
   const [selectedTools, setSelectedTools] = useState<string[]>([]);
   const [endpointUrl, setEndpointUrl] = useState("");

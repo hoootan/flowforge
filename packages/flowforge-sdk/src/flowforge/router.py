@@ -63,7 +63,7 @@ class LLMRouter(Router):
 
     def __init__(
         self,
-        model: str = "gpt-4o-mini",
+        model: str = "gpt-5-mini",
         prompt: str | None = None,
         temperature: float = 0.3,
     ):
@@ -130,7 +130,7 @@ def code(fn: Callable[["RouterContext"], "AgentDefinition | str | None"]) -> Cod
 
 
 def llm(
-    model: str = "gpt-4o-mini",
+    model: str = "gpt-5-mini",
     prompt: str | None = None,
     temperature: float = 0.3,
 ) -> LLMRouter:
@@ -138,7 +138,7 @@ def llm(
     Create an LLM-based router.
 
     Args:
-        model: Model to use for routing (default: gpt-4o-mini).
+        model: Model to use for routing (default: gpt-5-mini).
         prompt: Custom routing prompt template.
         temperature: Sampling temperature (default: 0.3).
 
@@ -147,7 +147,7 @@ def llm(
 
     Example:
         router = llm(
-            model="gpt-4o",
+            model="gpt-5",
             prompt="Select the best agent for: {last_result}",
             temperature=0.5,
         )

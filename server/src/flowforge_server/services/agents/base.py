@@ -86,7 +86,7 @@ class AgentDefinition:
 
     name: str
     system_prompt: str
-    model: str = "claude-sonnet-4-5-20250514"
+    model: str = "claude-sonnet-4-6"
     tools: list[ToolDefinition] = field(default_factory=list)
 
     # Execution limits

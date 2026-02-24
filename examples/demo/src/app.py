@@ -78,7 +78,7 @@ async def research_topic(ctx: Context) -> dict:
     result = await step.agent(
         "research",
         task=f"Research and summarize: {topic}. Use search tools to find information, then save your findings.",
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         system="You are a research assistant. Be thorough and cite sources.",
         tools=[search_web, fetch_article, save_notes],
         max_iterations=10,
@@ -118,7 +118,7 @@ async def handle_support(ctx: Context) -> dict:
 
 Look up the customer, search the knowledge base, create a ticket, and resolve if possible.
 If you need to send an email, it will require approval.""",
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         system="You are a helpful customer support agent. Be empathetic and thorough.",
         tools=[
             get_customer,
@@ -187,7 +187,7 @@ support_network = network(
     name="support-net",
     agents=[classifier, technical_support, billing_support],
     router=code(ticket_router),
-    default_model="claude-sonnet-4-20250514",
+    default_model="claude-sonnet-4-6",
 )
 
 

@@ -139,7 +139,7 @@ support_net = network(
     name="support-network",
     agents=[classifier_agent, technical_agent, billing_agent, escalation_agent],
     router=code(support_router),
-    default_model="claude-sonnet-4-20250514",
+    default_model="claude-sonnet-4-6",
 )
 
 # Alternative: LLM-based routing
@@ -147,7 +147,7 @@ support_net_llm = network(
     name="support-network-llm",
     agents=[classifier_agent, technical_agent, billing_agent, escalation_agent],
     router=llm(
-        model="gpt-4o-mini",
+        model="gpt-5-mini",
         prompt="""You are routing a customer support ticket to the appropriate agent.
 
 Available agents: {agents}
@@ -165,7 +165,7 @@ Routing rules:
 Which agent should handle this next? Reply with just the agent name or 'DONE'.""",
         temperature=0.2,
     ),
-    default_model="claude-sonnet-4-20250514",
+    default_model="claude-sonnet-4-6",
 )
 
 

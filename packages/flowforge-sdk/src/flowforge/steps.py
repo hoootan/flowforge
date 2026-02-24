@@ -189,7 +189,7 @@ class StepManager:
 
         Args:
             step_id: Unique identifier for this AI step.
-            model: Model name (e.g., "gpt-4o", "claude-3-sonnet").
+            model: Model name (e.g., "gpt-5", "claude-sonnet-4-6").
             prompt: Simple text prompt (converted to messages internally).
             messages: Full messages array for chat models.
             max_tokens: Maximum tokens in the response.
@@ -218,7 +218,7 @@ class StepManager:
         Example:
             result = await step.ai(
                 "analyze-order",
-                model="gpt-4o",
+                model="gpt-5",
                 prompt=f"Analyze this order for fraud: {order}",
             )
             analysis = result["content"]
@@ -227,7 +227,7 @@ class StepManager:
             # Or with full messages
             result = await step.ai(
                 "chat-response",
-                model="claude-3-sonnet-20240229",
+                model="claude-sonnet-4-6",
                 messages=[
                     {"role": "system", "content": "You are a helpful assistant."},
                     {"role": "user", "content": "Hello!"},
@@ -243,7 +243,7 @@ class StepManager:
 
             result = await step.ai(
                 "search-step",
-                model="gpt-4o",
+                model="gpt-5",
                 prompt="Find customer john@example.com",
                 tools=[search_db],
                 tool_choice="auto",
@@ -458,7 +458,7 @@ class StepManager:
         Args:
             step_id: Unique identifier for this agent execution.
             task: The task/prompt for the agent to accomplish.
-            model: LLM model to use (e.g., "claude-sonnet-4-20250514", "gpt-4o").
+            model: LLM model to use (e.g., "claude-sonnet-4-6", "gpt-5").
             system: System prompt for the agent.
             tools: List of Tool objects the agent can call.
             max_iterations: Maximum reasoning iterations (default 20).
@@ -477,7 +477,7 @@ class StepManager:
             result = await step.agent(
                 "research-agent",
                 task="Research Tokyo weather and create a 3-day itinerary",
-                model="claude-sonnet-4-20250514",
+                model="claude-sonnet-4-6",
                 system="You are a travel planning assistant.",
                 tools=[web_search, weather_api, get_attractions],
                 max_iterations=20,
