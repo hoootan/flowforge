@@ -483,42 +483,25 @@ class AIProviderService:
                     "message": "Cannot automatically test custom providers",
                 }
 
-            # Build completion params based on auth type
-            import os
+            # Build completion params — pass api_key directly to litellm
             completion_params: dict[str, Any] = {
                 "model": test_model,
                 "messages": [{"role": "user", "content": "Hi"}],
                 "max_tokens": 1,
+                "api_key": credential,
             }
 
-            old_key = None
-            env_var = f"{provider_name.upper()}_API_KEY"
-
             if auth_type == "oauth_token":
-                # OAuth tokens go via extra_headers as Bearer token
                 completion_params["extra_headers"] = {
                     "Authorization": f"Bearer {credential}"
                 }
-            else:
-                # Standard API key auth via env var
-                old_key = os.environ.get(env_var)
-                os.environ[env_var] = credential
 
-            try:
-                # Make a minimal request (just to test auth)
-                response = await litellm.acompletion(**completion_params)
-                return {
-                    "status": "healthy",
-                    "message": f"{'OAuth token' if auth_type == 'oauth_token' else 'API key'} is valid",
-                    "model_tested": response.model if hasattr(response, 'model') else test_model,
-                }
-            finally:
-                # Restore original key (only for api_key auth type)
-                if auth_type != "oauth_token":
-                    if old_key:
-                        os.environ[env_var] = old_key
-                    elif env_var in os.environ:
-                        del os.environ[env_var]
+            response = await litellm.acompletion(**completion_params)
+            return {
+                "status": "healthy",
+                "message": f"{'OAuth token' if auth_type == 'oauth_token' else 'API key'} is valid",
+                "model_tested": response.model if hasattr(response, 'model') else test_model,
+            }
 
         except ImportError:
             return {
