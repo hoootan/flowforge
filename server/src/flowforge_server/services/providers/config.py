@@ -67,6 +67,14 @@ DEFAULT_MODEL_CONFIGS: dict[str, ModelConfig] = {
     # ===================
     # OpenAI GPT-5 Family (Latest)
     # ===================
+    "gpt-5.3": ModelConfig(
+        provider="openai",
+        model_id="gpt-5.3",
+        input_price_per_m=2.00,
+        output_price_per_m=16.00,
+        supports_vision=True,
+        context_window=400000,
+    ),
     "gpt-5.2": ModelConfig(
         provider="openai",
         model_id="gpt-5.2",
@@ -74,57 +82,6 @@ DEFAULT_MODEL_CONFIGS: dict[str, ModelConfig] = {
         output_price_per_m=14.00,
         supports_vision=True,
         context_window=400000,
-    ),
-    "gpt-5.1": ModelConfig(
-        provider="openai",
-        model_id="gpt-5.1",
-        input_price_per_m=1.25,
-        output_price_per_m=10.00,
-        supports_vision=True,
-        context_window=400000,
-    ),
-    "gpt-5": ModelConfig(
-        provider="openai",
-        model_id="gpt-5",
-        input_price_per_m=1.25,
-        output_price_per_m=10.00,
-        supports_vision=True,
-        context_window=400000,
-    ),
-    "gpt-5-mini": ModelConfig(
-        provider="openai",
-        model_id="gpt-5-mini",
-        input_price_per_m=0.25,
-        output_price_per_m=2.00,
-        supports_vision=True,
-        context_window=400000,
-    ),
-    "gpt-5-nano": ModelConfig(
-        provider="openai",
-        model_id="gpt-5-nano",
-        input_price_per_m=0.05,
-        output_price_per_m=0.40,
-        supports_vision=True,
-        context_window=200000,
-    ),
-    # ===================
-    # OpenAI GPT-4.1 Family
-    # ===================
-    "gpt-4.1": ModelConfig(
-        provider="openai",
-        model_id="gpt-4.1",
-        input_price_per_m=2.00,
-        output_price_per_m=8.00,
-        supports_vision=True,
-        context_window=1000000,
-    ),
-    "gpt-4.1-mini": ModelConfig(
-        provider="openai",
-        model_id="gpt-4.1-mini",
-        input_price_per_m=0.40,
-        output_price_per_m=1.60,
-        supports_vision=True,
-        context_window=1000000,
     ),
     # ===================
     # OpenAI O-Series (Reasoning Models)
@@ -196,48 +153,40 @@ DEFAULT_MODEL_CONFIGS: dict[str, ModelConfig] = {
         max_output_tokens=64000,
     ),
     # ===================
-    # Google Gemini 2.5 Series (Latest)
+    # Google Gemini 3 Series (Latest)
     # ===================
-    "gemini-2.5-pro": ModelConfig(
+    "gemini-3.1-pro": ModelConfig(
         provider="google",
-        model_id="gemini-2.5-pro",
+        model_id="gemini-3.1-pro",
+        input_price_per_m=1.50,
+        output_price_per_m=12.00,
+        supports_vision=True,
+        context_window=1000000,
+    ),
+    "gemini-3-pro": ModelConfig(
+        provider="google",
+        model_id="gemini-3-pro",
         input_price_per_m=1.25,
         output_price_per_m=10.00,
         supports_vision=True,
         context_window=1000000,
     ),
-    "gemini-2.5-flash": ModelConfig(
+    "gemini-3-flash": ModelConfig(
         provider="google",
-        model_id="gemini-2.5-flash",
+        model_id="gemini-3-flash",
         input_price_per_m=0.30,
         output_price_per_m=2.50,
         supports_vision=True,
         context_window=1000000,
     ),
-    "gemini-2.5-flash-lite": ModelConfig(
-        provider="google",
-        model_id="gemini-2.5-flash-lite",
-        input_price_per_m=0.10,
-        output_price_per_m=0.40,
-        supports_vision=True,
-        context_window=1000000,
-    ),
     # ===================
-    # Google Gemini 2.0 Series
+    # Google Gemini 2.5 Series (Budget)
     # ===================
-    "gemini-2.0-flash": ModelConfig(
+    "gemini-2.5-flash": ModelConfig(
         provider="google",
-        model_id="gemini-2.0-flash",
-        input_price_per_m=0.10,
-        output_price_per_m=0.40,
-        supports_vision=True,
-        context_window=1000000,
-    ),
-    "gemini-2.0-flash-lite": ModelConfig(
-        provider="google",
-        model_id="gemini-2.0-flash-lite",
-        input_price_per_m=0.075,
-        output_price_per_m=0.30,
+        model_id="gemini-2.5-flash",
+        input_price_per_m=0.15,
+        output_price_per_m=1.25,
         supports_vision=True,
         context_window=1000000,
     ),
@@ -246,11 +195,8 @@ DEFAULT_MODEL_CONFIGS: dict[str, ModelConfig] = {
 # Model aliases for convenience
 MODEL_ALIASES: dict[str, str] = {
     # OpenAI GPT aliases
-    "gpt-5-latest": "gpt-5.2",
-    "gpt-5-fast": "gpt-5-mini",
-    "gpt-5-cheap": "gpt-5-nano",
-    "gpt-4-latest": "gpt-4.1",
-    "gpt-4-fast": "gpt-4.1-mini",
+    "gpt-5-latest": "gpt-5.3",
+    "gpt-5-fast": "gpt-5.2",
     # OpenAI O-series aliases
     "o3-latest": "o3",
     "o-fast": "o4-mini",
@@ -264,18 +210,18 @@ MODEL_ALIASES: dict[str, str] = {
     "claude-haiku": "claude-haiku-4-5-20251001",
     "claude-haiku-4.5": "claude-haiku-4-5-20251001",
     # Google Gemini aliases
-    "gemini": "gemini-2.5-pro",
-    "gemini-latest": "gemini-2.5-pro",
-    "gemini-flash": "gemini-2.5-flash",
-    "gemini-flash-lite": "gemini-2.5-flash-lite",
+    "gemini": "gemini-3.1-pro",
+    "gemini-latest": "gemini-3.1-pro",
+    "gemini-pro": "gemini-3.1-pro",
+    "gemini-flash": "gemini-3-flash",
     # Use case aliases
-    "fast": "gpt-5-mini",
-    "fastest": "gpt-5-nano",
+    "fast": "gpt-5.2",
+    "fastest": "gpt-5.2",
     "smart": "claude-opus-4-6",
     "smartest": "claude-opus-4-6",
     "coding": "claude-sonnet-4-6",
-    "cheap": "gemini-2.0-flash",
-    "cheapest": "gpt-5-nano",
+    "cheap": "gemini-2.5-flash",
+    "cheapest": "gemini-2.5-flash",
     "reasoning": "o3",
     "reasoning-fast": "o4-mini",
     "reasoning-deep": "o1",
@@ -285,19 +231,19 @@ MODEL_ALIASES: dict[str, str] = {
 DEFAULT_FALLBACK_CHAINS: dict[str, FallbackConfig] = {
     "default": FallbackConfig(
         name="default",
-        models=["gpt-5", "claude-sonnet-4-6", "gemini-2.5-pro"],
+        models=["gpt-5.3", "claude-sonnet-4-6", "gemini-3.1-pro"],
     ),
     "fast": FallbackConfig(
         name="fast",
-        models=["gpt-5-mini", "claude-haiku-4-5-20251001", "gemini-2.5-flash"],
+        models=["gpt-5.2", "gemini-3-flash", "claude-haiku-4-5-20251001"],
     ),
     "smart": FallbackConfig(
         name="smart",
-        models=["claude-opus-4-6", "gpt-5.2", "gemini-2.5-pro"],
+        models=["claude-opus-4-6", "gpt-5.3", "gemini-3.1-pro"],
     ),
     "cheap": FallbackConfig(
         name="cheap",
-        models=["gpt-5-nano", "gemini-2.0-flash", "gemini-2.0-flash-lite"],
+        models=["gemini-2.5-flash", "gemini-3-flash", "gpt-5.2"],
     ),
     "reasoning": FallbackConfig(
         name="reasoning",
@@ -305,7 +251,7 @@ DEFAULT_FALLBACK_CHAINS: dict[str, FallbackConfig] = {
     ),
     "coding": FallbackConfig(
         name="coding",
-        models=["claude-sonnet-4-6", "claude-opus-4-6", "gpt-4.1"],
+        models=["claude-sonnet-4-6", "claude-opus-4-6", "gpt-5.3"],
     ),
 }
 
@@ -328,11 +274,11 @@ class ProviderRegistryConfig(BaseModel):
     # Default model for various use cases
     defaults: dict[str, str] = Field(
         default_factory=lambda: {
-            "default": "gpt-5",
-            "fast": "gpt-5-mini",
+            "default": "gpt-5.3",
+            "fast": "gpt-5.2",
             "smart": "claude-opus-4-6",
             "coding": "claude-sonnet-4-6",
-            "cheap": "gpt-5-nano",
+            "cheap": "gemini-2.5-flash",
             "reasoning": "o3",
         }
     )

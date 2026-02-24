@@ -38,6 +38,7 @@ def ai_provider_to_response(provider: AIProvider) -> AIProviderResponse:
         provider_name=provider.provider_name,
         display_name=provider.display_name,
         api_key_prefix=provider.api_key_prefix,
+        auth_type=provider.auth_type or "api_key",
         base_url=provider.base_url,
         is_active=provider.is_active,
         is_default=provider.is_default,
@@ -117,6 +118,7 @@ async def create_provider(
             base_url=provider_data.base_url,
             is_default=provider_data.is_default,
             config=provider_data.config,
+            auth_type=provider_data.auth_type,
         )
         await session.commit()
 
@@ -191,6 +193,7 @@ async def update_provider(
             is_active=provider_data.is_active,
             is_default=provider_data.is_default,
             config=provider_data.config,
+            auth_type=provider_data.auth_type,
         )
         await session.commit()
 

@@ -12,14 +12,8 @@ class AIModel(str, Enum):
     """Supported AI models."""
 
     # OpenAI GPT-5 family
+    GPT_5_3 = "gpt-5.3"
     GPT_5_2 = "gpt-5.2"
-    GPT_5_1 = "gpt-5.1"
-    GPT_5 = "gpt-5"
-    GPT_5_MINI = "gpt-5-mini"
-    GPT_5_NANO = "gpt-5-nano"
-    # OpenAI GPT-4.1 family
-    GPT_4_1 = "gpt-4.1"
-    GPT_4_1_MINI = "gpt-4.1-mini"
     # OpenAI reasoning models
     O1 = "o1"
     O3 = "o3"
@@ -32,7 +26,9 @@ class AIModel(str, Enum):
     CLAUDE_HAIKU_4_5 = "claude-haiku-4-5-20251001"
 
     # Google models
-    GEMINI_25_PRO = "gemini-2.5-pro"
+    GEMINI_31_PRO = "gemini-3.1-pro"
+    GEMINI_3_PRO = "gemini-3-pro"
+    GEMINI_3_FLASH = "gemini-3-flash"
     GEMINI_25_FLASH = "gemini-2.5-flash"
 
     # Mistral models
@@ -51,13 +47,8 @@ class ModelPricing(TypedDict):
 # Model pricing (per 1M tokens) - updated February 2026
 MODEL_PRICING: dict[str, ModelPricing] = {
     # OpenAI
+    AIModel.GPT_5_3: {"input": 2.00, "output": 16.00},
     AIModel.GPT_5_2: {"input": 1.75, "output": 14.00},
-    AIModel.GPT_5_1: {"input": 1.25, "output": 10.00},
-    AIModel.GPT_5: {"input": 1.25, "output": 10.00},
-    AIModel.GPT_5_MINI: {"input": 0.25, "output": 2.00},
-    AIModel.GPT_5_NANO: {"input": 0.05, "output": 0.40},
-    AIModel.GPT_4_1: {"input": 2.00, "output": 8.00},
-    AIModel.GPT_4_1_MINI: {"input": 0.40, "output": 1.60},
     AIModel.O1: {"input": 15.00, "output": 60.00},
     AIModel.O3: {"input": 2.00, "output": 8.00},
     AIModel.O3_MINI: {"input": 1.10, "output": 4.40},
@@ -67,8 +58,10 @@ MODEL_PRICING: dict[str, ModelPricing] = {
     AIModel.CLAUDE_SONNET_4_6: {"input": 3.00, "output": 15.00},
     AIModel.CLAUDE_HAIKU_4_5: {"input": 1.00, "output": 5.00},
     # Google
-    AIModel.GEMINI_25_PRO: {"input": 1.25, "output": 10.00},
-    AIModel.GEMINI_25_FLASH: {"input": 0.30, "output": 2.50},
+    AIModel.GEMINI_31_PRO: {"input": 1.50, "output": 12.00},
+    AIModel.GEMINI_3_PRO: {"input": 1.25, "output": 10.00},
+    AIModel.GEMINI_3_FLASH: {"input": 0.30, "output": 2.50},
+    AIModel.GEMINI_25_FLASH: {"input": 0.15, "output": 1.25},
     # Mistral
     AIModel.MISTRAL_LARGE: {"input": 4.00, "output": 12.00},
     AIModel.MISTRAL_MEDIUM: {"input": 2.70, "output": 8.10},

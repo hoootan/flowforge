@@ -34,7 +34,7 @@ class AgentConfigSchema(BaseModel):
     model: str = Field(
         default="claude-sonnet-4-6",
         description="AI model to use",
-        examples=["claude-sonnet-4-6", "gpt-5"],
+        examples=["claude-sonnet-4-6", "gpt-5.3"],
     )
 
     max_iterations: int = Field(
@@ -118,7 +118,7 @@ class InlineFunctionCreate(BaseModel):
     tools: list[str] = Field(
         ...,
         description="List of tool names to use (must exist in tools table)",
-        examples=[["web_search", "generate_image", "post_to_twitter"]],
+        examples=[["web_search", "generate_image", "ask_user"]],
         min_length=1,
     )
 

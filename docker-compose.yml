@@ -117,12 +117,14 @@ services:
     build:
       context: ./dashboard
       dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=http://192.168.2.3:8000/api/v1
     container_name: flowforge-dashboard
     # Dockerfile sets USER nextjs (uid 1001)
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}
+      - NEXT_PUBLIC_API_URL=http://192.168.2.3:8000/api/v1
     depends_on:
       server:
         condition: service_healthy

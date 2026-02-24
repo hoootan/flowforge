@@ -10,6 +10,10 @@ from pydantic import BaseModel, Field
 ProviderName = Literal["openai", "anthropic", "google", "mistral", "cohere", "custom"]
 
 
+# Authentication type
+AuthType = Literal["api_key", "oauth_token"]
+
+
 class AIProviderCreate(BaseModel):
     """Schema for creating a new AI provider."""
 
@@ -21,10 +25,15 @@ class AIProviderCreate(BaseModel):
 
     api_key: str = Field(
         ...,
-        description="The API key (will be encrypted)",
+        description="The API key or OAuth token (will be encrypted)",
         min_length=1,
         max_length=500,
         examples=["sk-..."],
+    )
+
+    auth_type: AuthType = Field(
+        default="api_key",
+        description="Authentication type: 'api_key' for standard API keys, 'oauth_token' for OAuth bearer tokens",
     )
 
     display_name: str | None = Field(
@@ -56,9 +65,14 @@ class AIProviderUpdate(BaseModel):
 
     api_key: str | None = Field(
         None,
-        description="New API key (will be encrypted). Omit to keep current.",
+        description="New API key or OAuth token (will be encrypted). Omit to keep current.",
         min_length=1,
         max_length=500,
+    )
+
+    auth_type: AuthType | None = Field(
+        None,
+        description="Authentication type: 'api_key' or 'oauth_token'",
     )
 
     display_name: str | None = Field(
@@ -96,8 +110,9 @@ class AIProviderResponse(BaseModel):
     display_name: str = Field(..., description="User-friendly name")
     api_key_prefix: str = Field(
         ...,
-        description="Masked API key prefix (e.g., 'sk-proj-...')",
+        description="Masked credential prefix (e.g., 'sk-proj-...')",
     )
+    auth_type: AuthType = Field(default="api_key", description="Authentication type: 'api_key' or 'oauth_token'")
     base_url: str | None = Field(None, description="Custom API endpoint")
     is_active: bool = Field(..., description="Whether the provider is enabled")
     is_default: bool = Field(..., description="Whether this is the default provider")

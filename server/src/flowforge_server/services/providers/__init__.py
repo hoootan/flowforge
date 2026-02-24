@@ -237,14 +237,14 @@ class ProviderRegistry:
 
         # Default fallbacks
         defaults = {
-            "default": "gpt-5",
-            "fast": "gpt-5-mini",
-            "smart": "gpt-5.2",
+            "default": "gpt-5.3",
+            "fast": "gpt-5.2",
+            "smart": "gpt-5.3",
             "coding": "claude-sonnet-4-6",
-            "cheap": "gpt-5-nano",
+            "cheap": "gemini-2.5-flash",
             "reasoning": "o3",
         }
-        return defaults.get(use_case, "gpt-5")
+        return defaults.get(use_case, "gpt-5.3")
 
     def set_health_checker(self, checker: HealthChecker) -> None:
         """Set the health checker for provider health awareness."""
@@ -383,14 +383,14 @@ class ProviderRegistry:
         session: "AsyncSession",
         tenant_id: uuid.UUID,
         provider: str,
-    ) -> str | None:
+    ) -> tuple[str, str] | None:
         """
-        Get the API key for a provider, checking tenant-specific first.
+        Get the credential and auth type for a provider, checking tenant-specific first.
 
         Priority:
         1. Tenant-specific provider from database (encrypted)
-        2. Environment variable (global fallback)
-        3. Config file (if loaded)
+        2. Environment variable (global fallback, always "api_key" auth type)
+        3. Config file (if loaded, always "api_key" auth type)
 
         Args:
             session: Database session for querying tenant providers
@@ -398,21 +398,22 @@ class ProviderRegistry:
             provider: Provider name (openai, anthropic, etc.)
 
         Returns:
-            API key or None if not found
+            Tuple of (credential, auth_type) or None if not found.
+            auth_type is "api_key" or "oauth_token".
         """
         # 1. Check tenant-specific providers first
         from flowforge_server.services.ai_provider import get_ai_provider_service
 
         try:
             service = get_ai_provider_service()
-            api_key = await service.get_decrypted_key(session, tenant_id, provider)
-            if api_key:
-                return api_key
+            result = await service.get_decrypted_key(session, tenant_id, provider)
+            if result:
+                return result  # Already a (credential, auth_type) tuple
         except Exception:
             # If service unavailable or decryption fails, fall back to env vars
             pass
 
-        # 2. Check environment variables
+        # 2. Check environment variables (always api_key auth type)
         env_keys = {
             "openai": "OPENAI_API_KEY",
             "anthropic": "ANTHROPIC_API_KEY",
@@ -425,12 +426,12 @@ class ProviderRegistry:
         if env_var:
             api_key = os.environ.get(env_var)
             if api_key:
-                return api_key
+                return (api_key, "api_key")
 
-        # 3. Check loaded config
+        # 3. Check loaded config (always api_key auth type)
         provider_settings = self.get_provider_settings(provider)
         if provider_settings.api_key:
-            return provider_settings.api_key
+            return (provider_settings.api_key, "api_key")
 
         return None
 

@@ -14,16 +14,30 @@ from flowforge_server.services.auth import generate_api_key, hash_api_key
 
 
 async def seed_builtin_tools() -> None:
-    """Seed built-in tools into the database if they don't exist."""
+    """Seed built-in tools into the database, removing stale ones."""
     print("[Seed] Checking built-in tools...")
 
     async with get_session_context() as session:
         definitions = get_builtin_tool_definitions()
+        valid_names = {d.name for d in definitions}
         created_count = 0
         updated_count = 0
+        removed_count = 0
 
+        # Remove stale built-in tools no longer in definitions
+        result = await session.execute(
+            select(Tool).where(Tool.is_builtin == True)
+        )
+        existing_builtins = list(result.scalars().all())
+
+        for tool in existing_builtins:
+            if tool.name not in valid_names:
+                await session.delete(tool)
+                removed_count += 1
+                print(f"[Seed] Removed stale built-in tool: {tool.name}")
+
+        # Create or update current definitions
         for tool_def in definitions:
-            # Check if tool already exists
             result = await session.execute(
                 select(Tool).where(
                     Tool.is_builtin == True,
@@ -33,7 +47,6 @@ async def seed_builtin_tools() -> None:
             existing = result.scalar_one_or_none()
 
             if existing:
-                # Update existing tool
                 existing.description = tool_def.description
                 existing.parameters = tool_def.parameters
                 existing.requires_approval = tool_def.requires_approval
@@ -41,13 +54,12 @@ async def seed_builtin_tools() -> None:
                 existing.is_active = True
                 updated_count += 1
             else:
-                # Create new tool
                 tool = Tool(
-                    tenant_id=None,  # Built-in tools have no tenant
+                    tenant_id=None,
                     name=tool_def.name,
                     description=tool_def.description,
                     parameters=tool_def.parameters,
-                    code=None,  # Built-in tools use Python implementations
+                    code=None,
                     is_builtin=True,
                     requires_approval=tool_def.requires_approval,
                     approval_timeout=tool_def.approval_timeout,
@@ -58,8 +70,15 @@ async def seed_builtin_tools() -> None:
 
         await session.commit()
 
-        if created_count > 0 or updated_count > 0:
-            print(f"[Seed] Built-in tools: {created_count} created, {updated_count} updated")
+        parts = []
+        if created_count:
+            parts.append(f"{created_count} created")
+        if updated_count:
+            parts.append(f"{updated_count} updated")
+        if removed_count:
+            parts.append(f"{removed_count} removed")
+        if parts:
+            print(f"[Seed] Built-in tools: {', '.join(parts)}")
         else:
             print("[Seed] Built-in tools: already up to date")
 

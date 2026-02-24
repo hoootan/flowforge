@@ -73,6 +73,13 @@ class AIProvider(Base, TimestampMixin):
         nullable=False,
     )  # First 8 chars + "..." for display
 
+    # Authentication type
+    auth_type: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="api_key",
+    )  # "api_key" or "oauth_token"
+
     # Optional custom endpoint
     base_url: Mapped[str | None] = mapped_column(
         Text,
@@ -137,6 +144,7 @@ class AIProvider(Base, TimestampMixin):
             "provider_name": self.provider_name,
             "display_name": self.display_name,
             "api_key_prefix": self.api_key_prefix,
+            "auth_type": self.auth_type,
             "base_url": self.base_url,
             "is_active": self.is_active,
             "is_default": self.is_default,

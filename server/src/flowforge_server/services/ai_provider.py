@@ -29,8 +29,8 @@ if TYPE_CHECKING:
 KNOWN_PROVIDERS = {
     "openai": {
         "display_name": "OpenAI",
-        "models": ["gpt-5.2", "gpt-5.1", "gpt-5", "gpt-5-mini", "gpt-5-nano", "gpt-4.1", "gpt-4.1-mini", "o3", "o4-mini", "o3-mini"],
-        "default_model": "gpt-5",
+        "models": ["gpt-5.3", "gpt-5.2", "o3", "o4-mini", "o3-mini"],
+        "default_model": "gpt-5.3",
     },
     "anthropic": {
         "display_name": "Anthropic",
@@ -43,8 +43,8 @@ KNOWN_PROVIDERS = {
     },
     "google": {
         "display_name": "Google AI",
-        "models": ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"],
-        "default_model": "gemini-2.5-pro",
+        "models": ["gemini-3.1-pro", "gemini-3-pro", "gemini-3-flash", "gemini-2.5-flash"],
+        "default_model": "gemini-3.1-pro",
     },
     "mistral": {
         "display_name": "Mistral AI",
@@ -89,8 +89,8 @@ class AIProviderService:
     Handles encrypted storage of API keys and per-tenant provider management.
     """
 
-    # In-memory cache for decrypted keys (tenant_id:provider -> (key, expiry))
-    _key_cache: dict[str, tuple[str, datetime]] = {}
+    # In-memory cache for decrypted keys (tenant_id:provider -> (key, auth_type, expiry))
+    _key_cache: dict[str, tuple[str, str, datetime]] = {}
     _cache_ttl = timedelta(minutes=5)
 
     async def create_provider(
@@ -103,6 +103,7 @@ class AIProviderService:
         base_url: str | None = None,
         is_default: bool = False,
         config: dict[str, Any] | None = None,
+        auth_type: str = "api_key",
     ) -> AIProvider:
         """
         Create a new AI provider configuration.
@@ -111,11 +112,12 @@ class AIProviderService:
             session: Database session
             tenant_id: Tenant ID
             provider_name: Provider identifier (openai, anthropic, etc.)
-            api_key: The API key (will be encrypted)
+            api_key: The API key or OAuth token (will be encrypted)
             display_name: User-friendly name (defaults to provider's standard name)
             base_url: Optional custom API endpoint
             is_default: Whether this should be the default provider
             config: Additional configuration
+            auth_type: Authentication type ("api_key" or "oauth_token")
 
         Returns:
             The created AIProvider
@@ -138,7 +140,7 @@ class AIProviderService:
             provider_info = KNOWN_PROVIDERS.get(provider_name, {})
             display_name = provider_info.get("display_name", provider_name.title())
 
-        # Encrypt the API key
+        # Encrypt the API key / OAuth token
         api_key_encrypted = encrypt_value(api_key)
         api_key_prefix = get_key_prefix(api_key)
 
@@ -153,6 +155,7 @@ class AIProviderService:
             display_name=display_name,
             api_key_encrypted=api_key_encrypted,
             api_key_prefix=api_key_prefix,
+            auth_type=auth_type,
             base_url=base_url,
             is_default=is_default,
             config=config or {},
@@ -260,6 +263,7 @@ class AIProviderService:
         is_active: bool | None = None,
         is_default: bool | None = None,
         config: dict[str, Any] | None = None,
+        auth_type: str | None = None,
     ) -> AIProvider:
         """
         Update an existing provider.
@@ -268,12 +272,13 @@ class AIProviderService:
             session: Database session
             tenant_id: Tenant ID
             provider_name: Provider identifier
-            api_key: New API key (will be encrypted)
+            api_key: New API key or OAuth token (will be encrypted)
             display_name: New display name
             base_url: New base URL (pass "" to clear)
             is_active: New active status
             is_default: New default status
             config: New configuration (replaces existing)
+            auth_type: New authentication type ("api_key" or "oauth_token")
 
         Returns:
             Updated AIProvider
@@ -287,6 +292,11 @@ class AIProviderService:
             provider.api_key_encrypted = encrypt_value(api_key)
             provider.api_key_prefix = get_key_prefix(api_key)
             # Clear cache for this provider
+            self._clear_key_cache(tenant_id, provider_name)
+
+        if auth_type is not None:
+            provider.auth_type = auth_type
+            # Clear cache since auth_type affects how the credential is used
             self._clear_key_cache(tenant_id, provider_name)
 
         if display_name is not None:
@@ -348,9 +358,9 @@ class AIProviderService:
         session: AsyncSession,
         tenant_id: uuid.UUID,
         provider_name: str,
-    ) -> str | None:
+    ) -> tuple[str, str] | None:
         """
-        Get the decrypted API key for a provider.
+        Get the decrypted credential and auth type for a provider.
 
         Uses in-memory caching to avoid repeated decryption.
 
@@ -360,15 +370,16 @@ class AIProviderService:
             provider_name: Provider identifier
 
         Returns:
-            Decrypted API key or None if not found
+            Tuple of (credential, auth_type) or None if not found.
+            auth_type is "api_key" or "oauth_token".
         """
         cache_key = f"{tenant_id}:{provider_name.lower()}"
 
         # Check cache
         if cache_key in self._key_cache:
-            key, expiry = self._key_cache[cache_key]
+            key, auth_type, expiry = self._key_cache[cache_key]
             if datetime.utcnow() < expiry:
-                return key
+                return (key, auth_type)
             else:
                 del self._key_cache[cache_key]
 
@@ -382,9 +393,10 @@ class AIProviderService:
 
         try:
             decrypted = decrypt_value(provider.api_key_encrypted)
-            # Cache the decrypted key
-            self._key_cache[cache_key] = (decrypted, datetime.utcnow() + self._cache_ttl)
-            return decrypted
+            auth_type = provider.auth_type or "api_key"
+            # Cache the decrypted key and auth type
+            self._key_cache[cache_key] = (decrypted, auth_type, datetime.utcnow() + self._cache_ttl)
+            return (decrypted, auth_type)
         except EncryptionError:
             return None
 
@@ -419,7 +431,7 @@ class AIProviderService:
         provider_name: str,
     ) -> dict[str, Any]:
         """
-        Test a provider's API key connectivity.
+        Test a provider's credential connectivity.
 
         Args:
             session: Database session
@@ -430,26 +442,28 @@ class AIProviderService:
             Dict with status and message
         """
         provider = await self.get_provider(session, tenant_id, provider_name)
-        api_key = await self.get_decrypted_key(session, tenant_id, provider_name)
+        result = await self.get_decrypted_key(session, tenant_id, provider_name)
 
-        if not api_key:
+        if not result:
             return {
                 "status": "error",
-                "message": "Could not decrypt API key",
+                "message": "Could not decrypt credential",
             }
 
+        credential, auth_type = result
+
         try:
-            # Try a minimal API call to verify the key works
+            # Try a minimal API call to verify the credential works
             import litellm
 
             # Use a minimal model call based on provider
             test_model = None
             if provider_name == "openai":
-                test_model = "gpt-5-nano"
+                test_model = "gpt-5.2"
             elif provider_name == "anthropic":
                 test_model = "claude-haiku-4-5-20251001"
             elif provider_name == "google":
-                test_model = "gemini-2.0-flash"
+                test_model = "gemini-3-flash"
             elif provider_name == "mistral":
                 test_model = "mistral-small-latest"
             else:
@@ -459,30 +473,42 @@ class AIProviderService:
                     "message": "Cannot automatically test custom providers",
                 }
 
-            # Set the API key for this request
+            # Build completion params based on auth type
             import os
+            completion_params: dict[str, Any] = {
+                "model": test_model,
+                "messages": [{"role": "user", "content": "Hi"}],
+                "max_tokens": 1,
+            }
+
+            old_key = None
             env_var = f"{provider_name.upper()}_API_KEY"
-            old_key = os.environ.get(env_var)
-            os.environ[env_var] = api_key
+
+            if auth_type == "oauth_token":
+                # OAuth tokens go via extra_headers as Bearer token
+                completion_params["extra_headers"] = {
+                    "Authorization": f"Bearer {credential}"
+                }
+            else:
+                # Standard API key auth via env var
+                old_key = os.environ.get(env_var)
+                os.environ[env_var] = credential
 
             try:
                 # Make a minimal request (just to test auth)
-                response = await litellm.acompletion(
-                    model=test_model,
-                    messages=[{"role": "user", "content": "Hi"}],
-                    max_tokens=1,
-                )
+                response = await litellm.acompletion(**completion_params)
                 return {
                     "status": "healthy",
-                    "message": "API key is valid",
+                    "message": f"{'OAuth token' if auth_type == 'oauth_token' else 'API key'} is valid",
                     "model_tested": response.model if hasattr(response, 'model') else test_model,
                 }
             finally:
-                # Restore original key
-                if old_key:
-                    os.environ[env_var] = old_key
-                elif env_var in os.environ:
-                    del os.environ[env_var]
+                # Restore original key (only for api_key auth type)
+                if auth_type != "oauth_token":
+                    if old_key:
+                        os.environ[env_var] = old_key
+                    elif env_var in os.environ:
+                        del os.environ[env_var]
 
         except ImportError:
             return {
@@ -494,12 +520,12 @@ class AIProviderService:
             if "401" in error_str or "unauthorized" in error_str or "invalid" in error_str:
                 return {
                     "status": "error",
-                    "message": "API key is invalid or expired",
+                    "message": f"{'OAuth token' if auth_type == 'oauth_token' else 'API key'} is invalid or expired",
                 }
             elif "rate" in error_str or "quota" in error_str:
                 return {
                     "status": "healthy",
-                    "message": "API key is valid (but rate limited)",
+                    "message": f"{'OAuth token' if auth_type == 'oauth_token' else 'API key'} is valid (but rate limited)",
                 }
             else:
                 return {

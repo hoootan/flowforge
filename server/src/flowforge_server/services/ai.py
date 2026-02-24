@@ -91,14 +91,8 @@ class AIResponse:
 # Model pricing (per 1M tokens) - updated February 2026
 MODEL_PRICING = {
     # OpenAI GPT-5 Family
+    "gpt-5.3": {"input": 2.00, "output": 16.00},
     "gpt-5.2": {"input": 1.75, "output": 14.00},
-    "gpt-5.1": {"input": 1.25, "output": 10.00},
-    "gpt-5": {"input": 1.25, "output": 10.00},
-    "gpt-5-mini": {"input": 0.25, "output": 2.00},
-    "gpt-5-nano": {"input": 0.05, "output": 0.40},
-    # OpenAI GPT-4.1 Family
-    "gpt-4.1": {"input": 2.00, "output": 8.00},
-    "gpt-4.1-mini": {"input": 0.40, "output": 1.60},
     # OpenAI O-Series (Reasoning)
     "o1": {"input": 15.00, "output": 60.00},
     "o3": {"input": 2.00, "output": 8.00},
@@ -108,13 +102,12 @@ MODEL_PRICING = {
     "claude-opus-4-6": {"input": 5.00, "output": 25.00},
     "claude-sonnet-4-6": {"input": 3.00, "output": 15.00},
     "claude-haiku-4-5-20251001": {"input": 1.00, "output": 5.00},
-    # Google Gemini 2.5 Series
-    "gemini-2.5-pro": {"input": 1.25, "output": 10.00},
-    "gemini-2.5-flash": {"input": 0.30, "output": 2.50},
-    "gemini-2.5-flash-lite": {"input": 0.10, "output": 0.40},
-    # Google Gemini 2.0 Series
-    "gemini-2.0-flash": {"input": 0.10, "output": 0.40},
-    "gemini-2.0-flash-lite": {"input": 0.075, "output": 0.30},
+    # Google Gemini 3 Series
+    "gemini-3.1-pro": {"input": 1.50, "output": 12.00},
+    "gemini-3-pro": {"input": 1.25, "output": 10.00},
+    "gemini-3-flash": {"input": 0.30, "output": 2.50},
+    # Google Gemini 2.5 Series (Budget)
+    "gemini-2.5-flash": {"input": 0.15, "output": 1.25},
 }
 
 
@@ -323,7 +316,7 @@ class AIService:
         Generate a completion from an AI model.
 
         Args:
-            model: Model identifier (e.g., "gpt-5", "claude-sonnet-4-6").
+            model: Model identifier (e.g., "gpt-5.3", "claude-sonnet-4-6").
             messages: List of message dicts with 'role' and 'content'.
             max_tokens: Maximum tokens to generate.
             temperature: Sampling temperature.
@@ -398,13 +391,16 @@ class AIService:
         if model.startswith("claude") and not model.startswith("anthropic/"):
             litellm_model = f"anthropic/{model}"
 
-        # Set up tenant-specific API key if provided
-        api_key_override = None
+        # Set up tenant-specific credential if provided
+        credential_override: str | None = None
+        credential_auth_type: str = "api_key"
         if tenant_id and session and self._provider_registry:
             try:
-                api_key_override = await self._provider_registry.get_api_key_for_tenant(
+                result = await self._provider_registry.get_api_key_for_tenant(
                     session, tenant_id, provider
                 )
+                if result:
+                    credential_override, credential_auth_type = result
             except Exception:
                 # Fall back to default behavior if lookup fails
                 pass
@@ -422,9 +418,14 @@ class AIService:
                     **kwargs,
                 }
 
-                # Add API key override if we have one
-                if api_key_override:
-                    completion_params["api_key"] = api_key_override
+                # Add credential override based on auth type
+                if credential_override:
+                    if credential_auth_type == "oauth_token":
+                        completion_params["extra_headers"] = {
+                            "Authorization": f"Bearer {credential_override}"
+                        }
+                    else:
+                        completion_params["api_key"] = credential_override
 
                 # Add tools if provided
                 if tool_schemas:
@@ -569,7 +570,7 @@ class AIService:
         Stream a completion from an AI model token by token.
 
         Args:
-            model: Model identifier (e.g., "gpt-5", "claude-sonnet-4-6").
+            model: Model identifier (e.g., "gpt-5.3", "claude-sonnet-4-6").
             messages: List of message dicts with 'role' and 'content'.
             max_tokens: Maximum tokens to generate.
             temperature: Sampling temperature.

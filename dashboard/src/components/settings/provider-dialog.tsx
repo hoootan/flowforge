@@ -23,7 +23,8 @@ import {
 import { Loader2, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/api";
-import type { AIProvider, KnownProviderInfo, CreateAIProviderRequest, UpdateAIProviderRequest } from "@/lib/api";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import type { AIProvider, AuthType, KnownProviderInfo, CreateAIProviderRequest, UpdateAIProviderRequest } from "@/lib/api";
 
 interface ProviderDialogProps {
   open: boolean;
@@ -49,6 +50,7 @@ export function ProviderDialog({
   const [providerName, setProviderName] = useState<ProviderName>("openai");
   const [displayName, setDisplayName] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const [authType, setAuthType] = useState<AuthType>("api_key");
   const [baseUrl, setBaseUrl] = useState("");
   const [isDefault, setIsDefault] = useState(false);
   const [isActive, setIsActive] = useState(true);
@@ -63,6 +65,7 @@ export function ProviderDialog({
         setProviderName(provider.provider_name as ProviderName);
         setDisplayName(provider.display_name);
         setApiKey(""); // Don't populate - we never show the key
+        setAuthType(provider.auth_type || "api_key");
         setBaseUrl(provider.base_url || "");
         setIsDefault(provider.is_default);
         setIsActive(provider.is_active);
@@ -75,6 +78,7 @@ export function ProviderDialog({
         setProviderName((firstAvailable?.name as ProviderName) || "openai");
         setDisplayName("");
         setApiKey("");
+        setAuthType("api_key");
         setBaseUrl("");
         setIsDefault(false);
         setIsActive(true);
@@ -95,6 +99,7 @@ export function ProviderDialog({
           base_url: baseUrl || undefined,
           is_active: isActive,
           is_default: isDefault,
+          auth_type: authType,
         };
 
         // Only include API key if user entered a new one
@@ -121,6 +126,7 @@ export function ProviderDialog({
         const createData: CreateAIProviderRequest = {
           provider_name: providerName,
           api_key: apiKey,
+          auth_type: authType,
           display_name: displayName || undefined,
           base_url: baseUrl || undefined,
           is_default: isDefault,
@@ -209,16 +215,51 @@ export function ProviderDialog({
               </p>
             </div>
 
-            {/* API Key */}
+            {/* Auth Type */}
+            <div className="grid gap-2">
+              <Label>Authentication Type</Label>
+              <RadioGroup
+                value={authType}
+                onValueChange={(value) => setAuthType(value as AuthType)}
+                className="flex gap-4"
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="api_key" id="auth-api-key" />
+                  <Label htmlFor="auth-api-key" className="font-normal cursor-pointer">
+                    API Key
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="oauth_token" id="auth-oauth" />
+                  <Label htmlFor="auth-oauth" className="font-normal cursor-pointer">
+                    OAuth Token
+                  </Label>
+                </div>
+              </RadioGroup>
+              {authType === "oauth_token" && (
+                <p className="text-xs text-muted-foreground">
+                  Use an OAuth bearer token (e.g., from Claude Code Max subscription)
+                </p>
+              )}
+            </div>
+
+            {/* API Key / OAuth Token */}
             <div className="grid gap-2">
               <Label htmlFor="apiKey">
-                API Key {!isEditing && <span className="text-destructive">*</span>}
+                {authType === "oauth_token" ? "OAuth Token" : "API Key"}{" "}
+                {!isEditing && <span className="text-destructive">*</span>}
               </Label>
               <div className="relative">
                 <Input
                   id="apiKey"
                   type={showApiKey ? "text" : "password"}
-                  placeholder={isEditing ? "Enter new key to change" : "sk-..."}
+                  placeholder={
+                    isEditing
+                      ? `Enter new ${authType === "oauth_token" ? "token" : "key"} to change`
+                      : authType === "oauth_token"
+                        ? "eyJ..."
+                        : "sk-..."
+                  }
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
                   required={!isEditing}
@@ -239,8 +280,8 @@ export function ProviderDialog({
               </div>
               <p className="text-xs text-muted-foreground">
                 {isEditing
-                  ? "Leave empty to keep current key. Keys are encrypted at rest."
-                  : "Your API key will be encrypted and stored securely."}
+                  ? `Leave empty to keep current ${authType === "oauth_token" ? "token" : "key"}. Credentials are encrypted at rest.`
+                  : `Your ${authType === "oauth_token" ? "OAuth token" : "API key"} will be encrypted and stored securely.`}
               </p>
             </div>
 

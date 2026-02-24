@@ -192,11 +192,14 @@ export interface CreateApiKeyRequest {
 }
 
 // AI Provider types
+export type AuthType = "api_key" | "oauth_token";
+
 export interface AIProvider {
   id: string;
   provider_name: string;
   display_name: string;
   api_key_prefix: string;
+  auth_type: AuthType;
   base_url: string | null;
   is_active: boolean;
   is_default: boolean;
@@ -224,6 +227,7 @@ export interface KnownProvidersResponse {
 export interface CreateAIProviderRequest {
   provider_name: "openai" | "anthropic" | "google" | "mistral" | "cohere" | "custom";
   api_key: string;
+  auth_type?: AuthType;
   display_name?: string;
   base_url?: string;
   is_default?: boolean;
@@ -232,6 +236,7 @@ export interface CreateAIProviderRequest {
 
 export interface UpdateAIProviderRequest {
   api_key?: string;
+  auth_type?: AuthType;
   display_name?: string;
   base_url?: string;
   is_active?: boolean;

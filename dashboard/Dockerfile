@@ -30,6 +30,9 @@ FROM base AS builder
 
 WORKDIR /app
 
+# Build arguments
+ARG NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+
 # Copy dependencies from deps stage
 COPY --from=deps /app/node_modules ./node_modules
 
@@ -39,6 +42,7 @@ COPY . .
 # Set environment variables for build
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 
 # Build the application
 RUN pnpm build
