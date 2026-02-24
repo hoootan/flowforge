@@ -31,7 +31,6 @@ interface ProviderDialogProps {
   onOpenChange: (open: boolean) => void;
   provider: AIProvider | null; // null = create mode
   knownProviders: KnownProviderInfo[];
-  configuredProviders: string[];
   onSuccess: () => void;
 }
 
@@ -42,7 +41,6 @@ export function ProviderDialog({
   onOpenChange,
   provider,
   knownProviders,
-  configuredProviders,
   onSuccess,
 }: ProviderDialogProps) {
   const isEditing = provider !== null;
@@ -70,12 +68,9 @@ export function ProviderDialog({
         setIsDefault(provider.is_default);
         setIsActive(provider.is_active);
       } else {
-        // Create mode - select first unconfigured provider
-        const available = knownProviders.filter(
-          (kp) => !configuredProviders.includes(kp.name)
-        );
-        const firstAvailable = available[0];
-        setProviderName((firstAvailable?.name as ProviderName) || "openai");
+        // Create mode
+        const firstProvider = knownProviders[0];
+        setProviderName((firstProvider?.name as ProviderName) || "openai");
         setDisplayName("");
         setApiKey("");
         setAuthType("api_key");
@@ -85,7 +80,7 @@ export function ProviderDialog({
       }
       setShowApiKey(false);
     }
-  }, [open, provider, knownProviders, configuredProviders]);
+  }, [open, provider, knownProviders]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,7 +88,7 @@ export function ProviderDialog({
 
     try {
       if (isEditing) {
-        // Update existing provider
+        // Update existing provider by ID
         const updateData: UpdateAIProviderRequest = {
           display_name: displayName || undefined,
           base_url: baseUrl || undefined,
@@ -107,7 +102,7 @@ export function ProviderDialog({
           updateData.api_key = apiKey;
         }
 
-        const result = await api.updateAIProvider(provider!.provider_name, updateData);
+        const result = await api.updateAIProvider(provider!.id, updateData);
         if (result) {
           toast.success("Provider updated");
           onOpenChange(false);
@@ -152,11 +147,6 @@ export function ProviderDialog({
   const selectedKnownProvider = knownProviders.find((kp) => kp.name === providerName);
   const displayNamePlaceholder = selectedKnownProvider?.display_name || providerName;
 
-  // Available providers for selection (only unconfigured ones in create mode)
-  const availableProviders = isEditing
-    ? knownProviders
-    : knownProviders.filter((kp) => !configuredProviders.includes(kp.name));
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
@@ -185,7 +175,7 @@ export function ProviderDialog({
                     <SelectValue placeholder="Select provider" />
                   </SelectTrigger>
                   <SelectContent>
-                    {availableProviders.map((kp) => (
+                    {knownProviders.map((kp) => (
                       <SelectItem key={kp.name} value={kp.name}>
                         {kp.display_name}
                       </SelectItem>

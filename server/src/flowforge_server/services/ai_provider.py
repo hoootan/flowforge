@@ -87,9 +87,10 @@ class AIProviderService:
     Service for managing AI provider configurations.
 
     Handles encrypted storage of API keys and per-tenant provider management.
+    Multiple providers of the same type are allowed per tenant.
     """
 
-    # In-memory cache for decrypted keys (tenant_id:provider -> (key, auth_type, expiry))
+    # In-memory cache for decrypted keys (tenant_id:provider_name -> (key, auth_type, expiry))
     _key_cache: dict[str, tuple[str, str, datetime]] = {}
     _cache_ttl = timedelta(minutes=5)
 
@@ -108,6 +109,8 @@ class AIProviderService:
         """
         Create a new AI provider configuration.
 
+        Multiple providers of the same type are allowed (e.g., two Anthropic keys).
+
         Args:
             session: Database session
             tenant_id: Tenant ID
@@ -121,20 +124,7 @@ class AIProviderService:
 
         Returns:
             The created AIProvider
-
-        Raises:
-            AIProviderExistsError: If provider already exists for this tenant
         """
-        # Check if provider already exists
-        existing = await self.get_provider(
-            session, tenant_id, provider_name, raise_not_found=False
-        )
-        if existing:
-            raise AIProviderExistsError(
-                f"Provider '{provider_name}' already exists for this tenant. "
-                "Use update_provider to modify it."
-            )
-
         # Set default display name
         if not display_name:
             provider_info = KNOWN_PROVIDERS.get(provider_name, {})
@@ -164,7 +154,7 @@ class AIProviderService:
         session.add(provider)
         return provider
 
-    async def get_provider(
+    async def get_provider_by_name(
         self,
         session: AsyncSession,
         tenant_id: uuid.UUID,
@@ -172,7 +162,10 @@ class AIProviderService:
         raise_not_found: bool = True,
     ) -> AIProvider | None:
         """
-        Get a provider by tenant and name.
+        Get the best provider by tenant and name.
+
+        When multiple providers of the same type exist, returns the default
+        one first, then the earliest created active one.
 
         Args:
             session: Database session
@@ -187,10 +180,13 @@ class AIProviderService:
             AIProviderNotFoundError: If provider not found and raise_not_found is True
         """
         result = await session.execute(
-            select(AIProvider).where(
+            select(AIProvider)
+            .where(
                 AIProvider.tenant_id == tenant_id,
                 AIProvider.provider_name == provider_name.lower(),
             )
+            .order_by(AIProvider.is_default.desc(), AIProvider.created_at.asc())
+            .limit(1)
         )
         provider = result.scalar_one_or_none()
 
@@ -206,6 +202,7 @@ class AIProviderService:
         session: AsyncSession,
         provider_id: uuid.UUID,
         tenant_id: uuid.UUID | None = None,
+        raise_not_found: bool = True,
     ) -> AIProvider | None:
         """
         Get a provider by ID.
@@ -214,6 +211,7 @@ class AIProviderService:
             session: Database session
             provider_id: Provider ID
             tenant_id: Optional tenant ID for validation
+            raise_not_found: If True, raise exception when not found
 
         Returns:
             The AIProvider or None
@@ -223,7 +221,14 @@ class AIProviderService:
             query = query.where(AIProvider.tenant_id == tenant_id)
 
         result = await session.execute(query)
-        return result.scalar_one_or_none()
+        provider = result.scalar_one_or_none()
+
+        if not provider and raise_not_found:
+            raise AIProviderNotFoundError(
+                f"Provider not found"
+            )
+
+        return provider
 
     async def list_providers(
         self,
@@ -256,7 +261,7 @@ class AIProviderService:
         self,
         session: AsyncSession,
         tenant_id: uuid.UUID,
-        provider_name: str,
+        provider_id: uuid.UUID,
         api_key: str | None = None,
         display_name: str | None = None,
         base_url: str | None = None,
@@ -266,12 +271,12 @@ class AIProviderService:
         auth_type: str | None = None,
     ) -> AIProvider:
         """
-        Update an existing provider.
+        Update an existing provider by ID.
 
         Args:
             session: Database session
             tenant_id: Tenant ID
-            provider_name: Provider identifier
+            provider_id: Provider UUID
             api_key: New API key or OAuth token (will be encrypted)
             display_name: New display name
             base_url: New base URL (pass "" to clear)
@@ -286,18 +291,18 @@ class AIProviderService:
         Raises:
             AIProviderNotFoundError: If provider not found
         """
-        provider = await self.get_provider(session, tenant_id, provider_name)
+        provider = await self.get_provider_by_id(session, provider_id, tenant_id)
 
         if api_key is not None:
             provider.api_key_encrypted = encrypt_value(api_key)
             provider.api_key_prefix = get_key_prefix(api_key)
             # Clear cache for this provider
-            self._clear_key_cache(tenant_id, provider_name)
+            self._clear_key_cache(tenant_id, provider.provider_name)
 
         if auth_type is not None:
             provider.auth_type = auth_type
             # Clear cache since auth_type affects how the credential is used
-            self._clear_key_cache(tenant_id, provider_name)
+            self._clear_key_cache(tenant_id, provider.provider_name)
 
         if display_name is not None:
             provider.display_name = display_name
@@ -322,29 +327,31 @@ class AIProviderService:
         self,
         session: AsyncSession,
         tenant_id: uuid.UUID,
-        provider_name: str,
+        provider_id: uuid.UUID,
     ) -> bool:
         """
-        Delete a provider.
+        Delete a provider by ID.
 
         Args:
             session: Database session
             tenant_id: Tenant ID
-            provider_name: Provider identifier
+            provider_id: Provider UUID
 
         Returns:
             True if deleted, False if not found
         """
-        # First check if provider exists
-        provider = await self.get_provider(session, tenant_id, provider_name, raise_not_found=False)
+        provider = await self.get_provider_by_id(
+            session, provider_id, tenant_id, raise_not_found=False
+        )
         if not provider:
             return False
 
-        # Delete the provider
+        provider_name = provider.provider_name
+
         await session.execute(
             delete(AIProvider).where(
+                AIProvider.id == provider_id,
                 AIProvider.tenant_id == tenant_id,
-                AIProvider.provider_name == provider_name.lower(),
             )
         )
 
@@ -362,6 +369,7 @@ class AIProviderService:
         """
         Get the decrypted credential and auth type for a provider.
 
+        Resolves the best provider of this type (default first, then earliest).
         Uses in-memory caching to avoid repeated decryption.
 
         Args:
@@ -383,8 +391,8 @@ class AIProviderService:
             else:
                 del self._key_cache[cache_key]
 
-        # Fetch from database
-        provider = await self.get_provider(
+        # Fetch from database (picks default/first active)
+        provider = await self.get_provider_by_name(
             session, tenant_id, provider_name, raise_not_found=False
         )
 
@@ -428,29 +436,31 @@ class AIProviderService:
         self,
         session: AsyncSession,
         tenant_id: uuid.UUID,
-        provider_name: str,
+        provider_id: uuid.UUID,
     ) -> dict[str, Any]:
         """
-        Test a provider's credential connectivity.
+        Test a provider's credential connectivity by ID.
 
         Args:
             session: Database session
             tenant_id: Tenant ID
-            provider_name: Provider identifier
+            provider_id: Provider UUID
 
         Returns:
             Dict with status and message
         """
-        provider = await self.get_provider(session, tenant_id, provider_name)
-        result = await self.get_decrypted_key(session, tenant_id, provider_name)
+        provider = await self.get_provider_by_id(session, provider_id, tenant_id)
+        provider_name = provider.provider_name
 
-        if not result:
+        # Decrypt the key directly from this specific provider
+        try:
+            credential = decrypt_value(provider.api_key_encrypted)
+            auth_type = provider.auth_type or "api_key"
+        except EncryptionError:
             return {
                 "status": "error",
                 "message": "Could not decrypt credential",
             }
-
-        credential, auth_type = result
 
         try:
             # Try a minimal API call to verify the credential works
@@ -537,19 +547,16 @@ class AIProviderService:
         self,
         session: AsyncSession,
         tenant_id: uuid.UUID,
-        provider_name: str,
+        provider_id: uuid.UUID,
         new_api_key: str,
     ) -> AIProvider:
         """
         Rotate the API key for a provider.
 
-        This is essentially an update with just the API key,
-        but semantically distinct for audit purposes.
-
         Args:
             session: Database session
             tenant_id: Tenant ID
-            provider_name: Provider identifier
+            provider_id: Provider UUID
             new_api_key: The new API key
 
         Returns:
@@ -558,7 +565,7 @@ class AIProviderService:
         return await self.update_provider(
             session=session,
             tenant_id=tenant_id,
-            provider_name=provider_name,
+            provider_id=provider_id,
             api_key=new_api_key,
         )
 

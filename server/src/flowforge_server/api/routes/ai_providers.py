@@ -19,9 +19,7 @@ from flowforge_server.api.schemas.ai_providers import (
 )
 from flowforge_server.api.deps import CurrentUserAdmin, TenantWithDevFallback
 from flowforge_server.services.ai_provider import (
-    AIProviderService,
     AIProviderError,
-    AIProviderExistsError,
     AIProviderNotFoundError,
     KNOWN_PROVIDERS,
     get_ai_provider_service,
@@ -103,6 +101,7 @@ async def create_provider(
 
     **Requires admin role.**
 
+    Multiple providers of the same type are allowed.
     The API key is encrypted at rest using Fernet encryption.
     Only the first 8 characters are stored for display purposes.
     """
@@ -129,11 +128,6 @@ async def create_provider(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(e),
         )
-    except AIProviderExistsError as e:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=str(e),
-        )
     except AIProviderError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -141,21 +135,21 @@ async def create_provider(
         )
 
 
-@router.get("/{provider_name}", response_model=AIProviderResponse)
+@router.get("/{provider_id}", response_model=AIProviderResponse)
 async def get_provider(
-    provider_name: str,
+    provider_id: uuid.UUID,
     tenant: TenantWithDevFallback,
     session: AsyncSession = Depends(get_session),
 ) -> AIProviderResponse:
     """
-    Get details of a specific AI provider.
+    Get details of a specific AI provider by ID.
 
     The API key is never returned - only the masked prefix.
     """
     service = get_ai_provider_service()
 
     try:
-        provider = await service.get_provider(session, tenant.id, provider_name)
+        provider = await service.get_provider_by_id(session, provider_id, tenant.id)
         return ai_provider_to_response(provider)
     except AIProviderNotFoundError as e:
         raise HTTPException(
@@ -164,16 +158,16 @@ async def get_provider(
         )
 
 
-@router.patch("/{provider_name}", response_model=AIProviderResponse)
+@router.patch("/{provider_id}", response_model=AIProviderResponse)
 async def update_provider(
-    provider_name: str,
+    provider_id: uuid.UUID,
     provider_data: AIProviderUpdate,
     tenant: TenantWithDevFallback,
     admin_user: CurrentUserAdmin,
     session: AsyncSession = Depends(get_session),
 ) -> AIProviderResponse:
     """
-    Update an AI provider configuration.
+    Update an AI provider configuration by ID.
 
     **Requires admin role.**
 
@@ -186,7 +180,7 @@ async def update_provider(
         provider = await service.update_provider(
             session=session,
             tenant_id=tenant.id,
-            provider_name=provider_name,
+            provider_id=provider_id,
             api_key=provider_data.api_key,
             display_name=provider_data.display_name,
             base_url=provider_data.base_url,
@@ -216,15 +210,15 @@ async def update_provider(
         )
 
 
-@router.delete("/{provider_name}", status_code=204)
+@router.delete("/{provider_id}", status_code=204)
 async def delete_provider(
-    provider_name: str,
+    provider_id: uuid.UUID,
     tenant: TenantWithDevFallback,
     admin_user: CurrentUserAdmin,
     session: AsyncSession = Depends(get_session),
 ) -> None:
     """
-    Delete an AI provider configuration.
+    Delete an AI provider configuration by ID.
 
     **Requires admin role.**
 
@@ -232,31 +226,31 @@ async def delete_provider(
     """
     service = get_ai_provider_service()
 
-    deleted = await service.delete_provider(session, tenant.id, provider_name)
+    deleted = await service.delete_provider(session, tenant.id, provider_id)
     await session.commit()
 
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Provider '{provider_name}' not found",
+            detail="Provider not found",
         )
 
 
-@router.post("/{provider_name}/test", response_model=AIProviderTestResponse)
+@router.post("/{provider_id}/test", response_model=AIProviderTestResponse)
 async def test_provider(
-    provider_name: str,
+    provider_id: uuid.UUID,
     tenant: TenantWithDevFallback,
     session: AsyncSession = Depends(get_session),
 ) -> AIProviderTestResponse:
     """
-    Test connectivity to an AI provider.
+    Test connectivity to an AI provider by ID.
 
     Makes a minimal API call to verify the API key is valid.
     """
     service = get_ai_provider_service()
 
     try:
-        result = await service.test_provider(session, tenant.id, provider_name)
+        result = await service.test_provider(session, tenant.id, provider_id)
         return AIProviderTestResponse(**result)
     except AIProviderNotFoundError as e:
         raise HTTPException(
@@ -265,16 +259,16 @@ async def test_provider(
         )
 
 
-@router.post("/{provider_name}/rotate", response_model=AIProviderResponse)
+@router.post("/{provider_id}/rotate", response_model=AIProviderResponse)
 async def rotate_provider_key(
-    provider_name: str,
+    provider_id: uuid.UUID,
     rotate_data: AIProviderRotateRequest,
     tenant: TenantWithDevFallback,
     admin_user: CurrentUserAdmin,
     session: AsyncSession = Depends(get_session),
 ) -> AIProviderResponse:
     """
-    Rotate the API key for a provider.
+    Rotate the API key for a provider by ID.
 
     **Requires admin role.**
 
@@ -287,7 +281,7 @@ async def rotate_provider_key(
         provider = await service.rotate_key(
             session=session,
             tenant_id=tenant.id,
-            provider_name=provider_name,
+            provider_id=provider_id,
             new_api_key=rotate_data.new_api_key,
         )
         await session.commit()

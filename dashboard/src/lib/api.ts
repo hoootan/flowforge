@@ -948,17 +948,17 @@ class FlowForgeAPI {
     }
   }
 
-  async getAIProvider(providerName: string): Promise<AIProvider | null> {
+  async getAIProvider(providerId: string): Promise<AIProvider | null> {
     try {
-      return await this.request<AIProvider>(`/ai/providers/${providerName}`);
+      return await this.request<AIProvider>(`/ai/providers/${providerId}`);
     } catch {
       return null;
     }
   }
 
-  async updateAIProvider(providerName: string, data: UpdateAIProviderRequest): Promise<AIProvider | null> {
+  async updateAIProvider(providerId: string, data: UpdateAIProviderRequest): Promise<AIProvider | null> {
     try {
-      return await this.request<AIProvider>(`/ai/providers/${providerName}`, {
+      return await this.request<AIProvider>(`/ai/providers/${providerId}`, {
         method: "PATCH",
         body: JSON.stringify(data),
       });
@@ -967,9 +967,9 @@ class FlowForgeAPI {
     }
   }
 
-  async deleteAIProvider(providerName: string): Promise<boolean> {
+  async deleteAIProvider(providerId: string): Promise<boolean> {
     try {
-      await this.request(`/ai/providers/${providerName}`, {
+      await this.request(`/ai/providers/${providerId}`, {
         method: "DELETE",
       });
       return true;
@@ -978,9 +978,9 @@ class FlowForgeAPI {
     }
   }
 
-  async testAIProvider(providerName: string): Promise<AIProviderTestResult | null> {
+  async testAIProvider(providerId: string): Promise<AIProviderTestResult | null> {
     try {
-      return await this.request<AIProviderTestResult>(`/ai/providers/${providerName}/test`, {
+      return await this.request<AIProviderTestResult>(`/ai/providers/${providerId}/test`, {
         method: "POST",
       });
     } catch {
@@ -988,9 +988,9 @@ class FlowForgeAPI {
     }
   }
 
-  async rotateAIProviderKey(providerName: string, newApiKey: string): Promise<AIProvider | null> {
+  async rotateAIProviderKey(providerId: string, newApiKey: string): Promise<AIProvider | null> {
     try {
-      return await this.request<AIProvider>(`/ai/providers/${providerName}/rotate`, {
+      return await this.request<AIProvider>(`/ai/providers/${providerId}/rotate`, {
         method: "POST",
         body: JSON.stringify({ new_api_key: newApiKey }),
       });

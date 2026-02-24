@@ -47,10 +47,10 @@ const providerStyles: Record<string, { color: string; bgColor: string }> = {
 
 interface ProviderCardProps {
   provider: AIProvider;
-  onTest: (name: string) => Promise<void>;
+  onTest: (id: string) => Promise<void>;
   onEdit: (provider: AIProvider) => void;
-  onDelete: (name: string) => void;
-  onSetDefault: (name: string) => void;
+  onDelete: (id: string) => void;
+  onSetDefault: (id: string) => void;
   isAdmin: boolean;
   testingProvider: string | null;
 }
@@ -65,7 +65,7 @@ function ProviderCard({
   testingProvider,
 }: ProviderCardProps) {
   const styles = providerStyles[provider.provider_name] || providerStyles.custom;
-  const isTesting = testingProvider === provider.provider_name;
+  const isTesting = testingProvider === provider.id;
 
   return (
     <div className="flex items-center justify-between rounded-lg border p-4">
@@ -102,7 +102,7 @@ function ProviderCard({
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => onTest(provider.provider_name)}
+          onClick={() => onTest(provider.id)}
           disabled={isTesting}
         >
           {isTesting ? (
@@ -119,7 +119,7 @@ function ProviderCard({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => onSetDefault(provider.provider_name)}
+                onClick={() => onSetDefault(provider.id)}
               >
                 <Star className="h-4 w-4" />
               </Button>
@@ -134,7 +134,7 @@ function ProviderCard({
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => onDelete(provider.provider_name)}
+              onClick={() => onDelete(provider.id)}
               className="text-destructive hover:text-destructive"
             >
               <Trash2 className="h-4 w-4" />
@@ -154,7 +154,7 @@ export function AIProvidersTab() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProvider, setEditingProvider] = useState<AIProvider | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [deletingProvider, setDeletingProvider] = useState<string | null>(null);
+  const [deletingProviderId, setDeletingProviderId] = useState<string | null>(null);
   const [testingProvider, setTestingProvider] = useState<string | null>(null);
 
   const loadProviders = async () => {
@@ -177,10 +177,10 @@ export function AIProvidersTab() {
     loadProviders();
   }, []);
 
-  const handleTest = async (providerName: string) => {
-    setTestingProvider(providerName);
+  const handleTest = async (providerId: string) => {
+    setTestingProvider(providerId);
     try {
-      const result = await api.testAIProvider(providerName);
+      const result = await api.testAIProvider(providerId);
       if (result) {
         if (result.status === "healthy") {
           toast.success(result.message, {
@@ -212,9 +212,9 @@ export function AIProvidersTab() {
   };
 
   const handleDelete = async () => {
-    if (!deletingProvider) return;
+    if (!deletingProviderId) return;
 
-    const success = await api.deleteAIProvider(deletingProvider);
+    const success = await api.deleteAIProvider(deletingProviderId);
     if (success) {
       toast.success("Provider deleted");
       loadProviders();
@@ -222,11 +222,11 @@ export function AIProvidersTab() {
       toast.error("Failed to delete provider");
     }
     setDeleteDialogOpen(false);
-    setDeletingProvider(null);
+    setDeletingProviderId(null);
   };
 
-  const handleSetDefault = async (providerName: string) => {
-    const result = await api.updateAIProvider(providerName, { is_default: true });
+  const handleSetDefault = async (providerId: string) => {
+    const result = await api.updateAIProvider(providerId, { is_default: true });
     if (result) {
       toast.success(`${result.display_name} set as default`);
       loadProviders();
@@ -239,15 +239,10 @@ export function AIProvidersTab() {
     loadProviders();
   };
 
-  const confirmDelete = (providerName: string) => {
-    setDeletingProvider(providerName);
+  const confirmDelete = (providerId: string) => {
+    setDeletingProviderId(providerId);
     setDeleteDialogOpen(true);
   };
-
-  // Get providers that haven't been configured yet
-  const unconfiguredProviders = knownProviders.filter(
-    (kp) => !providers.some((p) => p.provider_name === kp.name)
-  );
 
   return (
     <div className="space-y-6">
@@ -271,7 +266,7 @@ export function AIProvidersTab() {
             </CardDescription>
           </div>
           {isAdmin && (
-            <Button size="sm" onClick={handleCreate} disabled={unconfiguredProviders.length === 0}>
+            <Button size="sm" onClick={handleCreate}>
               <Plus className="mr-2 h-4 w-4" />
               Add Provider
             </Button>
@@ -323,7 +318,6 @@ export function AIProvidersTab() {
         onOpenChange={setDialogOpen}
         provider={editingProvider}
         knownProviders={knownProviders}
-        configuredProviders={providers.map((p) => p.provider_name)}
         onSuccess={handleDialogSuccess}
       />
 

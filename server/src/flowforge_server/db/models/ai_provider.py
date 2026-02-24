@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any, TYPE_CHECKING
 import uuid
 
-from sqlalchemy import String, Text, Boolean, ForeignKey, Index, UniqueConstraint
+from sqlalchemy import String, Text, Boolean, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -115,8 +115,6 @@ class AIProvider(Base, TimestampMixin):
 
     # Constraints and indexes
     __table_args__ = (
-        # Only one provider of each type per tenant
-        UniqueConstraint("tenant_id", "provider_name", name="uq_ai_provider_tenant_name"),
         # Index for finding default provider
         Index("ix_ai_provider_tenant_default", "tenant_id", "is_default"),
         # Index for finding active providers
