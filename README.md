@@ -17,12 +17,12 @@ A production-ready AI workflow orchestration platform. Build durable, event-driv
 FlowForge uses a **client-server architecture** where your workflow code runs on workers, while the central server handles orchestration.
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
+┌──────────────────────────────────────────────────────────────────┐
 │                        Your Application                          │
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐          │
-│  │  Next.js    │    │   FastAPI   │    │   Cron Job  │          │
-│  │  Frontend   │    │   Backend   │    │             │          │
-│  └──────┬──────┘    └──────┬──────┘    └──────┬──────┘          │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐           │
+│  │  Next.js    │    │   FastAPI   │    │   Cron Job  │           │
+│  │  Frontend   │    │   Backend   │    │             │           │
+│  └──────┬──────┘    └──────┬──────┘    └──────┬──────┘           │
 │         │                  │                  │                  │
 │         └──────────────────┼──────────────────┘                  │
 │                            │ send events                         │
@@ -47,7 +47,7 @@ FlowForge uses a **client-server architecture** where your workflow code runs on
 │  │  └─────────────────────────────────────────────────────┘    │ │
 │  │                         :8080                               │ │
 │  └─────────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────────┘
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 **The Flow:**
