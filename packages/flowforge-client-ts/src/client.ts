@@ -292,7 +292,7 @@ export function createClient(
       lastError = result.error;
 
       // Don't retry if not retryable or last attempt
-      if (!isRetryable(lastError) || attempt === retryConfig.maxAttempts - 1) {
+      if (!lastError || !isRetryable(lastError) || attempt === retryConfig.maxAttempts - 1) {
         return result;
       }
 

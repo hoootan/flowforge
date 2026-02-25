@@ -418,8 +418,7 @@ class AIService:
                     **kwargs,
                 }
 
-                # Add credential override — Anthropic accepts both API keys
-                # and OAuth tokens via the api_key parameter (x-api-key header)
+                # Add credential override
                 if credential_override:
                     completion_params["api_key"] = credential_override
 
