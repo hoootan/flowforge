@@ -112,8 +112,10 @@ async def create_event(
         run_id = str(run.id)
         log.info("run_created", run_id=run_id, function_id=fn.function_id)
 
+    # Commit BEFORE publishing so the run exists in DB when Runner picks it up
+    await session.commit()
+
     # Publish to event stream for Runner to process and enqueue job
-    # This decouples the API from job scheduling for better scalability
     services = get_services(request)
     message = StreamMessage(
         id=str(event.id),
@@ -129,11 +131,11 @@ async def create_event(
     try:
         await services.event_stream.publish(message)
         event.processed = True
+        await session.commit()
     except Exception as e:
         # Event is stored and can be reprocessed
         log.warning("event_stream_publish_failed", event_id=event_id, error=str(e))
 
-    await session.commit()
     await session.refresh(event)
 
     return EventResponse(
@@ -244,6 +246,9 @@ async def create_events_batch(
                 await session.flush()
                 run_id = str(run.id)
 
+            # Commit each event+run before publishing so Runner can find them
+            await session.commit()
+
             # Publish to event stream
             message = StreamMessage(
                 id=str(event.id),
@@ -258,6 +263,7 @@ async def create_events_batch(
             try:
                 await services.event_stream.publish(message)
                 event.processed = True
+                await session.commit()
             except Exception as e:
                 log.warning("event_stream_publish_failed", event_id=event_id, error=str(e))
 
@@ -278,8 +284,6 @@ async def create_events_batch(
             ))
             failure_count += 1
             log.error("batch_event_failed", index=idx, error=str(e))
-
-    await session.commit()
 
     log.info(
         "batch_events_created",

@@ -124,6 +124,9 @@ class StepManager:
                 # Handle coroutines
                 if hasattr(result, "__await__"):
                     result = await result
+        except (StepCompleted, StepFailed):
+            # Re-raise control flow exceptions from nested steps
+            raise
         except Exception as e:
             # Let the server handle retries
             raise StepFailed(step_id=step_id, error=e) from e
@@ -266,6 +269,14 @@ class StepManager:
         if messages is None:
             raise ValueError("Either 'prompt' or 'messages' must be provided")
 
+        # Convert Tool objects to JSON-serializable OpenAI schema dicts
+        tools_schema = None
+        if tools:
+            tools_schema = [
+                t.to_openai_schema() if isinstance(t, Tool) else t
+                for t in tools
+            ]
+
         # This will be executed by the server/executor with LLM client
         ai_request = {
             "type": "ai",
@@ -275,7 +286,7 @@ class StepManager:
             "temperature": temperature,
             "provider": provider,
             "use_cache": use_cache,
-            "tools": tools,
+            "tools": tools_schema,
             "tool_choice": tool_choice,
             "max_tool_calls": max_tool_calls,
             **kwargs,
