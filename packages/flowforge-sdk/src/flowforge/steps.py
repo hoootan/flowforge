@@ -124,6 +124,9 @@ class StepManager:
                 # Handle coroutines
                 if hasattr(result, "__await__"):
                     result = await result
+        except (StepCompleted, StepFailed):
+            # Re-raise control flow exceptions from nested steps
+            raise
         except Exception as e:
             # Let the server handle retries
             raise StepFailed(step_id=step_id, error=e) from e

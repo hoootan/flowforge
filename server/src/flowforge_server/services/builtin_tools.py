@@ -34,7 +34,12 @@ BUILTIN_TOOLS: list[BuiltinToolDefinition] = [
                 "query": {
                     "type": "string",
                     "description": "The search query to look up",
-                }
+                },
+                "num_results": {
+                    "type": "integer",
+                    "description": "Number of results to return (default 10)",
+                    "default": 10,
+                },
             },
             "required": ["query"],
         },
@@ -94,38 +99,38 @@ BUILTIN_TOOLS: list[BuiltinToolDefinition] = [
 # TOOL IMPLEMENTATIONS
 # =============================================================================
 
-async def execute_web_search(query: str, **kwargs) -> dict[str, Any]:
-    """Execute web search using Perplexity API if available, otherwise simulate."""
-    api_key = os.environ.get("PERPLEXITY_API_KEY")
+async def execute_web_search(query: str, num_results: int = 10, **kwargs) -> dict[str, Any]:
+    """Execute web search using Tavily API if available, otherwise simulate."""
+    api_key = os.environ.get("TAVILY_API_KEY")
 
     if api_key:
-        # Real implementation using Perplexity
         import httpx
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                "https://api.perplexity.ai/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
+                "https://api.tavily.com/search",
                 json={
-                    "model": "llama-3.1-sonar-small-128k-online",
-                    "messages": [
-                        {"role": "user", "content": query}
-                    ],
+                    "api_key": api_key,
+                    "query": query,
+                    "max_results": num_results,
+                    "include_answer": True,
                 },
                 timeout=30.0,
             )
             response.raise_for_status()
             data = response.json()
-            answer = data["choices"][0]["message"]["content"]
-            citations = data.get("citations", [])
 
             return {
                 "query": query,
-                "answer": answer,
-                "citations": citations,
+                "answer": data.get("answer", ""),
+                "results": [
+                    {
+                        "title": r.get("title", ""),
+                        "url": r.get("url", ""),
+                        "content": r.get("content", ""),
+                    }
+                    for r in data.get("results", [])
+                ],
                 "simulated": False,
             }
     else:
@@ -133,9 +138,9 @@ async def execute_web_search(query: str, **kwargs) -> dict[str, Any]:
         return {
             "query": query,
             "answer": f"Here are the key findings about '{query}': This topic is trending with significant interest. Recent developments show growing engagement. Key statistics indicate strong market potential. Experts recommend focusing on authenticity and value.",
-            "citations": [
-                {"title": "Industry Report 2024", "url": "https://example.com/report"},
-                {"title": "Market Analysis", "url": "https://example.com/analysis"},
+            "results": [
+                {"title": "Industry Report 2024", "url": "https://example.com/report", "content": "Sample result content."},
+                {"title": "Market Analysis", "url": "https://example.com/analysis", "content": "Sample analysis content."},
             ],
             "simulated": True,
         }
