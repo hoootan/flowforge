@@ -124,6 +124,9 @@ class StepManager:
                 # Handle coroutines
                 if hasattr(result, "__await__"):
                     result = await result
+        except (StepCompleted, StepFailed):
+            # Re-raise control flow exceptions from nested steps
+            raise
         except Exception as e:
             # Let the server handle retries
             raise StepFailed(step_id=step_id, error=e) from e
@@ -266,6 +269,14 @@ class StepManager:
         if messages is None:
             raise ValueError("Either 'prompt' or 'messages' must be provided")
 
+        # Convert Tool objects to JSON-serializable OpenAI schema dicts
+        tools_schema = None
+        if tools:
+            tools_schema = [
+                t.to_openai_schema() if isinstance(t, Tool) else t
+                for t in tools
+            ]
+
         # This will be executed by the server/executor with LLM client
         ai_request = {
             "type": "ai",
@@ -275,7 +286,7 @@ class StepManager:
             "temperature": temperature,
             "provider": provider,
             "use_cache": use_cache,
-            "tools": tools,
+            "tools": tools_schema,
             "tool_choice": tool_choice,
             "max_tool_calls": max_tool_calls,
             **kwargs,
@@ -553,9 +564,32 @@ class StepManager:
                 "content": ai_response.get("content", ""),
             }
 
+            # Normalize tool calls to OpenAI format for litellm compatibility.
+            # Server stores flat format: {"id", "name", "arguments"}
+            # LiteLLM expects OpenAI format: {"id", "type", "function": {"name", "arguments"}}
+            raw_tool_calls = ai_response.get("tool_calls", [])
+            normalized_tool_calls = []
+            for tc in raw_tool_calls:
+                if "function" in tc:
+                    # Already in OpenAI format
+                    normalized_tool_calls.append(tc)
+                else:
+                    # Convert flat format to OpenAI format
+                    args = tc.get("arguments", {})
+                    if not isinstance(args, str):
+                        args = json.dumps(args)
+                    normalized_tool_calls.append({
+                        "id": tc.get("id", ""),
+                        "type": "function",
+                        "function": {
+                            "name": tc.get("name", ""),
+                            "arguments": args,
+                        },
+                    })
+
             # Include tool calls in assistant message if present
-            if ai_response.get("tool_calls"):
-                assistant_message["tool_calls"] = ai_response["tool_calls"]
+            if normalized_tool_calls:
+                assistant_message["tool_calls"] = normalized_tool_calls
 
             state.messages.append(assistant_message)
 
@@ -563,12 +597,12 @@ class StepManager:
             finish_reason = ai_response.get("finish_reason", "stop")
 
             # If no tool calls, we're done
-            if not ai_response.get("tool_calls") or finish_reason == "stop":
+            if not normalized_tool_calls or finish_reason == "stop":
                 state.status = "completed"
                 break
 
             # Execute each tool call
-            for tool_call in ai_response.get("tool_calls", []):
+            for tool_call in normalized_tool_calls:
                 tool_call_id = tool_call.get("id", f"tool-{state.tool_calls_count}")
                 tool_name = tool_call.get("function", {}).get("name", "")
                 tool_args = tool_call.get("function", {}).get("arguments", {})

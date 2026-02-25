@@ -74,9 +74,13 @@ class Executor:
         return self._http_client
 
     def _get_ai_service(self) -> AIService:
-        """Get or create AI service."""
+        """Get or create AI service with provider registry."""
         if self._ai_service is None:
             self._ai_service = get_ai_service()
+            # Attach provider registry so executor can look up tenant credentials
+            if self._ai_service._provider_registry is None:
+                from flowforge_server.services.providers import get_provider_registry
+                self._ai_service.provider_registry = get_provider_registry()
         return self._ai_service
 
     def _get_inline_executor(self) -> "InlineExecutor":
