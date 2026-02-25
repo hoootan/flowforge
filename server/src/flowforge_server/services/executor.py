@@ -74,9 +74,13 @@ class Executor:
         return self._http_client
 
     def _get_ai_service(self) -> AIService:
-        """Get or create AI service."""
+        """Get or create AI service with provider registry."""
         if self._ai_service is None:
             self._ai_service = get_ai_service()
+            # Attach provider registry so executor can look up tenant credentials
+            if self._ai_service._provider_registry is None:
+                from flowforge_server.services.providers import get_provider_registry
+                self._ai_service.provider_registry = get_provider_registry()
         return self._ai_service
 
     def _get_inline_executor(self) -> "InlineExecutor":
@@ -91,6 +95,9 @@ class Executor:
         print(f"[Executor] Starting {self.worker_id} with concurrency={self.concurrency}...")
 
         self._running = True
+
+        # Recover orphaned runs stuck in "running" state (e.g. from executor restart)
+        await self._recover_stuck_runs()
 
         # Set up signal handlers
         loop = asyncio.get_event_loop()
@@ -125,6 +132,53 @@ class Executor:
             await self._ai_service.close()
 
         await self.queue.close()
+
+    async def _recover_stuck_runs(self) -> None:
+        """Re-enqueue runs stuck in 'running' status (orphaned by executor restart)."""
+        try:
+            async with get_session_context() as session:
+                result = await session.execute(
+                    select(Run).where(Run.status == RunStatus.RUNNING)
+                )
+                stuck_runs = result.scalars().all()
+
+                if not stuck_runs:
+                    return
+
+                print(f"[Executor] Recovering {len(stuck_runs)} stuck running runs...")
+
+                for run in stuck_runs:
+                    # Get the function
+                    fn_result = await session.execute(
+                        select(Function).where(Function.id == run.function_id)
+                    )
+                    fn = fn_result.scalar_one_or_none()
+                    if not fn:
+                        # No function found — mark as failed
+                        run.status = RunStatus.FAILED
+                        run.error = {"type": "RecoveryError", "message": "Function not found during recovery"}
+                        run.ended_at = datetime.utcnow()
+                        continue
+
+                    # Re-enqueue the job
+                    job = Job(
+                        job_type="execute_run",
+                        run_id=str(run.id),
+                        function_id=fn.function_id,
+                        tenant_id=str(run.tenant_id),
+                        data={
+                            "trigger_data": run.trigger_data or {},
+                            "endpoint_url": fn.endpoint_url,
+                        },
+                        max_attempts=run.max_attempts,
+                    )
+                    await self.queue.enqueue(job)
+                    print(f"[Executor] Re-enqueued stuck run {run.id} (function={fn.function_id})")
+
+                await session.commit()
+
+        except Exception as e:
+            print(f"[Executor] Error recovering stuck runs: {e}")
 
     async def _worker(self, worker_num: int) -> None:
         """Individual worker loop."""
@@ -573,7 +627,9 @@ class Executor:
             max_tokens = step_result.get("max_tokens", 1000)
             use_cache = step_result.get("use_cache", True)
             tools = step_result.get("tools")
-            tool_choice = step_result.get("tool_choice", "auto")
+            # Only send tool_choice when tools are present — Anthropic rejects
+            # tool_choice without a tools list (e.g. wrap-up step has no tools).
+            tool_choice = step_result.get("tool_choice", "auto") if tools else None
 
             # Publish thinking event before LLM call
             await publish_run_event(
