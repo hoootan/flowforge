@@ -13,6 +13,21 @@ if TYPE_CHECKING:
     from flowforge.decorators import FlowForgeFunction
 
 
+def _make_serializable(obj: Any) -> Any:
+    """Recursively convert non-serializable objects to JSON-safe types."""
+    if isinstance(obj, dict):
+        return {k: _make_serializable(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_make_serializable(item) for item in obj]
+    # Convert Tool objects to their OpenAI schema
+    if hasattr(obj, "to_openai_schema"):
+        return obj.to_openai_schema()
+    # Convert any dataclass-like objects with to_dict
+    if hasattr(obj, "to_dict") and callable(obj.to_dict):
+        return obj.to_dict()
+    return obj
+
+
 async def _handle_invoke(
     request: Request,
     flowforge: "FlowForge",
@@ -90,7 +105,7 @@ async def _handle_invoke(
         attempt=attempt,
     )
 
-    return JSONResponse(content=result.to_dict())
+    return JSONResponse(content=_make_serializable(result.to_dict()))
 
 
 async def _handle_register(
