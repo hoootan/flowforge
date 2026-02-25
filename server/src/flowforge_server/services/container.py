@@ -90,8 +90,13 @@ def create_service_container() -> ServiceContainer:
     from flowforge_server.stream import RedisEventStream
     from flowforge_server.stream.pubsub import RunEventPubSub
 
+    from flowforge_server.services.providers import get_provider_registry
+
+    ai_service = AIService()
+    ai_service.provider_registry = get_provider_registry()
+
     return ServiceContainer(
-        ai_service=AIService(),
+        ai_service=ai_service,
         job_queue=FairQueue(),
         event_stream=RedisEventStream(),
         pubsub=RunEventPubSub(),
