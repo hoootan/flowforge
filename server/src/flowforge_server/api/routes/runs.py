@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from flowforge_server.db import get_session
-from flowforge_server.db.models import Run, RunStatus, Step, Tenant
+from flowforge_server.db.models import Run, RunStatus, Step, StepStatus, Tenant
 from flowforge_server.api.schemas.runs import (
     RunResponse,
     RunsResponse,
@@ -200,6 +200,61 @@ async def cancel_run(
     return RunActionResponse(
         success=True,
         message="Run cancelled successfully",
+        run_id=run_id,
+    )
+
+
+@router.post("/{run_id}/retry", response_model=RunActionResponse)
+async def retry_run(
+    run_id: str,
+    tenant: TenantWithDevFallback,
+    session: AsyncSession = Depends(get_session),
+) -> RunActionResponse:
+    """
+    Retry a failed run in-place, preserving all completed steps.
+
+    Unlike /replay (which starts a fresh run), this keeps all memoized
+    step results so execution resumes from the point of failure rather
+    than from the beginning.
+    """
+    try:
+        run_uuid = uuid.UUID(run_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid run ID format")
+
+    result = await session.execute(
+        select(Run)
+        .where(Run.tenant_id == tenant.id, Run.id == run_uuid)
+        .options(selectinload(Run.steps))
+    )
+    run = result.scalar_one_or_none()
+
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    if run.status not in (RunStatus.FAILED, RunStatus.RUNNING, RunStatus.PENDING):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot retry run with status '{run.status.value}'",
+        )
+
+    # Delete failed/errored steps so they re-execute on the next attempt.
+    # Completed steps stay intact — the SDK will replay them from cache.
+    for step in list(run.steps):
+        if step.status in (StepStatus.FAILED,):
+            await session.delete(step)
+
+    # Reset run so the executor picks it up again
+    run.status = RunStatus.PENDING
+    run.attempt = 1
+    run.error = None
+    run.ended_at = None
+
+    await session.commit()
+
+    return RunActionResponse(
+        success=True,
+        message="Run queued for retry. Completed steps will be replayed from cache.",
         run_id=run_id,
     )
 
