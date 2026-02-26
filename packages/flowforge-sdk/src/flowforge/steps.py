@@ -749,7 +749,11 @@ class StepManager:
                 model=model,
                 messages=state.messages,
                 temperature=temperature,
-                # No tools — force a text response
+                # Pass tools so Anthropic understands the message history
+                # (tool_use/tool_result blocks), but tool_choice="none" prevents
+                # the model from making any further tool calls.
+                tools=tools,
+                tool_choice="none",
                 **wrap_kwargs,
             )
             wrap_content = wrap_response.get("content", "")
