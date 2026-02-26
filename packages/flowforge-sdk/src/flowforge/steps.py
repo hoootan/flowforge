@@ -602,7 +602,7 @@ class StepManager:
                 break
 
             # Execute each tool call
-            for tool_call in normalized_tool_calls:
+            for i, tool_call in enumerate(normalized_tool_calls):
                 tool_call_id = tool_call.get("id", f"tool-{state.tool_calls_count}")
                 tool_name = tool_call.get("function", {}).get("name", "")
                 tool_args = tool_call.get("function", {}).get("arguments", {})
@@ -715,6 +715,18 @@ class StepManager:
                 # Check if we've hit tool call limit after this tool
                 if state.tool_calls_count >= max_tool_calls:
                     state.status = "max_tool_calls"
+                    # Add placeholder results for remaining unprocessed tool calls
+                    # in this batch — Anthropic requires every tool_use block to
+                    # have a corresponding tool_result in the next message.
+                    for remaining in normalized_tool_calls[i + 1:]:
+                        remaining_id = remaining.get("id", "")
+                        remaining_name = remaining.get("function", {}).get("name", "")
+                        state.messages.append({
+                            "role": "tool",
+                            "tool_call_id": remaining_id,
+                            "name": remaining_name,
+                            "content": json.dumps({"status": "skipped", "reason": "tool call limit reached"}),
+                        })
                     break
 
             # If we hit max tool calls, exit loop
