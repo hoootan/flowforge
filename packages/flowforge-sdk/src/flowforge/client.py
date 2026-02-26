@@ -376,6 +376,68 @@ class FlowForge:
             worker_url=worker_url,
         )
 
+    async def get_run(self, run_id: str) -> dict[str, Any]:
+        """
+        Get details for a specific run.
+
+        Args:
+            run_id: The run UUID.
+
+        Returns:
+            Run details including status, steps, and output.
+        """
+        client = await self._get_client()
+        headers: dict[str, str] = {}
+        if self.api_key:
+            headers["X-FlowForge-API-Key"] = self.api_key
+        response = await client.get(f"/api/v1/runs/{run_id}", headers=headers)
+        response.raise_for_status()
+        return response.json()
+
+    async def cancel_run(self, run_id: str) -> dict[str, Any]:
+        """
+        Cancel a running or pending run.
+
+        Args:
+            run_id: The run UUID to cancel.
+
+        Returns:
+            Action result with success status.
+        """
+        client = await self._get_client()
+        headers: dict[str, str] = {}
+        if self.api_key:
+            headers["X-FlowForge-API-Key"] = self.api_key
+        response = await client.post(f"/api/v1/runs/{run_id}/cancel", headers=headers)
+        response.raise_for_status()
+        return response.json()
+
+    async def retry_run(self, run_id: str) -> dict[str, Any]:
+        """
+        Retry a failed run in-place, preserving all completed (memoized) steps.
+
+        Unlike replay (which starts a fresh run), retry keeps all memoized step
+        results so execution resumes from the point of failure rather than from
+        the beginning.
+
+        Args:
+            run_id: The run UUID to retry.
+
+        Returns:
+            Action result with success status.
+
+        Example:
+            result = await flowforge.retry_run("761c0321-...")
+            print(result["message"])  # "Run queued for retry..."
+        """
+        client = await self._get_client()
+        headers: dict[str, str] = {}
+        if self.api_key:
+            headers["X-FlowForge-API-Key"] = self.api_key
+        response = await client.post(f"/api/v1/runs/{run_id}/retry", headers=headers)
+        response.raise_for_status()
+        return response.json()
+
     async def close(self) -> None:
         """Close the HTTP client."""
         if self._http_client:
