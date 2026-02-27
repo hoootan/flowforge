@@ -716,9 +716,16 @@ class Executor:
                 step.status = StepStatus.FAILED
                 step.error = {"type": type(e).__name__, "message": str(e)}
 
-                # Fail the job with retry
+                will_retry = await self.queue.fail(job.id, str(e), retry=True)
+
+                if not will_retry:
+                    # Job exhausted retries — mark the run as failed too
+                    run.status = RunStatus.FAILED
+                    run.error = {"type": type(e).__name__, "message": str(e)}
+                    run.ended_at = datetime.utcnow()
+                    print(f"[Executor] Run {run.id} failed permanently (AI step error, no retries left)")
+
                 await session.commit()
-                await self.queue.fail(job.id, str(e), retry=True)
                 return True
 
             # Update step with actual result
