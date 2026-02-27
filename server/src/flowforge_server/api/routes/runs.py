@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from flowforge_server.db import get_session
-from flowforge_server.db.models import Run, RunStatus, Step, StepStatus, Tenant
+from flowforge_server.db.models import Function, Run, RunStatus, Step, StepStatus, Tenant
 from flowforge_server.api.schemas.runs import (
     RunResponse,
     RunsResponse,
@@ -22,6 +22,7 @@ from flowforge_server.api.schemas.approvals import (
     ToolCallsResponse,
 )
 from flowforge_server.api.deps import TenantWithDevFallback
+from flowforge_server.queue import FairQueue, Job
 
 router = APIRouter(prefix="/runs", tags=["runs"])
 
@@ -238,6 +239,14 @@ async def retry_run(
             detail=f"Cannot retry run with status '{run.status.value}'",
         )
 
+    # Fetch the function to build the job payload
+    fn_result = await session.execute(
+        select(Function).where(Function.id == run.function_id)
+    )
+    fn = fn_result.scalar_one_or_none()
+    if not fn:
+        raise HTTPException(status_code=404, detail="Function not found")
+
     # Delete failed/errored steps so they re-execute on the next attempt.
     # Completed steps stay intact — the SDK will replay them from cache.
     for step in list(run.steps):
@@ -251,6 +260,26 @@ async def retry_run(
     run.ended_at = None
 
     await session.commit()
+
+    # Enqueue a job so the executor actually processes it
+    queue = FairQueue()
+    try:
+        job = Job(
+            job_type="execute_run",
+            run_id=run_id,
+            function_id=fn.function_id,
+            tenant_id=str(tenant.id),
+            data={
+                "function_uuid": str(fn.id),
+                "endpoint_url": fn.endpoint_url,
+                "config": fn.config,
+                "trigger_data": run.trigger_data,
+            },
+            max_attempts=fn.retries,
+        )
+        await queue.enqueue(job)
+    finally:
+        await queue.close()
 
     return RunActionResponse(
         success=True,

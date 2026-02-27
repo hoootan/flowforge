@@ -134,11 +134,11 @@ class Executor:
         await self.queue.close()
 
     async def _recover_stuck_runs(self) -> None:
-        """Re-enqueue runs stuck in 'running' status (orphaned by executor restart)."""
+        """Re-enqueue runs stuck in 'running' or 'pending' status (orphaned by executor restart)."""
         try:
             async with get_session_context() as session:
                 result = await session.execute(
-                    select(Run).where(Run.status == RunStatus.RUNNING)
+                    select(Run).where(Run.status.in_([RunStatus.RUNNING, RunStatus.PENDING]))
                 )
                 stuck_runs = result.scalars().all()
 
