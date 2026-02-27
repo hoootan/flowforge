@@ -1,0 +1,42 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: flowforge-ingress
+  namespace: flowforge
+  labels:
+    app.kubernetes.io/name: flowforge
+  annotations:
+    # Rewrite: strip the captured prefix so /api/v1/foo → /api/v1/foo on server
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    # Long timeout for SSE streams and slow LLM responses
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    # Disable buffering so SSE events are flushed immediately to clients
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - flowforge.example.com  # Replace with your domain
+      secretName: flowforge-tls  # Create via cert-manager or manually
+  rules:
+    - host: flowforge.example.com  # Replace with your domain
+      http:
+        paths:
+          # API traffic → server (path preserved via regex capture group)
+          - path: /api(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: server
+                port:
+                  number: 8000
+          # All other traffic → dashboard
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: dashboard
+                port:
+                  number: 3000

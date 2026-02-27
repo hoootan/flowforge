@@ -184,6 +184,85 @@ In production, run the server separately and connect workers:
 docker-compose up -d
 ```
 
+### 4. Kubernetes (Production Cluster)
+
+Raw Kubernetes manifests are provided in `deploy/kubernetes/` for cluster deployments. They mirror the docker-compose topology with health probes, autoscaling, and zero-downtime rollouts.
+
+**Prerequisites:** Metrics Server + NGINX Ingress Controller installed in your cluster.
+
+**Quick deploy:**
+
+```bash
+# 1. Fill in secrets (never commit real values)
+cp deploy/kubernetes/02-secret.yaml deploy/kubernetes/02-secret.local.yaml
+# Edit 02-secret.local.yaml and replace all CHANGE_ME values
+
+# 2. Update the host in deploy/kubernetes/40-ingress.yaml
+#    Replace flowforge.example.com with your domain
+
+# 3. Apply all manifests in order
+kubectl apply -f deploy/kubernetes/
+
+# 4. Watch rollout
+kubectl rollout status deployment/server -n flowforge
+kubectl rollout status deployment/executor -n flowforge
+
+# 5. Create the first admin user
+kubectl exec -it deployment/server -n flowforge -- \
+  flowforge-server create-admin --email admin@example.com --password secret123
+```
+
+**What's deployed:**
+
+| Workload | Kind | Replicas | Notes |
+|---|---|---|---|
+| `postgres` | StatefulSet | 1 | 20Gi PVC, AOF-style persistence |
+| `redis` | StatefulSet | 1 | 5Gi PVC, AOF persistence |
+| `server` | Deployment | 2 (min) | Runs Alembic migrations on startup |
+| `runner` | Deployment | 1 | `Recreate` strategy (Redis consumer group safety) |
+| `executor` | Deployment | 2 (min) | 120s termination grace for in-flight LLM steps |
+| `dashboard` | Deployment | 2 (min) | Requires image built with `NEXT_PUBLIC_API_URL=/api/v1` |
+
+**Autoscaling (HPA):**
+
+| Target | Min | Max | CPU Threshold | ScaleDown Stabilization |
+|---|---|---|---|---|
+| `server` | 2 | 8 | 70% | 5 min |
+| `executor` | 2 | 20 | 60% | 10 min |
+
+**Ingress routing** (via NGINX, path-based):
+
+```
+/api/*  →  server:8000    (preserves full path, 300s timeout for SSE)
+/       →  dashboard:3000
+```
+
+**Build the dashboard image** (required for API calls to work via Ingress):
+
+```bash
+docker build --build-arg NEXT_PUBLIC_API_URL=/api/v1 \
+  -t ghcr.io/flowforge/flowforge-dashboard:latest ./dashboard
+```
+
+**Secrets management** — the provided `02-secret.yaml` contains only `CHANGE_ME` placeholders. For production, use [Sealed Secrets](https://github.com/bitnami-labs/sealed-secrets) or [External Secrets Operator](https://external-secrets.io/) pointing to AWS Secrets Manager or HashiCorp Vault.
+
+**Manifest files:**
+
+```
+deploy/kubernetes/
+├── 00-namespace.yaml          # flowforge namespace
+├── 01-configmap.yaml          # Non-sensitive shared config
+├── 02-secret.yaml             # Secret template (replace CHANGE_ME values)
+├── 10-postgres-statefulset.yaml
+├── 11-redis-statefulset.yaml
+├── 20-server-deployment.yaml
+├── 21-runner-deployment.yaml
+├── 22-executor-deployment.yaml
+├── 23-dashboard-deployment.yaml
+├── 30-hpa.yaml                # Autoscaling for server + executor
+└── 40-ingress.yaml            # NGINX Ingress with TLS
+```
+
 **Run your worker:**
 
 ```python
@@ -353,6 +432,8 @@ flowforge/
 │   └── flowforge-client-ts/ # TypeScript client
 ├── server/                  # Orchestration server (FastAPI)
 ├── dashboard/               # Admin dashboard (Next.js)
+├── deploy/
+│   └── kubernetes/          # Raw K8s manifests (namespace → HPA → Ingress)
 ├── examples/                # Example workflows
 └── tests/                   # Test suites
 ```
