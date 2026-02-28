@@ -31,6 +31,7 @@ from flowforge_server.api.routes import (
 from flowforge_server.api.error_handlers import register_error_handlers
 from flowforge_server.middleware.correlation import add_correlation_middleware
 from flowforge_server.telemetry.metrics import metrics_router, add_metrics_middleware
+from flowforge_server.api.middleware import add_api_middleware
 from flowforge_server.telemetry.tracing import (
     init_tracing,
     instrument_app,
@@ -205,6 +206,9 @@ FlowForge provides durable execution for AI-powered workflows with:
 
     # Add metrics middleware (tracks request duration/count)
     add_metrics_middleware(app)
+
+    # Add security headers (X-Content-Type-Options, X-Frame-Options, etc.)
+    add_api_middleware(app)
 
     # Instrument FastAPI with OpenTelemetry (if configured)
     settings = get_settings()
