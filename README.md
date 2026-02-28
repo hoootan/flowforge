@@ -12,6 +12,12 @@ A production-ready AI workflow orchestration platform. Build durable, event-driv
 - **Role-Based Access**: Admin, Member, and Viewer roles with granular permissions.
 - **Developer Experience**: CLI for local development with hot reload and event simulation.
 
+## Dashboard
+
+| Overview | Tools | Settings |
+|---|---|---|
+| ![Overview](docs/screenshots/dashboard-overview.png) | ![Tools](docs/screenshots/dashboard-tools.png) | ![Settings](docs/screenshots/dashboard-settings.png) |
+
 ## How It Works
 
 FlowForge uses a **client-server architecture** where your workflow code runs on workers, while the central server handles orchestration.
