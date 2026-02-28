@@ -5,7 +5,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-
 # Known provider names
 ProviderName = Literal["openai", "anthropic", "google", "mistral", "cohere", "custom"]
 

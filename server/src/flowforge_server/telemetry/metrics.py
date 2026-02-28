@@ -6,8 +6,7 @@ Exposes /metrics endpoint for Prometheus scraping.
 from __future__ import annotations
 
 import time
-from functools import wraps
-from typing import Callable, Any
+from typing import Any
 
 from fastapi import APIRouter, Response
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
@@ -16,12 +15,12 @@ from starlette.responses import Response as StarletteResponse
 
 try:
     from prometheus_client import (
-        Counter,
-        Histogram,
-        Gauge,
-        generate_latest,
         CONTENT_TYPE_LATEST,
         REGISTRY,
+        Counter,
+        Gauge,
+        Histogram,
+        generate_latest,
     )
 
     PROMETHEUS_AVAILABLE = True
@@ -105,7 +104,7 @@ if PROMETHEUS_AVAILABLE:
     AI_TOKENS_TOTAL = Counter(
         "flowforge_ai_tokens_total",
         "Total AI tokens used",
-        ["provider", "model", "type"],  # type: input, output
+        ["provider", "model", "type"],  # values: input, output
     )
 
     AI_REQUEST_DURATION_SECONDS = Histogram(

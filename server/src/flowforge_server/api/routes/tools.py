@@ -1,21 +1,19 @@
 """Tool management endpoints."""
 
-from typing import Any
-import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, func, or_
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from flowforge_server.db import get_session
-from flowforge_server.db.models import Tool, Tenant
+from flowforge_server.api.deps import TenantWithDevFallback
 from flowforge_server.api.schemas.tools import (
     ToolCreate,
     ToolResponse,
-    ToolUpdate,
     ToolsResponse,
+    ToolUpdate,
 )
-from flowforge_server.api.deps import TenantWithDevFallback
+from flowforge_server.db import get_session
+from flowforge_server.db.models import Tool
 
 router = APIRouter(prefix="/tools", tags=["tools"])
 

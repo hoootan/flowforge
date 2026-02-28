@@ -1,8 +1,8 @@
 """Event processing service."""
 
+import uuid
 from datetime import datetime
 from typing import Any
-import uuid
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession

@@ -3,16 +3,15 @@
 import asyncio
 import json
 import uuid
+from collections.abc import AsyncGenerator
 from datetime import datetime
-from typing import AsyncGenerator
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from flowforge_server.db import get_session_context
-from flowforge_server.db.models import Run, RunStatus, Step, StepStatus
+from flowforge_server.db.models import Run
 from flowforge_server.stream.pubsub import (
     RunEvent,
     RunEventType,
@@ -223,7 +222,7 @@ async def generate_sse_events(
                     except (json.JSONDecodeError, KeyError, ValueError):
                         continue
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # Send keepalive on timeout
                 yield ": keepalive\n\n"
                 last_keepalive = asyncio.get_event_loop().time()

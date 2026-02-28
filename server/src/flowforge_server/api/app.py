@@ -1,42 +1,42 @@
 """FastAPI application factory."""
 
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from flowforge_server.config import get_settings
-from flowforge_server.db import init_db, close_db, run_migrations
-from flowforge_server.services.seed import run_all_seeds
-from flowforge_server.services.container import create_service_container
-from flowforge_server.logging import configure_logging, Loggers
+from flowforge_server.api.error_handlers import register_error_handlers
+from flowforge_server.api.middleware import add_api_middleware
 from flowforge_server.api.routes import (
+    ai_providers_router,
+    approvals_router,
+    audit_router,
+    auth_router,
+    dlq_router,
     events_router,
     functions_router,
-    runs_router,
     health_router,
-    approvals_router,
+    model_pricing_router,
+    runs_router,
+    stats_router,
     stream_router,
     tools_router,
-    auth_router,
-    users_router,
-    stats_router,
-    ai_providers_router,
     usage_router,
-    model_pricing_router,
-    audit_router,
-    dlq_router,
+    users_router,
 )
-from flowforge_server.api.error_handlers import register_error_handlers
+from flowforge_server.config import get_settings
+from flowforge_server.db import close_db, init_db, run_migrations
+from flowforge_server.logging import Loggers, configure_logging
 from flowforge_server.middleware.correlation import add_correlation_middleware
-from flowforge_server.telemetry.metrics import metrics_router, add_metrics_middleware
-from flowforge_server.api.middleware import add_api_middleware
+from flowforge_server.services.container import create_service_container
+from flowforge_server.services.seed import run_all_seeds
+from flowforge_server.telemetry.metrics import add_metrics_middleware, metrics_router
 from flowforge_server.telemetry.tracing import (
+    OTEL_AVAILABLE,
     init_tracing,
     instrument_app,
     instrument_httpx,
-    OTEL_AVAILABLE,
 )
 
 

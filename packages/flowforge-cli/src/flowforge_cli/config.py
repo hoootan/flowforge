@@ -14,7 +14,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 # Check if pyyaml is available
 try:
@@ -43,7 +43,7 @@ class ServerConfig:
     """Server connection configuration."""
 
     url: str = "http://localhost:8000"
-    api_key: Optional[str] = None
+    api_key: str | None = None
     timeout: int = 30
 
 
@@ -63,7 +63,7 @@ class CLIConfig:
     verbose: bool = False
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "CLIConfig":
+    def from_dict(cls, data: dict[str, Any]) -> CLIConfig:
         """Create config from dictionary."""
         config = cls()
 
@@ -115,11 +115,11 @@ class CLIConfig:
         # Options
         if output_format := os.environ.get("FLOWFORGE_OUTPUT_FORMAT"):
             self.output_format = output_format
-        if no_color := os.environ.get("NO_COLOR"):
+        if os.environ.get("NO_COLOR"):
             self.color = False
 
 
-def find_config_file(start_dir: Optional[Path] = None) -> Optional[Path]:
+def find_config_file(start_dir: Path | None = None) -> Path | None:
     """Find configuration file by walking up directory tree.
 
     Args:
@@ -168,13 +168,13 @@ def load_config_file(path: Path) -> dict[str, Any]:
             "Install with: pip install pyyaml"
         )
 
-    with open(path, "r") as f:
+    with open(path) as f:
         data = yaml.safe_load(f)
 
     return data or {}
 
 
-def load_config(start_dir: Optional[Path] = None) -> CLIConfig:
+def load_config(start_dir: Path | None = None) -> CLIConfig:
     """Load configuration from file and environment.
 
     Configuration is loaded in order of precedence (lowest to highest):
@@ -207,7 +207,7 @@ def load_config(start_dir: Optional[Path] = None) -> CLIConfig:
 
 
 # Global config cache
-_config: Optional[CLIConfig] = None
+_config: CLIConfig | None = None
 
 
 def get_config() -> CLIConfig:

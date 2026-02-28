@@ -1,9 +1,9 @@
 """Tool model for reusable AI tools."""
 
-from typing import Any, TYPE_CHECKING
 import uuid
+from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import ForeignKey, String, Text, Boolean, UniqueConstraint
+from sqlalchemy import Boolean, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 

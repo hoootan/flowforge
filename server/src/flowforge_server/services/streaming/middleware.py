@@ -7,8 +7,9 @@ and other cross-cutting concerns during streaming.
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
-from typing import Any, AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from dataclasses import dataclass
+from typing import Any
 
 from .events import (
     ContentChunkEvent,
@@ -18,7 +19,6 @@ from .events import (
     ToolCallEndEvent,
     ToolCallStartEvent,
 )
-
 
 # Type aliases for handlers
 EventHandler = Callable[[StreamEvent], Awaitable[None] | None]
@@ -43,7 +43,7 @@ class StreamMiddleware:
     def on_start(
         self,
         handler: Callable[[], Awaitable[None] | None],
-    ) -> "StreamMiddleware":
+    ) -> StreamMiddleware:
         """Register a start handler."""
         self._on_start.append(handler)
         return self
@@ -51,7 +51,7 @@ class StreamMiddleware:
     def on_event(
         self,
         handler: EventHandler,
-    ) -> "StreamMiddleware":
+    ) -> StreamMiddleware:
         """Register an event handler."""
         self._on_event.append(handler)
         return self
@@ -59,7 +59,7 @@ class StreamMiddleware:
     def on_complete(
         self,
         handler: CompleteHandler,
-    ) -> "StreamMiddleware":
+    ) -> StreamMiddleware:
         """Register a completion handler."""
         self._on_complete.append(handler)
         return self
@@ -67,7 +67,7 @@ class StreamMiddleware:
     def on_error(
         self,
         handler: ErrorHandler,
-    ) -> "StreamMiddleware":
+    ) -> StreamMiddleware:
         """Register an error handler."""
         self._on_error.append(handler)
         return self

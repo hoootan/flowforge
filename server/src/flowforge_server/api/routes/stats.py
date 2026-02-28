@@ -1,6 +1,6 @@
 """Stats endpoints for dashboard."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -105,7 +105,7 @@ async def get_stats(
     ) or 0
 
     # Events today
-    today_start = datetime.now(timezone.utc).replace(
+    today_start = datetime.now(UTC).replace(
         hour=0, minute=0, second=0, microsecond=0
     )
     event_today = await session.scalar(

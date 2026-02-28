@@ -1,12 +1,12 @@
 """Integration tests for agent loop execution with mocked LLM."""
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
-import json
-from unittest.mock import AsyncMock, patch, MagicMock
-from flowforge.steps import StepManager
 from flowforge.agent import AgentResult
+from flowforge.exceptions import StepCompleted
+from flowforge.steps import StepManager
 from flowforge.tools import tool
-from flowforge.exceptions import StepCompleted, StepFailed
 
 
 # Test tools for agent execution

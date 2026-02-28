@@ -1,11 +1,12 @@
 """Router implementations for multi-agent networks."""
 
 from abc import ABC, abstractmethod
-from typing import Callable, Any, TYPE_CHECKING
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from flowforge.network import RouterContext
     from flowforge.agent_def import AgentDefinition
+    from flowforge.network import RouterContext
 
 
 class Router(ABC):

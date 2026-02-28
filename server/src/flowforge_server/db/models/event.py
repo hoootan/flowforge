@@ -1,10 +1,10 @@
 """Event model for received events."""
 
-from datetime import datetime
-from typing import Any, TYPE_CHECKING
 import uuid
+from datetime import datetime
+from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 

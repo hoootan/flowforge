@@ -1,9 +1,9 @@
 """ToolApproval model for Human-in-the-Loop tool approval."""
 
-from datetime import datetime, timezone
-from enum import Enum
-from typing import Any, TYPE_CHECKING
 import uuid
+from datetime import UTC, datetime
+from enum import Enum
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import DateTime, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -143,11 +143,11 @@ class ToolApproval(Base, TimestampMixin):
         """Check if the approval has timed out."""
         if self.is_terminal:
             return False
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         timeout = self.timeout_at
         # Handle both naive and aware datetimes
         if timeout.tzinfo is None:
-            timeout = timeout.replace(tzinfo=timezone.utc)
+            timeout = timeout.replace(tzinfo=UTC)
         return now > timeout
 
     def to_dict(self) -> dict[str, Any]:

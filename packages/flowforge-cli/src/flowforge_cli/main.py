@@ -1,14 +1,13 @@
 """Main CLI entry point for FlowForge."""
 
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
-from flowforge_cli.commands import dev, send, functions, runs
-from flowforge_cli.config import get_config, find_config_file, load_config, YAML_AVAILABLE
+from flowforge_cli.commands import dev, functions, runs, send
+from flowforge_cli.config import YAML_AVAILABLE, find_config_file, get_config
 
 app = typer.Typer(
     name="flowforge",

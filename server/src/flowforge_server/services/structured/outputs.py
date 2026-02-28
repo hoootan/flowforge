@@ -6,7 +6,8 @@ using the instructor library with LiteLLM.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, AsyncIterator, Type, TypeVar
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
@@ -66,7 +67,7 @@ class StructuredOutputService:
     async def generate(
         self,
         model: str,
-        response_model: Type[T],
+        response_model: type[T],
         messages: list[dict[str, str]],
         max_retries: int = 3,
         temperature: float = 0.7,
@@ -114,7 +115,7 @@ class StructuredOutputService:
     async def generate_stream(
         self,
         model: str,
-        response_model: Type[T],
+        response_model: type[T],
         messages: list[dict[str, str]],
         temperature: float = 0.7,
         **kwargs: Any,
@@ -154,7 +155,7 @@ class StructuredOutputService:
     async def generate_with_fallback(
         self,
         model: str,
-        response_model: Type[T],
+        response_model: type[T],
         messages: list[dict[str, str]],
         max_retries: int = 3,
         **kwargs: Any,
@@ -194,7 +195,7 @@ class StructuredOutputService:
     async def _generate_with_json_mode(
         self,
         model: str,
-        response_model: Type[T],
+        response_model: type[T],
         messages: list[dict[str, str]],
         max_retries: int = 3,
         **kwargs: Any,
@@ -261,7 +262,7 @@ class StructuredOutputService:
         )
 
 
-def pydantic_to_tool_schema(model: Type[BaseModel]) -> dict[str, Any]:
+def pydantic_to_tool_schema(model: type[BaseModel]) -> dict[str, Any]:
     """
     Convert a Pydantic model to an OpenAI tool schema.
 
@@ -287,7 +288,7 @@ def pydantic_to_tool_schema(model: Type[BaseModel]) -> dict[str, Any]:
 
 def validate_against_model(
     data: dict[str, Any],
-    model: Type[T],
+    model: type[T],
 ) -> tuple[T | None, list[str]]:
     """
     Validate data against a Pydantic model.

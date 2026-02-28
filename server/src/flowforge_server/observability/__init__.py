@@ -16,9 +16,9 @@ Usage:
 
 from flowforge_server.observability.health import (
     ComponentHealth,
-    SystemHealth,
     HealthChecker,
     HealthStatus,
+    SystemHealth,
 )
 
 __all__ = [

@@ -6,8 +6,9 @@ AgentDefinition, StepContext, and ToolDefinition.
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Awaitable, Callable, Literal, Type
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel
 
@@ -98,7 +99,7 @@ class AgentDefinition:
     temperature: float = 0.7
 
     # Output schema for structured outputs
-    output_schema: Type[BaseModel] | None = None
+    output_schema: type[BaseModel] | None = None
 
     # Approval configuration
     requires_approval_for: list[str] = field(default_factory=list)  # Tool names

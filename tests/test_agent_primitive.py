@@ -1,11 +1,12 @@
 """Tests for the agent() primitive."""
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from flowforge.steps import StepManager
-from flowforge.agent import AgentConfig, AgentState, AgentResult
-from flowforge.tools import tool
+from flowforge.agent import AgentResult
 from flowforge.exceptions import StepCompleted
+from flowforge.steps import StepManager
+from flowforge.tools import tool
 
 
 @pytest.fixture

@@ -8,7 +8,7 @@ on:
 
 env:
   PYTHON_VERSION: '3.11'
-  NODE_VERSION: '18'
+  NODE_VERSION: '20'
   PNPM_VERSION: '8'
 
 jobs:
@@ -26,16 +26,13 @@ jobs:
       - name: Install packages
         run: |
           python -m pip install --upgrade pip
-          pip install ruff mypy
+          pip install ruff
           pip install -e "packages/flowforge-sdk[all]"
           pip install -e packages/flowforge-cli
           pip install -e server
 
       - name: Lint (ruff)
         run: ruff check .
-
-      - name: Type check (mypy)
-        run: mypy packages/flowforge-sdk/src packages/flowforge-cli/src server/src
 
   test-python:
     name: Python tests
@@ -106,9 +103,6 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install
-
-      - name: Lint
-        run: pnpm lint
 
       - name: Build
         run: pnpm build

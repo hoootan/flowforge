@@ -44,7 +44,7 @@ class DLQEntry:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "DLQEntry":
+    def from_dict(cls, data: dict[str, Any]) -> DLQEntry:
         return cls(
             job_id=data["job_id"],
             tenant_id=data["tenant_id"],

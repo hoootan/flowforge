@@ -8,15 +8,14 @@ timeout enforcement.
 import asyncio
 import functools
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Callable
+from typing import Any
 
 from RestrictedPython import compile_restricted, safe_builtins
-from RestrictedPython.Eval import default_guarded_getiter, default_guarded_getitem
+from RestrictedPython.Eval import default_guarded_getitem, default_guarded_getiter
 from RestrictedPython.Guards import (
     guarded_iter_unpack_sequence,
     safer_getattr,
 )
-
 
 # Default timeout for tool execution (30 seconds)
 DEFAULT_TIMEOUT_SECONDS = 30

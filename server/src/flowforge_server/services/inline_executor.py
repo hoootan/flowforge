@@ -6,25 +6,33 @@ an external worker. It runs the agent loop directly within FlowForge.
 
 import asyncio
 import json
-import uuid
 from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select, or_
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from flowforge_server.db.models import Function, Tool, Run, Step, StepStatus, StepType, ToolApproval, ApprovalStatus
-from flowforge_server.services.ai import AIService, AIResponse, ToolCall
+from flowforge_server.db.models import (
+    ApprovalStatus,
+    Function,
+    Run,
+    Step,
+    StepStatus,
+    StepType,
+    Tool,
+    ToolApproval,
+)
+from flowforge_server.logging import Loggers
+from flowforge_server.services.ai import AIService, ToolCall
 from flowforge_server.services.builtin_tools import execute_builtin_tool, get_builtin_tool_names
 from flowforge_server.services.sandbox import (
-    execute_sandboxed,
-    SandboxError,
-    SandboxTimeoutError,
-    SandboxSecurityError,
     DEFAULT_TIMEOUT_SECONDS,
+    SandboxError,
+    SandboxSecurityError,
+    SandboxTimeoutError,
+    execute_sandboxed,
 )
-from flowforge_server.stream.pubsub import publish_run_event, RunEventType
-from flowforge_server.logging import Loggers
+from flowforge_server.stream.pubsub import RunEventType, publish_run_event
 
 log = Loggers.inline_executor()
 

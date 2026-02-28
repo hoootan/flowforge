@@ -1,6 +1,5 @@
 """Add worker_last_seen field to functions table for worker health tracking."""
 
-from datetime import datetime
 
 # Migration metadata
 MIGRATION_ID = "add_worker_heartbeat"

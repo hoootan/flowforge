@@ -1,10 +1,9 @@
 """AI Provider model for secure multi-tenant API key management."""
 
-from datetime import datetime
-from typing import Any, TYPE_CHECKING
 import uuid
+from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import String, Text, Boolean, ForeignKey, Index
+from sqlalchemy import Boolean, ForeignKey, Index, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 

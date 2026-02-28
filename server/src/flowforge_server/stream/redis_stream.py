@@ -1,13 +1,12 @@
 """Redis Streams implementation for event streaming."""
 
 import json
-from datetime import datetime
 from typing import Any
 
 import redis.asyncio as redis
 
-from flowforge_server.stream.base import EventStream, StreamMessage
 from flowforge_server.config import get_settings
+from flowforge_server.stream.base import EventStream, StreamMessage
 
 
 class RedisEventStream(EventStream):

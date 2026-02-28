@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select, desc
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from flowforge_server.db.models.audit_log import AuditLog, AuditAction
-from flowforge_server.middleware.correlation import get_correlation_id
+from flowforge_server.db.models.audit_log import AuditAction, AuditLog
 from flowforge_server.logging import Loggers
+from flowforge_server.middleware.correlation import get_correlation_id
 
 
 class AuditService:
@@ -77,7 +77,7 @@ class AuditService:
 
         entry = AuditLog(
             tenant_id=tenant_id,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             actor_id=actor_id,
             actor_type=actor_type,
             actor_display=actor_display,

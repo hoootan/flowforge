@@ -4,13 +4,13 @@ Seeds the database with built-in tools and default data on startup.
 """
 
 import uuid
+
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from flowforge_server.db import get_session_context
-from flowforge_server.db.models import Tool, Tenant, ApiKey, ApiKeyType, DEFAULT_SCOPES
+from flowforge_server.db.models import DEFAULT_SCOPES, ApiKey, ApiKeyType, Tenant, Tool
+from flowforge_server.services.auth import hash_api_key
 from flowforge_server.services.builtin_tools import get_builtin_tool_definitions
-from flowforge_server.services.auth import generate_api_key, hash_api_key
 
 
 async def seed_builtin_tools() -> None:

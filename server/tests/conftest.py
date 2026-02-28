@@ -10,22 +10,19 @@ This module provides fixtures for:
 import asyncio
 import os
 import uuid
-from datetime import datetime
-from typing import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Generator
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
-from flowforge_server.config import Settings, get_settings
-from flowforge_server.db.models.base import Base
-from flowforge_server.db.models import Tenant, Function, Tool, Run, RunStatus
 from flowforge_server.api.deps import hash_api_key
-
+from flowforge_server.config import Settings
+from flowforge_server.db.models import Function, Run, RunStatus, Tenant, Tool
+from flowforge_server.db.models.base import Base
 
 # Test configuration
 TEST_DATABASE_URL = os.getenv(

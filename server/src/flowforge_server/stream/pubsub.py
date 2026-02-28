@@ -7,10 +7,11 @@ to connected SSE clients in real-time.
 import asyncio
 import json
 import uuid
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, AsyncIterator
+from typing import Any
 
 import redis.asyncio as redis
 
@@ -283,7 +284,7 @@ class RunEventPubSub:
                         except (json.JSONDecodeError, KeyError, ValueError):
                             continue
 
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     # Timeout is expected, continue polling
                     continue
 

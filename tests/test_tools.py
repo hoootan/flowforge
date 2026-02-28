@@ -1,11 +1,11 @@
 """Tests for tool definition and schema inference."""
 
-import pytest
-from typing import Literal, Optional
+import importlib.util
 
 # Direct import to avoid dependency issues in tests
-import sys
-import importlib.util
+from typing import Literal
+
+import pytest
 
 spec = importlib.util.spec_from_file_location(
     "tools",
@@ -230,10 +230,9 @@ class TestComplexTypes:
 
     def test_list_with_type(self):
         """Test List[str] type."""
-        from typing import List
 
         @tool(name="test", description="Test")
-        def test_func(items: List[str]) -> dict:
+        def test_func(items: list[str]) -> dict:
             return {}
 
         param_schema = test_func.parameters["properties"]["items"]
@@ -242,10 +241,9 @@ class TestComplexTypes:
 
     def test_dict_with_types(self):
         """Test Dict[str, int] type."""
-        from typing import Dict
 
         @tool(name="test", description="Test")
-        def test_func(data: Dict[str, int]) -> dict:
+        def test_func(data: dict[str, int]) -> dict:
             return {}
 
         param_schema = test_func.parameters["properties"]["data"]
@@ -256,7 +254,7 @@ class TestComplexTypes:
         """Test Optional[str] type."""
 
         @tool(name="test", description="Test")
-        def test_func(value: Optional[str]) -> dict:
+        def test_func(value: str | None) -> dict:
             return {}
 
         param_schema = test_func.parameters["properties"]["value"]

@@ -6,7 +6,6 @@ import signal
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
@@ -16,7 +15,7 @@ console = Console()
 
 # Check if watchfiles is available
 try:
-    import watchfiles
+    import watchfiles  # noqa: F401
     WATCHFILES_AVAILABLE = True
 except ImportError:
     WATCHFILES_AVAILABLE = False
@@ -183,7 +182,7 @@ def run_with_watch(directory: Path, host: str, port: int, app_id: str) -> None:
         # Note: no --watch flag to avoid recursion
     ]
 
-    process: Optional[subprocess.Popen] = None
+    process: subprocess.Popen | None = None
 
     def start_server() -> subprocess.Popen:
         """Start a new server process."""
@@ -197,7 +196,7 @@ def run_with_watch(directory: Path, host: str, port: int, app_id: str) -> None:
             stderr=sys.stderr,
         )
 
-    def stop_server(proc: Optional[subprocess.Popen]) -> None:
+    def stop_server(proc: subprocess.Popen | None) -> None:
         """Stop the server process gracefully."""
         if proc is None:
             return
@@ -227,7 +226,6 @@ def run_with_watch(directory: Path, host: str, port: int, app_id: str) -> None:
     process = start_server()
 
     # Watch for changes
-    watch_patterns = ["*.py"]
     ignore_patterns = [
         "__pycache__",
         ".git",

@@ -1,8 +1,10 @@
 """Tool definition API for FlowForge agents."""
 
 import inspect
+import types as _builtintypes
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Awaitable, get_type_hints, get_origin, get_args, Literal
+from typing import Any, Literal, Union, get_args, get_origin, get_type_hints
 
 
 @dataclass
@@ -76,28 +78,16 @@ def _type_to_schema(type_hint: Any) -> dict[str, Any]:
     # Get the origin type for generics
     origin = get_origin(type_hint)
 
-    # Handle Optional (Union with None)
-    if origin is type(None) or origin is type(None).__class__:
+    # Handle Union types (typing.Union / Optional and Python 3.10+ X | Y syntax)
+    _is_union = origin is Union or (
+        hasattr(_builtintypes, "UnionType") and type(type_hint) is _builtintypes.UnionType
+    )
+    if _is_union:
         args = get_args(type_hint)
-        if args:
-            # Take first non-None type
-            for arg in args:
-                if arg is not type(None):
-                    return _type_to_schema(arg)
-        return {"type": "null"}
-
-    # Handle Union types
-    if origin is type(None).__class__ or (hasattr(origin, "__name__") and origin.__name__ == "Union"):
-        args = get_args(type_hint)
-        if len(args) == 2 and type(None) in args:
-            # This is Optional[T]
-            non_none = args[0] if args[1] is type(None) else args[1]
-            schema = _type_to_schema(non_none)
-            # Don't add nullable flag, just return the schema
-            return schema
-        else:
-            # Multiple types - use anyOf
-            return {"anyOf": [_type_to_schema(arg) for arg in args]}
+        non_none_args = [a for a in args if a is not type(None)]
+        if len(non_none_args) == 1:
+            return _type_to_schema(non_none_args[0])
+        return {"anyOf": [_type_to_schema(a) for a in non_none_args]}
 
     # Handle Literal types
     if hasattr(type_hint, "__origin__") and type_hint.__origin__ is Literal:

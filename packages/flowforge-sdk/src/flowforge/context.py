@@ -1,9 +1,9 @@
 """Context and Event classes for FlowForge function execution."""
 
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, TYPE_CHECKING
-import logging
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from flowforge.steps import StepManager

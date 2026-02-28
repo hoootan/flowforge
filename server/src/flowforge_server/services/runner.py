@@ -1,21 +1,19 @@
 """Runner service - event consumer and job scheduler."""
 
 import asyncio
-import json
 import signal
-import sys
+import uuid
 from datetime import datetime
 from typing import Any
-import uuid
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from flowforge_server.config import get_settings
 from flowforge_server.db import get_session_context
-from flowforge_server.db.models import Function, Run, RunStatus, Event
-from flowforge_server.stream import RedisEventStream, StreamMessage
+from flowforge_server.db.models import Function, Run, RunStatus
 from flowforge_server.queue import FairQueue, Job
+from flowforge_server.stream import RedisEventStream, StreamMessage
 
 
 class Runner:
@@ -89,7 +87,7 @@ class Runner:
 
     async def _consume_events(self) -> None:
         """Main event consumption loop."""
-        print(f"[Runner] Consuming events from stream...")
+        print("[Runner] Consuming events from stream...")
 
         while self._running:
             try:

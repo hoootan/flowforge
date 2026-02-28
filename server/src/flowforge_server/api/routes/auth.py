@@ -1,28 +1,28 @@
 """Authentication and API key management endpoints."""
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from flowforge_server.db import get_session
-from flowforge_server.db.models import ApiKey, ApiKeyType, Tenant
+from flowforge_server.api.deps import TenantWithDevFallback
 from flowforge_server.api.schemas.auth import (
     ApiKeyCreate,
-    ApiKeyResponse,
     ApiKeyCreatedResponse,
+    ApiKeyResponse,
     ApiKeysResponse,
     RevokeApiKeyRequest,
     TokenRequest,
     TokenResponse,
 )
-from flowforge_server.api.deps import TenantWithDevFallback
+from flowforge_server.db import get_session
+from flowforge_server.db.models import ApiKey, ApiKeyType
 from flowforge_server.services.auth import (
     create_api_key,
-    revoke_api_key,
     list_api_keys,
+    revoke_api_key,
     validate_api_key,
 )
 
@@ -229,14 +229,14 @@ async def create_token(
         )
 
     # Calculate expiration
-    expires_at = datetime.now(timezone.utc) + timedelta(seconds=token_request.expires_in)
+    expires_at = datetime.now(UTC) + timedelta(seconds=token_request.expires_in)
 
     # Create token payload
     payload = {
         "sub": str(tenant.id),  # Subject is tenant ID
         "key_id": str(api_key.id),
         "scopes": api_key.scopes,
-        "iat": datetime.now(timezone.utc),
+        "iat": datetime.now(UTC),
         "exp": expires_at,
     }
 

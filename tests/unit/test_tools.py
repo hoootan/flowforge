@@ -1,8 +1,9 @@
 """Unit tests for tool definition and schema inference."""
 
+from typing import Literal, Optional
+
 import pytest
-from typing import Literal, Optional, List, Dict
-from flowforge.tools import Tool, tool, _type_to_schema, _infer_parameters
+from flowforge.tools import Tool, _infer_parameters, _type_to_schema, tool
 
 
 class TestToolDecorator:
@@ -32,7 +33,7 @@ class TestToolDecorator:
             return {"result": x}
 
         assert isinstance(async_func, Tool)
-        assert test_func.name == "async_func"
+        assert async_func.name == "async_func"
         assert callable(async_func.fn)
 
     def test_tool_with_approval_required(self):
@@ -202,7 +203,7 @@ class TestComplexTypes:
         """Test List[str] type annotation."""
 
         @tool(name="test", description="Test")
-        def test_func(items: List[str]) -> dict:
+        def test_func(items: list[str]) -> dict:
             return {}
 
         param_schema = test_func.parameters["properties"]["items"]
@@ -213,7 +214,7 @@ class TestComplexTypes:
         """Test Dict[str, int] type annotation."""
 
         @tool(name="test", description="Test")
-        def test_func(data: Dict[str, int]) -> dict:
+        def test_func(data: dict[str, int]) -> dict:
             return {}
 
         param_schema = test_func.parameters["properties"]["data"]
@@ -224,7 +225,7 @@ class TestComplexTypes:
         """Test Optional[str] type."""
 
         @tool(name="test", description="Test")
-        def test_func(value: Optional[str]) -> dict:
+        def test_func(value: str | None) -> dict:
             return {}
 
         param_schema = test_func.parameters["properties"]["value"]
@@ -384,7 +385,7 @@ class TestSchemaConversion:
         """Test schema generation with nested complex types."""
 
         @tool(name="process", description="Process data")
-        def process(items: List[Dict[str, str]]) -> dict:
+        def process(items: list[dict[str, str]]) -> dict:
             return {}
 
         schema = process.to_openai_schema()
@@ -413,21 +414,18 @@ class TestTypeToSchema:
 
     def test_list_with_items(self):
         """Test List[int] conversion."""
-        from typing import List
-        result = _type_to_schema(List[int])
+        result = _type_to_schema(list[int])
         assert result["type"] == "array"
         assert result["items"]["type"] == "integer"
 
     def test_dict_with_value_type(self):
         """Test Dict[str, bool] conversion."""
-        from typing import Dict
-        result = _type_to_schema(Dict[str, bool])
+        result = _type_to_schema(dict[str, bool])
         assert result["type"] == "object"
         assert result["additionalProperties"]["type"] == "boolean"
 
     def test_optional_type(self):
         """Test Optional[int] resolves to integer."""
-        from typing import Optional
         result = _type_to_schema(Optional[int])
         assert result["type"] == "integer"
 

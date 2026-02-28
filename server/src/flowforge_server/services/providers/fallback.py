@@ -5,7 +5,8 @@ Provides automatic fallback to alternative models when primary fails.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from flowforge_server.services.ai import AIResponse, AIService

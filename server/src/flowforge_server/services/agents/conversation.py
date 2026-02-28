@@ -56,7 +56,7 @@ class Message:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "Message":
+    def from_dict(cls, data: dict[str, Any]) -> Message:
         """Create from dictionary."""
         timestamp = data.get("timestamp")
         if isinstance(timestamp, str):
@@ -190,7 +190,7 @@ class ConversationManager:
         """Convert to LLM-compatible message format."""
         return [m.to_dict() for m in self.messages]
 
-    def fork(self) -> "ConversationManager":
+    def fork(self) -> ConversationManager:
         """Create a branch of this conversation."""
         forked = ConversationManager(
             conversation_id=str(uuid.uuid4()),
@@ -237,7 +237,7 @@ class ConversationManager:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "ConversationManager":
+    def from_dict(cls, data: dict[str, Any]) -> ConversationManager:
         """Deserialize from storage."""
         manager = cls(
             conversation_id=data.get("conversation_id"),

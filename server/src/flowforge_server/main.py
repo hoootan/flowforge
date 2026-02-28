@@ -2,7 +2,6 @@
 
 import uvicorn
 
-from flowforge_server.api.app import app
 from flowforge_server.config import get_settings
 
 

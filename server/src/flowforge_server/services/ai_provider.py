@@ -8,17 +8,17 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timedelta
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import select, update, delete
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from flowforge_server.db.models import AIProvider
 from flowforge_server.services.crypto import (
-    encrypt_value,
-    decrypt_value,
-    get_key_prefix,
     EncryptionError,
+    decrypt_value,
+    encrypt_value,
+    get_key_prefix,
 )
 
 if TYPE_CHECKING:
@@ -225,7 +225,7 @@ class AIProviderService:
 
         if not provider and raise_not_found:
             raise AIProviderNotFoundError(
-                f"Provider not found"
+                "Provider not found"
             )
 
         return provider

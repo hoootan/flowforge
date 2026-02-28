@@ -11,10 +11,10 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
+from flowforge_server.config import get_settings
 
 # Import all models to ensure they're registered with Base.metadata
 from flowforge_server.db.models import Base
-from flowforge_server.config import get_settings
 
 # This is the Alembic Config object
 config = context.config

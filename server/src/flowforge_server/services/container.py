@@ -12,8 +12,8 @@ from typing import TYPE_CHECKING
 from fastapi import Request
 
 if TYPE_CHECKING:
-    from flowforge_server.services.ai import AIService
     from flowforge_server.queue import FairQueue
+    from flowforge_server.services.ai import AIService
     from flowforge_server.stream import RedisEventStream
     from flowforge_server.stream.pubsub import RunEventPubSub
 
@@ -32,10 +32,10 @@ class ServiceContainer:
         result = await container.ai_service.complete(...)
     """
 
-    ai_service: "AIService"
-    job_queue: "FairQueue"
-    event_stream: "RedisEventStream"
-    pubsub: "RunEventPubSub"
+    ai_service: AIService
+    job_queue: FairQueue
+    event_stream: RedisEventStream
+    pubsub: RunEventPubSub
 
     # Optional flag to track initialization
     _initialized: bool = field(default=False, repr=False)
@@ -85,12 +85,11 @@ def create_service_container() -> ServiceContainer:
     This factory function creates and wires up all service instances.
     Should be called once during application startup.
     """
-    from flowforge_server.services.ai import AIService
     from flowforge_server.queue import FairQueue
+    from flowforge_server.services.ai import AIService
+    from flowforge_server.services.providers import get_provider_registry
     from flowforge_server.stream import RedisEventStream
     from flowforge_server.stream.pubsub import RunEventPubSub
-
-    from flowforge_server.services.providers import get_provider_registry
 
     ai_service = AIService()
     ai_service.provider_registry = get_provider_registry()
@@ -126,21 +125,21 @@ def get_services(request: Request) -> ServiceContainer:
     return services
 
 
-def get_ai_service(request: Request) -> "AIService":
+def get_ai_service(request: Request) -> AIService:
     """Get the AI service from the request."""
     return get_services(request).ai_service
 
 
-def get_job_queue(request: Request) -> "FairQueue":
+def get_job_queue(request: Request) -> FairQueue:
     """Get the job queue from the request."""
     return get_services(request).job_queue
 
 
-def get_event_stream(request: Request) -> "RedisEventStream":
+def get_event_stream(request: Request) -> RedisEventStream:
     """Get the event stream from the request."""
     return get_services(request).event_stream
 
 
-def get_pubsub(request: Request) -> "RunEventPubSub":
+def get_pubsub(request: Request) -> RunEventPubSub:
     """Get the pubsub from the request."""
     return get_services(request).pubsub

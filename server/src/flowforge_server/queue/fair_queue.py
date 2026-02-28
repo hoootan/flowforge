@@ -8,9 +8,8 @@ from typing import Any
 
 import redis.asyncio as redis
 
-from flowforge_server.queue.base import Queue, Job, JobStatus
 from flowforge_server.config import get_settings
-
+from flowforge_server.queue.base import Job, JobStatus, Queue
 
 # Lua script for fair dequeue across tenants
 FAIR_DEQUEUE_SCRIPT = """

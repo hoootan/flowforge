@@ -5,8 +5,8 @@ Users can reference them by name in their inline functions.
 """
 
 import os
-from typing import Any
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass

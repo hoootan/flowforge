@@ -102,6 +102,7 @@ async def downgrade(engine: AsyncEngine) -> None:
 if __name__ == "__main__":
     """Run migration manually."""
     import asyncio
+
     from flowforge_server.db import get_engine
 
     async def main():

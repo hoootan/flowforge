@@ -1,9 +1,9 @@
 """Step model for individual steps within a run."""
 
+import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Any, TYPE_CHECKING
-import uuid
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID

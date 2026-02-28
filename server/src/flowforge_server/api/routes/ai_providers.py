@@ -5,23 +5,23 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from flowforge_server.db import get_session
-from flowforge_server.db.models import AIProvider
+from flowforge_server.api.deps import CurrentUserAdmin, TenantWithDevFallback
 from flowforge_server.api.schemas.ai_providers import (
     AIProviderCreate,
-    AIProviderUpdate,
     AIProviderResponse,
+    AIProviderRotateRequest,
     AIProvidersResponse,
     AIProviderTestResponse,
-    AIProviderRotateRequest,
+    AIProviderUpdate,
     KnownProviderInfo,
     KnownProvidersResponse,
 )
-from flowforge_server.api.deps import CurrentUserAdmin, TenantWithDevFallback
+from flowforge_server.db import get_session
+from flowforge_server.db.models import AIProvider
 from flowforge_server.services.ai_provider import (
+    KNOWN_PROVIDERS,
     AIProviderError,
     AIProviderNotFoundError,
-    KNOWN_PROVIDERS,
     get_ai_provider_service,
 )
 from flowforge_server.services.crypto import EncryptionKeyMissing

@@ -3,14 +3,12 @@
 import hashlib
 import secrets
 import uuid
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from flowforge_server.db.models import ApiKey, ApiKeyType, Tenant, DEFAULT_SCOPES, ALL_SCOPES
-
+from flowforge_server.db.models import ALL_SCOPES, DEFAULT_SCOPES, ApiKey, ApiKeyType, Tenant
 
 # API key configuration
 API_KEY_PREFIX = "ff"
@@ -127,7 +125,7 @@ async def create_api_key(
     # Calculate expiration
     expires_at = None
     if expires_in_days is not None:
-        expires_at = datetime.now(timezone.utc) + timedelta(days=expires_in_days)
+        expires_at = datetime.now(UTC) + timedelta(days=expires_in_days)
 
     # Create the model
     api_key = ApiKey(
@@ -195,7 +193,7 @@ async def validate_api_key(
     await session.execute(
         update(ApiKey)
         .where(ApiKey.id == api_key.id)
-        .values(last_used_at=datetime.now(timezone.utc))
+        .values(last_used_at=datetime.now(UTC))
     )
 
     # Load tenant
@@ -221,7 +219,7 @@ async def revoke_api_key(
         .where(ApiKey.id == api_key_id)
         .values(
             is_active=False,
-            revoked_at=datetime.now(timezone.utc),
+            revoked_at=datetime.now(UTC),
             revoked_reason=reason,
         )
         .returning(ApiKey.id)

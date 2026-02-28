@@ -5,27 +5,26 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from flowforge_server.db import get_session
-from flowforge_server.db.models import ModelPricing
+from flowforge_server.api.deps import CurrentUserAdmin, TenantWithDevFallback
 from flowforge_server.api.schemas.model_pricing import (
-    ModelPricingCreate,
-    ModelPricingUpdate,
-    ModelPricingResponse,
-    ModelPricingListResponse,
-    EffectiveModelPricing,
-    EffectiveModelPricingListResponse,
     DefaultModelPricing,
     DefaultModelPricingListResponse,
+    EffectiveModelPricing,
+    EffectiveModelPricingListResponse,
+    ModelPricingCreate,
+    ModelPricingListResponse,
+    ModelPricingResponse,
+    ModelPricingUpdate,
 )
-from flowforge_server.api.deps import CurrentUserAdmin, TenantWithDevFallback
+from flowforge_server.db import get_session
+from flowforge_server.db.models import ModelPricing
 from flowforge_server.services.model_pricing import (
-    ModelPricingService,
+    FALLBACK_INPUT_PRICE,
+    FALLBACK_OUTPUT_PRICE,
     ModelPricingError,
     ModelPricingExistsError,
     ModelPricingNotFoundError,
     get_model_pricing_service,
-    FALLBACK_INPUT_PRICE,
-    FALLBACK_OUTPUT_PRICE,
 )
 from flowforge_server.services.providers.config import DEFAULT_MODEL_CONFIGS
 

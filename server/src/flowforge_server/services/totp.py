@@ -10,10 +10,10 @@ import io
 import secrets
 from typing import TYPE_CHECKING
 
-from flowforge_server.services.crypto import encrypt_value, decrypt_value
+from flowforge_server.services.crypto import decrypt_value, encrypt_value
 
 if TYPE_CHECKING:
-    from flowforge_server.db.models.user import User
+    pass
 
 
 # Number of backup codes to generate

@@ -1,6 +1,5 @@
 """Runs management commands."""
 
-from typing import Optional
 
 import httpx
 import typer
@@ -13,13 +12,13 @@ console = Console()
 
 @app.command("list")
 def list_runs(
-    function_id: Optional[str] = typer.Option(
+    function_id: str | None = typer.Option(
         None,
         "--function",
         "-f",
         help="Filter by function ID",
     ),
-    status: Optional[str] = typer.Option(
+    status: str | None = typer.Option(
         None,
         "--status",
         "-s",
@@ -139,11 +138,11 @@ def get_run(
             console.print(f"  Ended:      {run.get('ended_at')}")
 
         if run.get("output"):
-            console.print(f"\n  [bold]Output:[/bold]")
+            console.print("\n  [bold]Output:[/bold]")
             console.print(f"    {run.get('output')}")
 
         if run.get("error"):
-            console.print(f"\n  [bold red]Error:[/bold red]")
+            console.print("\n  [bold red]Error:[/bold red]")
             console.print(f"    {run.get('error')}")
 
         steps = run.get("steps", [])
@@ -230,7 +229,7 @@ def replay_run(
 
         response.raise_for_status()
         new_run = response.json()
-        console.print(f"[green]✓[/green] Run replayed")
+        console.print("[green]✓[/green] Run replayed")
         console.print(f"  New run ID: {new_run.get('id')}")
 
     except httpx.ConnectError:

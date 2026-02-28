@@ -1,17 +1,35 @@
 """Pydantic schemas for API requests and responses."""
 
+from flowforge_server.api.schemas.approvals import (
+    ApprovalActionResponse,
+    ApprovalsResponse,
+    ApproveToolRequest,
+    RejectToolRequest,
+    ToolApprovalResponse,
+    ToolCallResponse,
+    ToolCallsResponse,
+)
+from flowforge_server.api.schemas.auth import (
+    ApiKeyCreate,
+    ApiKeyCreatedResponse,
+    ApiKeyResponse,
+    ApiKeysResponse,
+    RevokeApiKeyRequest,
+    TokenRequest,
+    TokenResponse,
+)
 from flowforge_server.api.schemas.events import (
     EventCreate,
     EventResponse,
     EventsResponse,
 )
 from flowforge_server.api.schemas.functions import (
+    AgentConfigSchema,
     FunctionCreate,
     FunctionResponse,
-    FunctionUpdate,
     FunctionsResponse,
+    FunctionUpdate,
     InlineFunctionCreate,
-    AgentConfigSchema,
     TriggerSchema,
 )
 from flowforge_server.api.schemas.runs import (
@@ -22,36 +40,18 @@ from flowforge_server.api.schemas.runs import (
 from flowforge_server.api.schemas.tools import (
     ToolCreate,
     ToolResponse,
-    ToolUpdate,
     ToolsResponse,
-)
-from flowforge_server.api.schemas.approvals import (
-    ToolApprovalResponse,
-    ApprovalsResponse,
-    ApproveToolRequest,
-    RejectToolRequest,
-    ApprovalActionResponse,
-    ToolCallResponse,
-    ToolCallsResponse,
-)
-from flowforge_server.api.schemas.auth import (
-    ApiKeyCreate,
-    ApiKeyResponse,
-    ApiKeyCreatedResponse,
-    ApiKeysResponse,
-    TokenRequest,
-    TokenResponse,
-    RevokeApiKeyRequest,
+    ToolUpdate,
 )
 from flowforge_server.api.schemas.users import (
+    UserCreate,
     UserLogin,
     UserLoginResponse,
-    UserCreate,
-    UserUpdate,
+    UserMeResponse,
     UserPasswordUpdate,
     UserResponse,
     UsersResponse,
-    UserMeResponse,
+    UserUpdate,
 )
 
 __all__ = [

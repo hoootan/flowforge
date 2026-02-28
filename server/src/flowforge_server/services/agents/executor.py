@@ -8,13 +8,13 @@ from __future__ import annotations
 
 import json
 import time
-from typing import TYPE_CHECKING, Any, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING, Any
 
 from .base import (
     AgentDefinition,
     AgentExecutionResult,
     AgentState,
-    StepAction,
     StepContext,
     ToolDefinition,
 )
@@ -25,12 +25,6 @@ if TYPE_CHECKING:
     from flowforge_server.services.providers import ProviderRegistry
     from flowforge_server.services.streaming import (
         AnyStreamEvent,
-        ApprovalRequiredEvent,
-        IterationCompleteEvent,
-        StreamCompleteEvent,
-        ThinkingEvent,
-        ToolCallEndEvent,
-        ToolCallStartEvent,
     )
 
 

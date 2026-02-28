@@ -1,9 +1,9 @@
 """Unit tests for network data structures and primitives."""
 
 import pytest
-from flowforge.network import NetworkState, RouterContext, NetworkResult, Network, network
+from flowforge.agent_def import agent_def
+from flowforge.network import Network, NetworkResult, NetworkState, RouterContext, network
 from flowforge.router import CodeRouter, code
-from flowforge.agent_def import AgentDefinition, agent_def
 from flowforge.tools import tool
 
 

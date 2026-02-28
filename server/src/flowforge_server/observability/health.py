@@ -85,6 +85,7 @@ class HealthChecker:
         start = time.perf_counter()
         try:
             from sqlalchemy import text
+
             from flowforge_server.db.session import get_session_factory
 
             factory = get_session_factory()

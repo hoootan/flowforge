@@ -1,15 +1,12 @@
 """Integration tests for tool approvals API endpoints."""
 
-import pytest
 import uuid
 from datetime import datetime, timedelta
+
+import pytest
+from flowforge_server.db.models import ApprovalStatus, Function, Run, Step, Tenant, ToolApproval
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
-from unittest.mock import AsyncMock, patch
-
-from flowforge_server.db.models import ToolApproval, ApprovalStatus, Run, Function, Tenant, Step
-from flowforge_server.api.app import app
-
 
 # Default tenant ID used in the API
 DEFAULT_TENANT_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")

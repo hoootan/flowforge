@@ -1,27 +1,26 @@
 """Run management endpoints."""
 
-from datetime import datetime, timedelta
-from typing import Any
 import uuid
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, func, and_, or_
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from flowforge_server.db import get_session
-from flowforge_server.db.models import Function, Run, RunStatus, Step, StepStatus, Tenant
-from flowforge_server.api.schemas.runs import (
-    RunResponse,
-    RunsResponse,
-    RunActionResponse,
-    StepResponse,
-)
+from flowforge_server.api.deps import TenantWithDevFallback
 from flowforge_server.api.schemas.approvals import (
     ToolCallResponse,
     ToolCallsResponse,
 )
-from flowforge_server.api.deps import TenantWithDevFallback
+from flowforge_server.api.schemas.runs import (
+    RunActionResponse,
+    RunResponse,
+    RunsResponse,
+    StepResponse,
+)
+from flowforge_server.db import get_session
+from flowforge_server.db.models import Function, Run, RunStatus, Step, StepStatus
 from flowforge_server.queue import FairQueue, Job
 
 router = APIRouter(prefix="/runs", tags=["runs"])

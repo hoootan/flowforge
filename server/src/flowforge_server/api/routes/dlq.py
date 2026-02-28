@@ -3,11 +3,11 @@
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from flowforge_server.api.deps import CurrentUserAdmin
-from flowforge_server.queue.dlq import get_dlq, DLQEntry
+from flowforge_server.queue.dlq import DLQEntry, get_dlq
 
 router = APIRouter(prefix="/dlq", tags=["dlq"])
 

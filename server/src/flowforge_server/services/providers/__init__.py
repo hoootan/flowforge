@@ -25,6 +25,7 @@ from .config import (
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
+
     from .health import HealthChecker, HealthStatus
 
 __all__ = [
@@ -279,7 +280,7 @@ class ProviderRegistry:
 
     async def calculate_cost_async(
         self,
-        session: "AsyncSession",
+        session: AsyncSession,
         tenant_id: uuid.UUID,
         model: str,
         prompt_tokens: int,
@@ -380,7 +381,7 @@ class ProviderRegistry:
 
     async def get_api_key_for_tenant(
         self,
-        session: "AsyncSession",
+        session: AsyncSession,
         tenant_id: uuid.UUID,
         provider: str,
     ) -> tuple[str, str] | None:

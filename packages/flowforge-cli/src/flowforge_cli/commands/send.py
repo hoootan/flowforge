@@ -1,7 +1,6 @@
 """Send event command."""
 
 import json
-from typing import Optional
 
 import httpx
 import typer
@@ -15,13 +14,13 @@ def send_event(
         ...,
         help="Event name (e.g., 'order/created')",
     ),
-    data: Optional[str] = typer.Option(
+    data: str | None = typer.Option(
         None,
         "--data",
         "-d",
         help="Event data as JSON string",
     ),
-    data_file: Optional[str] = typer.Option(
+    data_file: str | None = typer.Option(
         None,
         "--file",
         "-f",
@@ -33,7 +32,7 @@ def send_event(
         "-u",
         help="FlowForge API URL",
     ),
-    event_id: Optional[str] = typer.Option(
+    event_id: str | None = typer.Option(
         None,
         "--id",
         help="Event ID for idempotency",
@@ -91,10 +90,10 @@ def send_event(
 
         if response.status_code == 201:
             result = response.json()
-            console.print(f"[green]✓[/green] Event sent successfully")
+            console.print("[green]✓[/green] Event sent successfully")
             console.print(f"  Event ID: {result.get('id', 'unknown')}")
         else:
-            console.print(f"[red]✗[/red] Failed to send event")
+            console.print("[red]✗[/red] Failed to send event")
             console.print(f"  Status: {response.status_code}")
             console.print(f"  Response: {response.text}")
             raise typer.Exit(1)

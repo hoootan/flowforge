@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import time
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, AsyncIterator, Type
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
@@ -166,7 +167,7 @@ class PartialObjectTransformer(StreamTransformer):
     Emits PartialObjectEvent as fields become available.
     """
 
-    def __init__(self, response_model: Type[BaseModel]) -> None:
+    def __init__(self, response_model: type[BaseModel]) -> None:
         """
         Initialize the partial object transformer.
 
@@ -185,8 +186,6 @@ class PartialObjectTransformer(StreamTransformer):
         stream: AsyncIterator[StreamEvent],
     ) -> AsyncIterator[StreamEvent]:
         """Convert content chunks to partial object events."""
-        import json
-        import re
 
         async for event in stream:
             if isinstance(event, ContentChunkEvent):

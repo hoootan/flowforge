@@ -1,16 +1,17 @@
 """Step primitives for durable workflow execution."""
 
-from datetime import timedelta
-from typing import Any, Callable, TypeVar, Awaitable
 import hashlib
 import json
+from collections.abc import Awaitable, Callable
+from datetime import timedelta
+from typing import Any, TypeVar
 
-from flowforge.exceptions import StepCompleted, StepFailed, WaitForEventTimeout
-from flowforge.agent import AgentConfig, AgentState, AgentResult
-from flowforge.tools import Tool
-from flowforge.network import Network, NetworkState, NetworkResult, RouterContext
-from flowforge.router import LLMRouter
+from flowforge.agent import AgentResult, AgentState
 from flowforge.agent_def import AgentDefinition
+from flowforge.exceptions import StepCompleted, StepFailed
+from flowforge.network import Network, NetworkResult, NetworkState, RouterContext
+from flowforge.router import LLMRouter
+from flowforge.tools import Tool
 
 T = TypeVar("T")
 

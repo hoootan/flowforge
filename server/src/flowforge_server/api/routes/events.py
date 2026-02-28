@@ -1,27 +1,26 @@
 """Event ingestion and management endpoints."""
 
-from datetime import datetime
-from typing import Any
 import uuid
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from flowforge_server.db import get_session
-from flowforge_server.db.models import Event, Function, Run, RunStatus, Tenant
-from flowforge_server.stream import StreamMessage
+from flowforge_server.api.deps import TenantWithDevFallback
 from flowforge_server.api.schemas.events import (
+    BatchEventCreate,
+    BatchEventResponse,
+    BatchEventResult,
     EventCreate,
     EventResponse,
     EventsResponse,
-    BatchEventCreate,
-    BatchEventResult,
-    BatchEventResponse,
 )
-from flowforge_server.api.deps import TenantWithDevFallback
-from flowforge_server.services.container import get_services
+from flowforge_server.db import get_session
+from flowforge_server.db.models import Event, Function, Run, RunStatus
 from flowforge_server.logging import Loggers
+from flowforge_server.services.container import get_services
+from flowforge_server.stream import StreamMessage
 
 router = APIRouter(prefix="/events", tags=["events"])
 log = Loggers.api()

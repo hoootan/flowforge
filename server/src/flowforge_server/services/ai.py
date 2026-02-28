@@ -5,12 +5,12 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-import os
 import time
 import uuid
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Any, AsyncIterator, Type, TypeVar
+from datetime import datetime
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import redis.asyncio as redis
 from pydantic import BaseModel
@@ -19,6 +19,7 @@ from flowforge_server.config import get_settings
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
+
     from flowforge_server.services.providers import ProviderRegistry
     from flowforge_server.services.providers.health import HealthChecker
     from flowforge_server.services.structured import StructuredOutputService
@@ -307,9 +308,9 @@ class AIService:
         cache_ttl: int | None = None,
         tools: list[Any] | None = None,
         tool_choice: str | dict[str, Any] = "auto",
-        response_model: Type[T] | None = None,
+        response_model: type[T] | None = None,
         tenant_id: uuid.UUID | None = None,
-        session: "AsyncSession | None" = None,
+        session: AsyncSession | None = None,
         **kwargs: Any,
     ) -> AIResponse | T:
         """

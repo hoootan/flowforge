@@ -1,17 +1,17 @@
 """API dependencies for authentication and common patterns."""
 
 import hashlib
-from datetime import datetime, timezone
-from typing import Annotated
 import uuid
+from datetime import UTC, datetime
+from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from flowforge_server.config import get_settings, Settings
+from flowforge_server.config import Settings, get_settings
 from flowforge_server.db import get_session
-from flowforge_server.db.models import Tenant, ApiKey
+from flowforge_server.db.models import ApiKey, Tenant
 from flowforge_server.db.models.user import User, UserRole
 
 
@@ -43,14 +43,14 @@ async def _validate_api_key_from_model(
         return None, None
 
     # Check expiration
-    if api_key_model.expires_at and datetime.now(timezone.utc) > api_key_model.expires_at:
+    if api_key_model.expires_at and datetime.now(UTC) > api_key_model.expires_at:
         return None, None
 
     # Update last_used_at
     await session.execute(
         update(ApiKey)
         .where(ApiKey.id == api_key_model.id)
-        .values(last_used_at=datetime.now(timezone.utc))
+        .values(last_used_at=datetime.now(UTC))
     )
 
     # Load tenant

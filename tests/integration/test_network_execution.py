@@ -1,14 +1,15 @@
 """Integration tests for step.network() execution."""
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from flowforge.steps import StepManager
-from flowforge.network import Network, NetworkState, NetworkResult
-from flowforge.router import code, llm
-from flowforge.agent_def import agent_def
 from flowforge.agent import AgentResult
-from flowforge.tools import tool
+from flowforge.agent_def import agent_def
 from flowforge.exceptions import StepCompleted
+from flowforge.network import Network, NetworkResult
+from flowforge.router import code
+from flowforge.steps import StepManager
+from flowforge.tools import tool
 
 
 # Test tools

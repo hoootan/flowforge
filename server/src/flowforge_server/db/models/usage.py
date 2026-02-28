@@ -1,12 +1,12 @@
 """Usage tracking model for AI calls."""
 
+import uuid
 from datetime import datetime
 from typing import Any
-import uuid
 
-from sqlalchemy import String, Float, Integer, ForeignKey, Index
+from sqlalchemy import Float, ForeignKey, Index, Integer, String
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from flowforge_server.db.models.base import Base, TimestampMixin
 

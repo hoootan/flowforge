@@ -19,7 +19,7 @@ async def run_retention_async(
     audit_days: int = 365,
 ) -> None:
     """Run data retention cleanup."""
-    from flowforge_server.services.retention import RetentionService, RetentionConfig
+    from flowforge_server.services.retention import RetentionConfig, RetentionService
 
     await init_db()
 
@@ -45,7 +45,7 @@ async def run_retention_async(
         else:
             print("Running retention cleanup...")
             result = await service.run_cleanup()
-            print(f"\nCleanup complete:")
+            print("\nCleanup complete:")
             print(f"  Runs deleted: {result.runs_deleted}")
             print(f"  Steps deleted: {result.steps_deleted}")
             print(f"  Events deleted: {result.events_deleted}")
@@ -86,7 +86,7 @@ async def create_admin_async(email: str, password: str, name: str) -> None:
 
         await session.commit()
 
-        print(f"Admin user created successfully!")
+        print("Admin user created successfully!")
         print(f"  Email: {user.email}")
         print(f"  Name: {user.name}")
         print(f"  Role: {user.role}")
@@ -223,8 +223,8 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "migrate":
-        import subprocess
         import os
+        import subprocess
 
         # Change to server directory for alembic
         server_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))

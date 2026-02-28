@@ -1,15 +1,15 @@
 """Run lifecycle management service."""
 
+import uuid
 from datetime import datetime
 from typing import Any
-import uuid
 
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from flowforge_server.db.models import Run, RunStatus, Step, StepStatus, Function, Event
-from flowforge_server.queue import FairQueue, Job
+from flowforge_server.db.models import Function, Run, RunStatus, Step, StepStatus
+from flowforge_server.queue import FairQueue
 
 
 class RunService:

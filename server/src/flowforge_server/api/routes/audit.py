@@ -7,9 +7,9 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from flowforge_server.api.deps import CurrentUserAdmin
 from flowforge_server.db import get_session
 from flowforge_server.db.models.audit_log import AuditAction
-from flowforge_server.api.deps import CurrentUserAdmin
 from flowforge_server.services.audit import AuditService
 
 router = APIRouter(prefix="/audit", tags=["audit"])

@@ -1,24 +1,23 @@
 """Tool approval management endpoints."""
 
-from datetime import datetime
-from typing import Any
 import uuid
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, func, or_
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from flowforge_server.db import get_session
-from flowforge_server.db.models import ToolApproval, ApprovalStatus, Run, Tenant
+from flowforge_server.api.deps import TenantWithDevFallback
 from flowforge_server.api.schemas.approvals import (
-    ToolApprovalResponse,
+    ApprovalActionResponse,
     ApprovalsResponse,
     ApproveToolRequest,
     RejectToolRequest,
-    ApprovalActionResponse,
+    ToolApprovalResponse,
 )
-from flowforge_server.api.deps import TenantWithDevFallback
+from flowforge_server.db import get_session
+from flowforge_server.db.models import ApprovalStatus, Run, ToolApproval
 
 router = APIRouter(prefix="/approvals", tags=["approvals"])
 

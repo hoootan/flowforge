@@ -1,12 +1,12 @@
 """User model for dashboard authentication."""
 
+import uuid
 from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING
-import uuid
 
-from sqlalchemy import String, Text, Boolean, ForeignKey, DateTime, Index, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID, ARRAY
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from flowforge_server.db.models.base import Base, TimestampMixin

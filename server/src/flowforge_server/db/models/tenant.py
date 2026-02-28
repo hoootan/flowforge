@@ -1,8 +1,7 @@
 """Tenant model for multi-tenancy support."""
 
-from datetime import datetime
-from typing import Any, TYPE_CHECKING
 import uuid
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -11,13 +10,13 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from flowforge_server.db.models.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
-    from flowforge_server.db.models.function import Function
-    from flowforge_server.db.models.event import Event
-    from flowforge_server.db.models.tool import Tool
-    from flowforge_server.db.models.api_key import ApiKey
-    from flowforge_server.db.models.user import User
     from flowforge_server.db.models.ai_provider import AIProvider
+    from flowforge_server.db.models.api_key import ApiKey
+    from flowforge_server.db.models.event import Event
+    from flowforge_server.db.models.function import Function
     from flowforge_server.db.models.model_pricing import ModelPricing
+    from flowforge_server.db.models.tool import Tool
+    from flowforge_server.db.models.user import User
 
 
 class Tenant(Base, TimestampMixin):

@@ -1,68 +1,63 @@
 """User management and authentication endpoints."""
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import update as sql_update
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from flowforge_server.db import get_session
-from flowforge_server.db.models.user import User, UserRole
-from flowforge_server.config import get_settings, Settings
-from flowforge_server.middleware.rate_limit import (
-    get_login_rate_limiter,
-    LoginRateLimiter,
-    RateLimitExceeded,
-)
-from flowforge_server.services.token_rotation import get_token_rotation_service
-from flowforge_server.api.schemas.users import (
-    UserLogin,
-    UserLoginResponse,
-    User2FARequiredResponse,
-    RefreshTokenRequest,
-    Verify2FARequest,
-    Setup2FAResponse,
-    Confirm2FARequest,
-    Confirm2FAResponse,
-    Disable2FARequest,
-    BackupCodesRequest,
-    BackupCodesResponse,
-    UserCreate,
-    UserUpdate,
-    UserPasswordUpdate,
-    UserResponse,
-    UsersResponse,
-    UserMeResponse,
-)
 from flowforge_server.api.deps import (
-    DEFAULT_TENANT_ID,
     CurrentUser,
     CurrentUserAdmin,
 )
+from flowforge_server.api.schemas.users import (
+    BackupCodesRequest,
+    BackupCodesResponse,
+    Confirm2FARequest,
+    Confirm2FAResponse,
+    Disable2FARequest,
+    RefreshTokenRequest,
+    Setup2FAResponse,
+    User2FARequiredResponse,
+    UserCreate,
+    UserLogin,
+    UserLoginResponse,
+    UserMeResponse,
+    UserPasswordUpdate,
+    UserResponse,
+    UsersResponse,
+    UserUpdate,
+    Verify2FARequest,
+)
+from flowforge_server.config import Settings, get_settings
+from flowforge_server.db import get_session
+from flowforge_server.db.models.user import User, UserRole
+from flowforge_server.middleware.rate_limit import (
+    get_login_rate_limiter,
+)
+from flowforge_server.services.token_rotation import get_token_rotation_service
+from flowforge_server.services.totp import (
+    decrypt_totp_secret,
+    encrypt_backup_codes,
+    encrypt_totp_secret,
+    generate_backup_codes,
+    setup_totp_for_user,
+    verify_backup_code,
+    verify_totp_code,
+)
 from flowforge_server.services.user import (
     authenticate_user_any_tenant,
-    create_user,
-    create_user_jwt,
-    create_refresh_token,
+    count_admins,
     create_token_pair,
+    create_user,
     decode_refresh_token,
+    delete_user,
     get_user_by_id,
     list_users,
     update_user,
     update_user_password,
-    delete_user,
-    count_admins,
     verify_password,
-)
-from flowforge_server.services.totp import (
-    setup_totp_for_user,
-    verify_totp_code,
-    verify_backup_code,
-    generate_backup_codes,
-    encrypt_totp_secret,
-    decrypt_totp_secret,
-    encrypt_backup_codes,
 )
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -79,13 +74,13 @@ def create_temp_token(user: User, settings: Settings) -> str:
     except ImportError:
         raise ImportError("PyJWT is required for user authentication. Install with: pip install pyjwt")
 
-    expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
+    expires_at = datetime.now(UTC) + timedelta(minutes=5)
 
     payload = {
         "sub": str(user.id),
         "tenant_id": str(user.tenant_id),
         "type": "2fa_temp",
-        "iat": datetime.now(timezone.utc),
+        "iat": datetime.now(UTC),
         "exp": expires_at,
     }
 
@@ -228,7 +223,7 @@ async def login(
 
     # No 2FA - return full login response with refresh token
     access_token, refresh_token, expires_in, refresh_expires_in = create_token_pair(user)
-    expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
+    expires_at = datetime.now(UTC) + timedelta(seconds=expires_in)
 
     return UserLoginResponse(
         access_token=access_token,
@@ -339,7 +334,7 @@ async def verify_2fa(
 
     # Create full JWT token pair
     access_token, refresh_token, expires_in, refresh_expires_in = create_token_pair(user)
-    expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
+    expires_at = datetime.now(UTC) + timedelta(seconds=expires_in)
 
     return UserLoginResponse(
         access_token=access_token,
@@ -437,7 +432,7 @@ async def refresh_access_token(
 
     # Generate new token pair (token rotation)
     access_token, refresh_token, expires_in, refresh_expires_in = create_token_pair(user)
-    expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
+    expires_at = datetime.now(UTC) + timedelta(seconds=expires_in)
 
     return UserLoginResponse(
         access_token=access_token,

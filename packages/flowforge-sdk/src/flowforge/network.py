@@ -1,11 +1,11 @@
 """Multi-agent network primitives for FlowForge."""
 
 from dataclasses import dataclass, field
-from typing import Any, Literal, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
-    from flowforge.router import Router
     from flowforge.agent_def import AgentDefinition
+    from flowforge.router import Router
 
 
 @dataclass

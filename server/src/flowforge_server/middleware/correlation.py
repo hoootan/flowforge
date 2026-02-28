@@ -74,7 +74,7 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
         return response
 
 
-def add_correlation_middleware(app: "FastAPI") -> None:
+def add_correlation_middleware(app: FastAPI) -> None:
     """
     Add correlation ID middleware to a FastAPI application.
 

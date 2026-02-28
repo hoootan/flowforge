@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator, Type, TypeVar
+from typing import Any, TypeVar
 
 from pydantic import BaseModel
 
@@ -149,7 +150,7 @@ class PartialJsonParser:
 
 async def stream_partial_objects(
     stream: AsyncIterator[dict[str, Any]],
-    response_model: Type[T],
+    response_model: type[T],
 ) -> AsyncIterator[tuple[PartialObject, T | None]]:
     """
     Convert a content stream to partial object updates.
@@ -203,7 +204,7 @@ class StreamingStructuredOutput:
     """
 
     model: str
-    response_model: Type[BaseModel]
+    response_model: type[BaseModel]
     messages: list[dict[str, str]]
     temperature: float = 0.7
 

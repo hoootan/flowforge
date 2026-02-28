@@ -5,8 +5,9 @@ Provides request tracing across services for debugging and performance analysis.
 
 from __future__ import annotations
 
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Any, Generator, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from flowforge_server.config import get_settings
 
@@ -16,15 +17,15 @@ if TYPE_CHECKING:
 # Check if OpenTelemetry is available
 try:
     from opentelemetry import trace
-    from opentelemetry.sdk.trace import TracerProvider
-    from opentelemetry.sdk.trace.export import BatchSpanProcessor
-    from opentelemetry.sdk.resources import Resource, SERVICE_NAME
     from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
     from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-    from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
-    from opentelemetry.instrumentation.redis import RedisInstrumentor
     from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
-    from opentelemetry.trace import Status, StatusCode, Span
+    from opentelemetry.instrumentation.redis import RedisInstrumentor
+    from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+    from opentelemetry.sdk.resources import SERVICE_NAME, Resource
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor
+    from opentelemetry.trace import Span, Status, StatusCode
     from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
     OTEL_AVAILABLE = True
@@ -88,7 +89,7 @@ def init_tracing(
     trace.set_tracer_provider(provider)
 
 
-def instrument_app(app: "FastAPI") -> None:
+def instrument_app(app: FastAPI) -> None:
     """
     Instrument a FastAPI application with OpenTelemetry.
 

@@ -4,11 +4,11 @@ This module provides functionality for recording and querying
 AI usage statistics per tenant.
 """
 
+import uuid
 from datetime import datetime, timedelta
 from typing import Any
-import uuid
 
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from flowforge_server.db.models import UsageRecord

@@ -1,8 +1,8 @@
 """Function model for registered workflow functions."""
 
-from datetime import datetime
-from typing import Any, TYPE_CHECKING
 import uuid
+from datetime import datetime
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -11,9 +11,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from flowforge_server.db.models.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
-    from flowforge_server.db.models.tenant import Tenant
-    from flowforge_server.db.models.run import Run
     from flowforge_server.db.models.function_version import FunctionVersion
+    from flowforge_server.db.models.run import Run
+    from flowforge_server.db.models.tenant import Tenant
 
 
 class Function(Base, TimestampMixin):

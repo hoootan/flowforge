@@ -1,12 +1,11 @@
 """Executor service - job worker that invokes functions."""
 
 import asyncio
-import json
 import signal
 import traceback
-from datetime import datetime, timedelta
-from typing import Any, TYPE_CHECKING
 import uuid
+from datetime import datetime, timedelta
+from typing import TYPE_CHECKING, Any
 
 import httpx
 from sqlalchemy import select
@@ -14,10 +13,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from flowforge_server.config import get_settings
 from flowforge_server.db import get_session_context
-from flowforge_server.db.models import Function, Run, RunStatus, Step, StepStatus, StepType, UsageRecord
-from flowforge_server.queue import FairQueue, Job, JobStatus
-from flowforge_server.services.ai import get_ai_service, AIService
-from flowforge_server.stream.pubsub import publish_run_event, RunEventType
+from flowforge_server.db.models import (
+    Function,
+    Run,
+    RunStatus,
+    Step,
+    StepStatus,
+    StepType,
+    UsageRecord,
+)
+from flowforge_server.queue import FairQueue, Job
+from flowforge_server.services.ai import AIService, get_ai_service
+from flowforge_server.stream.pubsub import RunEventType, publish_run_event
 
 if TYPE_CHECKING:
     from flowforge_server.services.inline_executor import InlineExecutor
@@ -58,7 +65,7 @@ class Executor:
         self._active_jobs: set[str] = set()
         self._http_client: httpx.AsyncClient | None = None
         self._ai_service: AIService | None = None
-        self._inline_executor: "InlineExecutor | None" = None
+        self._inline_executor: InlineExecutor | None = None
 
     async def _get_http_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""

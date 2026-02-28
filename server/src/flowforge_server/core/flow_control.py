@@ -1,8 +1,8 @@
 """Flow control for concurrency, rate limiting, and throttling."""
 
+import time
 from dataclasses import dataclass
 from typing import Any
-import time
 
 import redis.asyncio as redis
 

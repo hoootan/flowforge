@@ -1,12 +1,12 @@
 """API Key model for enhanced authentication."""
 
+import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Any, TYPE_CHECKING
-import uuid
+from typing import TYPE_CHECKING
 
-from sqlalchemy import String, Text, Boolean, ForeignKey, DateTime
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text
+from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from flowforge_server.db.models.base import Base, TimestampMixin

@@ -1,24 +1,23 @@
 """Function registration and management endpoints."""
 
+import re
 from datetime import datetime
 from typing import Any
-import uuid
-import re
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, func, or_
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from flowforge_server.db import get_session
-from flowforge_server.db.models import Function, Tool, Tenant
+from flowforge_server.api.deps import TenantWithDevFallback
 from flowforge_server.api.schemas.functions import (
     FunctionCreate,
     FunctionResponse,
-    FunctionUpdate,
     FunctionsResponse,
+    FunctionUpdate,
     InlineFunctionCreate,
 )
-from flowforge_server.api.deps import TenantWithDevFallback
+from flowforge_server.db import get_session
+from flowforge_server.db.models import Function, Tool
 
 router = APIRouter(prefix="/functions", tags=["functions"])
 

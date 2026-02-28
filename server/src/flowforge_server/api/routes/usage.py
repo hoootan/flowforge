@@ -3,24 +3,24 @@
 import uuid
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, func, cast, Date
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import Date, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from flowforge_server.db import get_session
-from flowforge_server.db.models import UsageRecord, Run
+from flowforge_server.api.deps import TenantWithDevFallback
 from flowforge_server.api.schemas.usage import (
-    UsageSummary,
-    UsageSummaryResponse,
-    UsageByProvider,
-    UsageByProviderResponse,
-    UsageByModel,
-    UsageByModelResponse,
     DailyUsage,
     DailyUsageResponse,
     RunUsageResponse,
+    UsageByModel,
+    UsageByModelResponse,
+    UsageByProvider,
+    UsageByProviderResponse,
+    UsageSummary,
+    UsageSummaryResponse,
 )
-from flowforge_server.api.deps import TenantWithDevFallback
+from flowforge_server.db import get_session
+from flowforge_server.db.models import Run, UsageRecord
 
 router = APIRouter(prefix="/usage", tags=["usage"])
 

@@ -1,8 +1,8 @@
 """Worker mode for FlowForge - connects to central server."""
 
-from typing import Any, TYPE_CHECKING
 import asyncio
 import os
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from flowforge.client import FlowForge
@@ -171,7 +171,7 @@ def run_worker(
         await _register_functions(
             server_url, flowforge.app_id, functions, worker_url, flowforge.api_key
         )
-        print(f"[Worker] Registration complete")
+        print("[Worker] Registration complete")
 
         # Start heartbeat loop
         function_ids = [fn.id for fn in functions]
@@ -193,7 +193,7 @@ def run_worker(
         print("[Worker] Shutdown complete")
 
     print(f"\n{'='*60}")
-    print(f"  FlowForge Worker")
+    print("  FlowForge Worker")
     print(f"{'='*60}")
     print(f"  App ID:      {flowforge.app_id}")
     print(f"  Server URL:  {server_url}")

@@ -3,15 +3,13 @@
 import hashlib
 import secrets
 import uuid
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select, update, func
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from flowforge_server.db.models.user import User, UserRole
-from flowforge_server.db.models.tenant import Tenant
 from flowforge_server.config import get_settings
+from flowforge_server.db.models.user import User, UserRole
 
 
 def hash_password(password: str) -> str:
@@ -73,7 +71,7 @@ def create_user_jwt(
     if expires_in_seconds is None:
         expires_in_seconds = settings.jwt_default_expiry_seconds
 
-    expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in_seconds)
+    expires_at = datetime.now(UTC) + timedelta(seconds=expires_in_seconds)
 
     payload = {
         "sub": str(user.id),
@@ -82,7 +80,7 @@ def create_user_jwt(
         "email": user.email,
         "name": user.name,
         "type": "user",  # Distinguish from API key tokens
-        "iat": datetime.now(timezone.utc),
+        "iat": datetime.now(UTC),
         "exp": expires_at,
     }
 
@@ -118,14 +116,14 @@ def create_refresh_token(
     if expires_in_seconds is None:
         expires_in_seconds = settings.jwt_refresh_expiry_seconds
 
-    expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in_seconds)
+    expires_at = datetime.now(UTC) + timedelta(seconds=expires_in_seconds)
 
     payload = {
         "sub": str(user.id),
         "tenant_id": str(user.tenant_id),
         "type": "refresh",
         "jti": secrets.token_hex(16),  # Unique token ID for revocation tracking
-        "iat": datetime.now(timezone.utc),
+        "iat": datetime.now(UTC),
         "exp": expires_at,
     }
 
@@ -296,7 +294,7 @@ async def authenticate_user(
     await session.execute(
         update(User)
         .where(User.id == user.id)
-        .values(last_login_at=datetime.now(timezone.utc))
+        .values(last_login_at=datetime.now(UTC))
     )
 
     return user, None
@@ -333,7 +331,7 @@ async def authenticate_user_any_tenant(
     await session.execute(
         update(User)
         .where(User.id == user.id)
-        .values(last_login_at=datetime.now(timezone.utc))
+        .values(last_login_at=datetime.now(UTC))
     )
 
     return user, None

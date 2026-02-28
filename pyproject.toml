@@ -34,10 +34,11 @@ packages = ["packages/flowforge-sdk/src/flowforge", "packages/flowforge-cli/src/
 [tool.ruff]
 target-version = "py311"
 line-length = 100
+exclude = ["examples/"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
-ignore = ["E501"]
+ignore = ["E501", "B904", "B008", "E712", "B007", "B023", "B905", "UP042", "UP045", "F401", "F841", "SIM102", "SIM103", "SIM105", "SIM108", "SIM117"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

@@ -5,16 +5,15 @@ Implements configurable retention policies for runs, events, and audit logs.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from sqlalchemy import delete, select, func
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from flowforge_server.config import get_settings
-from flowforge_server.db.models.run import Run, RunStatus
 from flowforge_server.db.models.event import Event
+from flowforge_server.db.models.run import Run, RunStatus
 from flowforge_server.db.models.step import Step
 from flowforge_server.logging import Loggers
 
@@ -83,7 +82,7 @@ class RetentionService:
         Returns:
             Tuple of (runs_deleted, steps_deleted)
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         runs_deleted = 0
         steps_deleted = 0
 
@@ -151,7 +150,7 @@ class RetentionService:
         Returns:
             Number of events deleted
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         events_deleted = 0
 
         # Processed events (have at least one run)
@@ -203,7 +202,7 @@ class RetentionService:
             self._log.debug("audit_log_model_not_available")
             return 0
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         cutoff = now - timedelta(days=self.config.audit_log_days)
 
         query = select(AuditLog.id).where(AuditLog.created_at < cutoff)

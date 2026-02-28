@@ -1,7 +1,7 @@
 """Unit tests for agent data structures and configuration."""
 
 import pytest
-from flowforge.agent import AgentConfig, AgentState, AgentResult
+from flowforge.agent import AgentConfig, AgentResult, AgentState
 from flowforge.tools import tool
 
 

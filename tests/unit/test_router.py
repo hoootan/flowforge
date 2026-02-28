@@ -1,10 +1,9 @@
 """Unit tests for router implementations."""
 
 import pytest
-from flowforge.router import Router, CodeRouter, LLMRouter, code, llm
-from flowforge.network import RouterContext, NetworkState
 from flowforge.agent_def import agent_def
-
+from flowforge.network import NetworkState, RouterContext
+from flowforge.router import CodeRouter, LLMRouter, code, llm
 
 # Sample agents for testing
 agent1 = agent_def("agent1", "System 1", [])

@@ -1,10 +1,9 @@
 """Local development server for FlowForge functions."""
 
-from typing import Any, TYPE_CHECKING
-import asyncio
 import json
 import uuid
 from datetime import datetime
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from flowforge.client import FlowForge
@@ -46,8 +45,6 @@ class LocalDevServer:
         id: str | None = None,
     ) -> str:
         """Send an event and trigger matching functions."""
-        from flowforge.context import Event
-        from flowforge.execution import ExecutionEngine, FunctionDefinition
 
         event_id = id or str(uuid.uuid4())
         now = datetime.utcnow()
@@ -285,7 +282,7 @@ def run_dev_server(
     serve(app, flowforge, functions, path="/api/flowforge")
 
     print(f"\n{'='*60}")
-    print(f"  FlowForge Dev Server")
+    print("  FlowForge Dev Server")
     print(f"{'='*60}")
     print(f"  App ID:     {flowforge.app_id}")
     print(f"  Functions:  {len(functions)}")
@@ -294,7 +291,7 @@ def run_dev_server(
         if fn.trigger:
             trigger_info = f" (trigger: {fn.trigger.type}={fn.trigger.value})"
         print(f"    - {fn.id}{trigger_info}")
-    print(f"\n  Endpoints:")
+    print("\n  Endpoints:")
     print(f"    POST http://{host}:{port}/api/v1/events    - Send events")
     print(f"    GET  http://{host}:{port}/api/v1/runs      - List runs")
     print(f"    GET  http://{host}:{port}/api/v1/functions - List functions")

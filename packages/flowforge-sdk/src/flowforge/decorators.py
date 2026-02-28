@@ -1,13 +1,13 @@
 """Decorators for defining FlowForge functions."""
 
-from functools import wraps
-from typing import Any, Callable, TypeVar, Awaitable, ParamSpec
 import asyncio
 import inspect
+from collections.abc import Awaitable, Callable
+from typing import Any, ParamSpec, TypeVar
 
+from flowforge.config import Concurrency, Debounce, FunctionConfig, RateLimit, Throttle
 from flowforge.context import Context
 from flowforge.triggers import Trigger
-from flowforge.config import Concurrency, RateLimit, Throttle, Debounce, FunctionConfig
 
 P = ParamSpec("P")
 T = TypeVar("T")

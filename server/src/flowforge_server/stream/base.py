@@ -1,10 +1,11 @@
 """Base event stream interface."""
 
+import uuid
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, AsyncIterator
-import uuid
+from typing import Any
 
 
 @dataclass

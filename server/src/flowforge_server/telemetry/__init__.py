@@ -2,25 +2,25 @@
 
 from flowforge_server.telemetry.metrics import (
     metrics_router,
+    track_queue_size,
     track_request,
-    track_run_started,
     track_run_completed,
     track_run_failed,
-    track_queue_size,
+    track_run_started,
 )
 from flowforge_server.telemetry.tracing import (
+    OTEL_AVAILABLE,
+    add_span_attributes,
+    create_span,
+    get_span_id,
+    get_trace_id,
     init_tracing,
     instrument_app,
-    instrument_sqlalchemy,
-    instrument_redis,
     instrument_httpx,
-    create_span,
-    add_span_attributes,
+    instrument_redis,
+    instrument_sqlalchemy,
     record_exception,
     set_span_status,
-    get_trace_id,
-    get_span_id,
-    OTEL_AVAILABLE,
 )
 
 __all__ = [

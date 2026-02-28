@@ -1,12 +1,12 @@
 """Audit log model for tracking security-sensitive operations."""
 
+import uuid
 from datetime import datetime
 from enum import Enum
 from typing import Any
-import uuid
 
 from sqlalchemy import DateTime, String, Text
-from sqlalchemy.dialects.postgresql import JSONB, UUID, INET
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from flowforge_server.db.models.base import Base
