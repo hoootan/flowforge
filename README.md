@@ -353,6 +353,72 @@ console.log('Output:', run.output);
 
 See [`packages/flowforge-client-ts`](./packages/flowforge-client-ts) for full documentation.
 
+## MCP Server (Claude Integration)
+
+Connect Claude to your FlowForge workflows via the Model Context Protocol. Exposes 25 tools for managing events, functions, runs, tools, approvals, and health checks.
+
+```bash
+npm install -g flowforge-mcp
+# or run directly
+npx flowforge-mcp --server-url http://localhost:8000 --api-key ff_live_xxx
+```
+
+### SSE Mode (recommended)
+
+Start the MCP server as a standalone service:
+
+```bash
+npx flowforge-mcp --server-url http://localhost:8000 --api-key ff_live_xxx --port 3100
+```
+
+Add to your project's `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "flowforge": {
+      "type": "sse",
+      "url": "http://localhost:3100/sse"
+    }
+  }
+}
+```
+
+### Stdio Mode (auto-managed by Claude Code)
+
+Add to `.mcp.json` — Claude Code launches and manages the process:
+
+```json
+{
+  "mcpServers": {
+    "flowforge": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["flowforge-mcp", "--transport", "stdio"],
+      "env": {
+        "FLOWFORGE_SERVER_URL": "http://localhost:8000",
+        "FLOWFORGE_API_KEY": "ff_live_xxx"
+      }
+    }
+  }
+}
+```
+
+### Available Tools
+
+| Category | Tools |
+|----------|-------|
+| **Events** | `flowforge_send_event`, `flowforge_list_events`, `flowforge_get_event` |
+| **Functions** | `flowforge_list_functions`, `flowforge_get_function`, `flowforge_create_function`, `flowforge_update_function`, `flowforge_delete_function` |
+| **Runs** | `flowforge_list_runs`, `flowforge_get_run`, `flowforge_cancel_run`, `flowforge_retry_run`, `flowforge_replay_run`, `flowforge_get_run_steps`, `flowforge_get_run_tool_calls` |
+| **Tools** | `flowforge_list_tools`, `flowforge_get_tool`, `flowforge_create_tool`, `flowforge_update_tool`, `flowforge_delete_tool` |
+| **Approvals** | `flowforge_list_approvals`, `flowforge_approve_tool_call`, `flowforge_reject_tool_call` |
+| **Health** | `flowforge_health_check`, `flowforge_get_stats` |
+
+Verify with `/mcp` inside Claude Code to see all connected tools.
+
+See [`packages/flowforge-mcp`](./packages/flowforge-mcp) for more details.
+
 ## Authentication
 
 FlowForge supports two authentication methods:
@@ -435,7 +501,8 @@ flowforge/
 ├── packages/
 │   ├── flowforge-sdk/       # Python SDK
 │   ├── flowforge-cli/       # CLI tool
-│   └── flowforge-client-ts/ # TypeScript client
+│   ├── flowforge-client-ts/ # TypeScript client
+│   └── flowforge-mcp/       # MCP server (Claude integration)
 ├── server/                  # Orchestration server (FastAPI)
 ├── dashboard/               # Admin dashboard (Next.js)
 ├── deploy/
