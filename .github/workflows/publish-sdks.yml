@@ -161,7 +161,7 @@ jobs:
       id-token: write
     defaults:
       run:
-        working-directory: packages/flowforge-mcp-server
+        working-directory: packages/flowforge-mcp
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
