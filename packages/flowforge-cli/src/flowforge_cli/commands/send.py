@@ -6,6 +6,8 @@ import httpx
 import typer
 from rich.console import Console
 
+from flowforge_cli.config import get_config
+
 console = Console()
 
 
@@ -82,9 +84,15 @@ def send_event(
 
     # Send event
     try:
+        config = get_config()
+        headers = {}
+        if config.server.api_key:
+            headers["X-FlowForge-API-Key"] = config.server.api_key
+
         response = httpx.post(
             f"{api_url}/api/v1/events",
             json=payload,
+            headers=headers,
             timeout=30.0,
         )
 

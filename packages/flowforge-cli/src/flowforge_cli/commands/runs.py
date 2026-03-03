@@ -6,8 +6,19 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from flowforge_cli.config import get_config
+
 app = typer.Typer()
 console = Console()
+
+
+def _auth_headers() -> dict[str, str]:
+    """Build auth headers from config."""
+    config = get_config()
+    headers: dict[str, str] = {}
+    if config.server.api_key:
+        headers["X-FlowForge-API-Key"] = config.server.api_key
+    return headers
 
 
 @app.command("list")
@@ -48,6 +59,7 @@ def list_runs(
         response = httpx.get(
             f"{api_url}/api/v1/runs",
             params=params,
+            headers=_auth_headers(),
             timeout=30.0,
         )
         response.raise_for_status()
@@ -115,6 +127,7 @@ def get_run(
     try:
         response = httpx.get(
             f"{api_url}/api/v1/runs/{run_id}",
+            headers=_auth_headers(),
             timeout=30.0,
         )
 
@@ -184,6 +197,7 @@ def cancel_run(
     try:
         response = httpx.post(
             f"{api_url}/api/v1/runs/{run_id}/cancel",
+            headers=_auth_headers(),
             timeout=30.0,
         )
 
@@ -220,6 +234,7 @@ def replay_run(
     try:
         response = httpx.post(
             f"{api_url}/api/v1/runs/{run_id}/replay",
+            headers=_auth_headers(),
             timeout=30.0,
         )
 

@@ -21,6 +21,11 @@ on:
         required: false
         type: boolean
         default: true
+      publish_mcp:
+        description: 'Publish MCP server to npm'
+        required: false
+        type: boolean
+        default: true
 
 env:
   NODE_VERSION: '20'
@@ -35,6 +40,7 @@ jobs:
       tag: ${{ steps.version.outputs.tag }}
       publish_ts: ${{ steps.flags.outputs.publish_ts }}
       publish_py: ${{ steps.flags.outputs.publish_py }}
+      publish_mcp: ${{ steps.flags.outputs.publish_mcp }}
     steps:
       - name: Determine version
         id: version
@@ -55,9 +61,11 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "publish_ts=${{ inputs.publish_typescript }}" >> $GITHUB_OUTPUT
             echo "publish_py=${{ inputs.publish_python }}" >> $GITHUB_OUTPUT
+            echo "publish_mcp=${{ inputs.publish_mcp }}" >> $GITHUB_OUTPUT
           else
             echo "publish_ts=true" >> $GITHUB_OUTPUT
             echo "publish_py=true" >> $GITHUB_OUTPUT
+            echo "publish_mcp=true" >> $GITHUB_OUTPUT
           fi
 
   publish-typescript:
@@ -144,9 +152,52 @@ jobs:
         with:
           packages-dir: packages/flowforge-sdk/dist/
 
+  publish-mcp:
+    needs: prepare
+    if: needs.prepare.outputs.publish_mcp == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: packages/flowforge-mcp
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Update version in package.json
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          jq --arg v "$VERSION" '.version = $v' package.json > package.json.tmp
+          mv package.json.tmp package.json
+          echo "Updated package.json to version $VERSION"
+
+      - name: Build
+        run: pnpm build
+
+      - name: Publish to npm
+        run: pnpm publish --no-git-checks --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
   create-release:
-    needs: [prepare, publish-typescript, publish-python]
-    if: always() && (needs.publish-typescript.result == 'success' || needs.publish-python.result == 'success')
+    needs: [prepare, publish-typescript, publish-python, publish-mcp]
+    if: always() && (needs.publish-typescript.result == 'success' || needs.publish-python.result == 'success' || needs.publish-mcp.result == 'success')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -172,6 +223,10 @@ jobs:
 
           if [ "${{ needs.publish-python.result }}" = "success" ]; then
             NOTES+="- **flowforge-sdk** v${VERSION} on [PyPI](https://pypi.org/project/flowforge-sdk/)\n"
+          fi
+
+          if [ "${{ needs.publish-mcp.result }}" = "success" ]; then
+            NOTES+="- **flowforge-mcp** v${VERSION} on [npm](https://www.npmjs.com/package/flowforge-mcp)\n"
           fi
 
           NOTES+="\n## What's Changed\n"
