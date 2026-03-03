@@ -42,8 +42,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+import api from "@/lib/api";
 
 // Audit log types - matches backend AuditLogResponse
 interface AuditLog {
@@ -104,35 +103,20 @@ export function AuditLogTab() {
   const fetchLogs = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({
-        offset: String((page - 1) * limit),
-        limit: String(limit),
+      const actionMap: Record<string, string> = {
+        auth: "login",
+        user: "user",
+        api_key: "api_key",
+        function: "function",
+        run: "run",
+        tool: "tool",
+      };
+
+      const data = await api.getAuditLogs({
+        offset: (page - 1) * limit,
+        limit,
+        action: actionFilter !== "all" ? actionMap[actionFilter] : undefined,
       });
-
-      if (actionFilter !== "all") {
-        // Map category to specific action prefix
-        const actionMap: Record<string, string> = {
-          auth: "login",
-          user: "user",
-          api_key: "api_key",
-          function: "function",
-          run: "run",
-          tool: "tool",
-        };
-        if (actionMap[actionFilter]) {
-          params.set("action", actionMap[actionFilter]);
-        }
-      }
-
-      const response = await fetch(`${API_BASE_URL}/audit?${params}`, {
-        credentials: "include",
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch audit logs");
-      }
-
-      const data: AuditLogResponse = await response.json();
       setLogs(data.logs);
       setTotal(data.total);
     } catch (error) {

@@ -1036,6 +1036,31 @@ class FlowForgeAPI {
     }
   }
 
+  // Audit Logs (Admin only)
+  async getAuditLogs(params?: {
+    offset?: number;
+    limit?: number;
+    action?: string;
+    actor_id?: string;
+    resource_type?: string;
+    success?: boolean;
+  }): Promise<{ logs: any[]; total: number; limit: number; offset: number }> {
+    const searchParams = new URLSearchParams();
+    if (params?.offset !== undefined) searchParams.set("offset", String(params.offset));
+    if (params?.limit !== undefined) searchParams.set("limit", String(params.limit));
+    if (params?.action) searchParams.set("action", params.action);
+    if (params?.actor_id) searchParams.set("actor_id", params.actor_id);
+    if (params?.resource_type) searchParams.set("resource_type", params.resource_type);
+    if (params?.success !== undefined) searchParams.set("success", String(params.success));
+
+    const query = searchParams.toString();
+    try {
+      return await this.request(`/audit${query ? `?${query}` : ""}`);
+    } catch {
+      return { logs: [], total: 0, limit: params?.limit ?? 20, offset: params?.offset ?? 0 };
+    }
+  }
+
   // Model Pricing API
   async getModelPricingConfigs(includeGlobal: boolean = true): Promise<ModelPricingListResponse> {
     try {
