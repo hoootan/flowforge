@@ -1,5 +1,5 @@
 {
-  "name": "flowforge-mcp",
+  "name": "flowforge-mcp-server",
   "version": "0.1.0",
   "description": "MCP server for FlowForge — connect Claude to your AI workflows",
   "bin": {

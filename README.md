@@ -358,9 +358,9 @@ See [`packages/flowforge-client-ts`](./packages/flowforge-client-ts) for full do
 Connect Claude to your FlowForge workflows via the Model Context Protocol. Exposes 25 tools for managing events, functions, runs, tools, approvals, and health checks.
 
 ```bash
-npm install -g flowforge-mcp
+npm install -g flowforge-mcp-server
 # or run directly
-npx flowforge-mcp --server-url http://localhost:8000 --api-key ff_live_xxx
+npx flowforge-mcp-server --server-url http://localhost:8000 --api-key ff_live_xxx
 ```
 
 ### SSE Mode (recommended)
@@ -368,7 +368,7 @@ npx flowforge-mcp --server-url http://localhost:8000 --api-key ff_live_xxx
 Start the MCP server as a standalone service:
 
 ```bash
-npx flowforge-mcp --server-url http://localhost:8000 --api-key ff_live_xxx --port 3100
+npx flowforge-mcp-server --server-url http://localhost:8000 --api-key ff_live_xxx --port 3100
 ```
 
 Add to your project's `.mcp.json`:
@@ -394,7 +394,7 @@ Add to `.mcp.json` — Claude Code launches and manages the process:
     "flowforge": {
       "type": "stdio",
       "command": "npx",
-      "args": ["flowforge-mcp", "--transport", "stdio"],
+      "args": ["flowforge-mcp-server", "--transport", "stdio"],
       "env": {
         "FLOWFORGE_SERVER_URL": "http://localhost:8000",
         "FLOWFORGE_API_KEY": "ff_live_xxx"
@@ -417,7 +417,7 @@ Add to `.mcp.json` — Claude Code launches and manages the process:
 
 Verify with `/mcp` inside Claude Code to see all connected tools.
 
-See [`packages/flowforge-mcp`](./packages/flowforge-mcp) for more details.
+See [`packages/flowforge-mcp-server`](./packages/flowforge-mcp-server) for more details.
 
 ## Authentication
 
@@ -502,7 +502,7 @@ flowforge/
 │   ├── flowforge-sdk/       # Python SDK
 │   ├── flowforge-cli/       # CLI tool
 │   ├── flowforge-client-ts/ # TypeScript client
-│   └── flowforge-mcp/       # MCP server (Claude integration)
+│   └── flowforge-mcp-server/       # MCP server (Claude integration)
 ├── server/                  # Orchestration server (FastAPI)
 ├── dashboard/               # Admin dashboard (Next.js)
 ├── deploy/

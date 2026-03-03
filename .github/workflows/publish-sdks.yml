@@ -161,7 +161,7 @@ jobs:
       id-token: write
     defaults:
       run:
-        working-directory: packages/flowforge-mcp
+        working-directory: packages/flowforge-mcp-server
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -226,7 +226,7 @@ jobs:
           fi
 
           if [ "${{ needs.publish-mcp.result }}" = "success" ]; then
-            NOTES+="- **flowforge-mcp** v${VERSION} on [npm](https://www.npmjs.com/package/flowforge-mcp)\n"
+            NOTES+="- **flowforge-mcp-server** v${VERSION} on [npm](https://www.npmjs.com/package/flowforge-mcp-server)\n"
           fi
 
           NOTES+="\n## What's Changed\n"
