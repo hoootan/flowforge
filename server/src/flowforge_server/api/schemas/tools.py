@@ -35,10 +35,34 @@ class ToolCreate(BaseModel):
         }],
     )
 
+    tool_type: str = Field(
+        default="custom",
+        description="Tool type: 'custom' (code), 'webhook' (HTTP config), or 'builtin'",
+        examples=["custom", "webhook"],
+    )
+
     code: str | None = Field(
         None,
         description="Python code for the tool. Format: async def execute(**kwargs) -> dict: ...",
         examples=["async def execute(query: str) -> dict:\n    return {'answer': f'Results for {query}'}"],
+    )
+
+    webhook_url: str | None = Field(
+        None,
+        description="Webhook URL for tool_type='webhook'. Supports {{credential:name}} placeholders.",
+        examples=["https://api.example.com/v1/data"],
+    )
+
+    webhook_method: str = Field(
+        default="POST",
+        description="HTTP method for webhook tools",
+        examples=["GET", "POST"],
+    )
+
+    webhook_headers: dict[str, str] | None = Field(
+        None,
+        description="HTTP headers for webhook tools. Supports {{credential:name}} placeholders.",
+        examples=[{"Authorization": "Bearer {{credential:my_token}}"}],
     )
 
     requires_approval: bool = Field(
@@ -58,7 +82,11 @@ class ToolUpdate(BaseModel):
 
     description: str | None = Field(None, description="Updated description")
     parameters: dict[str, Any] | None = Field(None, description="Updated parameters schema")
+    tool_type: str | None = Field(None, description="Updated tool type")
     code: str | None = Field(None, description="Updated Python code")
+    webhook_url: str | None = Field(None, description="Updated webhook URL")
+    webhook_method: str | None = Field(None, description="Updated webhook method")
+    webhook_headers: dict[str, str] | None = Field(None, description="Updated webhook headers")
     requires_approval: bool | None = Field(None, description="Updated approval requirement")
     approval_timeout: str | None = Field(None, description="Updated approval timeout")
     is_active: bool | None = Field(None, description="Whether the tool is active")
@@ -71,7 +99,11 @@ class ToolResponse(BaseModel):
     name: str = Field(..., description="Tool name")
     description: str = Field(..., description="Tool description")
     parameters: dict[str, Any] = Field(..., description="Parameter schema")
+    tool_type: str = Field(default="custom", description="Tool type")
     code: str | None = Field(None, description="Python code (None for built-in)")
+    webhook_url: str | None = Field(None, description="Webhook URL")
+    webhook_method: str = Field(default="POST", description="Webhook HTTP method")
+    webhook_headers: dict[str, str] | None = Field(None, description="Webhook headers")
     is_builtin: bool = Field(..., description="Whether this is a built-in tool")
     requires_approval: bool = Field(..., description="Whether approval is required")
     approval_timeout: str | None = Field(None, description="Approval timeout")

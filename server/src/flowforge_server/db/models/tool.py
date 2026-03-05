@@ -60,9 +60,23 @@ class Tool(Base, TimestampMixin):
         default=dict,
     )
 
+    # Tool type: "custom" (code-based), "webhook" (HTTP config), "builtin"
+    tool_type: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="custom", server_default="custom"
+    )
+
     # Python code for custom tools (None for built-in tools)
     # Format: async def execute(**kwargs) -> dict: ...
     code: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Webhook configuration (for tool_type="webhook")
+    webhook_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    webhook_method: Mapped[str] = mapped_column(
+        String(10), nullable=False, default="POST", server_default="POST"
+    )
+    webhook_headers: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB, nullable=True
+    )
 
     # Whether this is a built-in tool
     is_builtin: Mapped[bool] = mapped_column(Boolean, default=False)

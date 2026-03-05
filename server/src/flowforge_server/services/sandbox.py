@@ -104,6 +104,8 @@ SAFE_BUILTINS = {
     "math": __import__("math"),
     # Allow re for pattern matching
     "re": __import__("re"),
+    # Allow httpx for HTTP requests
+    "httpx": __import__("httpx"),
 }
 
 # Modules that are explicitly blocked
@@ -114,9 +116,28 @@ BLOCKED_MODULES = {
     "codeop", "compileall", "dis", "inspect", "pdb",
     "trace", "traceback", "linecache", "gc", "atexit",
     "io", "pathlib", "tempfile", "glob", "fnmatch",
-    "requests", "urllib", "http", "httpx", "aiohttp",
+    "requests", "urllib", "http", "aiohttp",
     "sqlite3", "psycopg2", "pymongo", "redis", "sqlalchemy",
 }
+
+
+class _ReadOnlyEnviron:
+    """Read-only proxy for os.environ, safe for sandbox use."""
+
+    def get(self, key: str, default: str | None = None) -> str | None:
+        import os
+        return os.environ.get(key, default)
+
+    def __getitem__(self, key: str) -> str:
+        import os
+        return os.environ[key]
+
+    def __contains__(self, key: object) -> bool:
+        import os
+        return key in os.environ
+
+
+_SAFE_ENVIRON = _ReadOnlyEnviron()
 
 
 def _guarded_import(
@@ -130,8 +151,8 @@ def _guarded_import(
     if name in BLOCKED_MODULES:
         raise SandboxSecurityError(f"Import of module '{name}' is not allowed")
 
-    # Only allow json, datetime, math, re
-    allowed_imports = {"json", "datetime", "math", "re", "collections", "itertools", "functools"}
+    # Allow json, datetime, math, re, and httpx for HTTP access
+    allowed_imports = {"json", "datetime", "math", "re", "collections", "itertools", "functools", "httpx"}
     if name not in allowed_imports:
         raise SandboxSecurityError(f"Import of module '{name}' is not allowed")
 
@@ -148,6 +169,11 @@ def _write_guard(obj: Any) -> Any:
 
 def _create_restricted_globals() -> dict[str, Any]:
     """Create the restricted globals for sandboxed execution."""
+
+    # Build a safe os-like namespace with only environ access
+    class _SafeOs:
+        environ = _SAFE_ENVIRON
+
     return {
         "__builtins__": SAFE_BUILTINS,
         "__name__": "__sandbox__",
@@ -160,6 +186,8 @@ def _create_restricted_globals() -> dict[str, Any]:
         "_write_": _write_guard,
         "_print_": lambda *args, **kwargs: None,  # Disable print
         "__import__": _guarded_import,
+        # Safe os proxy for reading environment variables
+        "os": _SafeOs(),
     }
 
 

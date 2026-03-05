@@ -12,6 +12,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Key,
+  KeyRound,
   AlertCircle,
   Settings,
   Bot,
@@ -36,6 +37,7 @@ import { AIProvidersTab } from "@/components/settings/ai-providers-tab";
 import { SecurityTab } from "@/components/settings/security-tab";
 import { ModelPricingTab } from "@/components/settings/model-pricing-tab";
 import { AuditLogTab } from "@/components/settings/audit-log-tab";
+import { CredentialsTab } from "@/components/settings/credentials-tab";
 import type { User } from "@/lib/api";
 
 interface SettingsData {
@@ -137,7 +139,7 @@ export default function SettingsPage() {
 
       {/* Tabbed Settings Interface */}
       <Tabs defaultValue="general" className="flex-1">
-        <TabsList className={`grid w-full max-w-4xl ${showUsersTab ? "grid-cols-8" : "grid-cols-6"}`}>
+        <TabsList className={`grid w-full max-w-5xl ${showUsersTab ? "grid-cols-9" : "grid-cols-7"}`}>
           <TabsTrigger value="general" className="gap-1.5">
             <Settings className="h-4 w-4" />
             <span className="hidden sm:inline">General</span>
@@ -155,6 +157,10 @@ export default function SettingsPage() {
           <TabsTrigger value="api-keys" className="gap-1.5">
             <Key className="h-4 w-4" />
             <span className="hidden sm:inline">API Keys</span>
+          </TabsTrigger>
+          <TabsTrigger value="credentials" className="gap-1.5">
+            <KeyRound className="h-4 w-4" />
+            <span className="hidden sm:inline">Credentials</span>
           </TabsTrigger>
           <TabsTrigger value="ai-config" className="gap-1.5">
             <Bot className="h-4 w-4" />
@@ -331,6 +337,11 @@ export default function SettingsPage() {
         {/* API Keys Tab */}
         <TabsContent value="api-keys" className="mt-6 space-y-6">
           <ApiKeysTab />
+        </TabsContent>
+
+        {/* Credentials Tab */}
+        <TabsContent value="credentials" className="mt-6 space-y-6">
+          <CredentialsTab />
         </TabsContent>
 
         {/* AI Providers Tab */}

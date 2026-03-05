@@ -18,6 +18,27 @@ from flowforge_server.db.models import Tool
 router = APIRouter(prefix="/tools", tags=["tools"])
 
 
+def _tool_response(tool: Tool, hide_code: bool = False) -> ToolResponse:
+    """Build a ToolResponse from a Tool model."""
+    return ToolResponse(
+        id=str(tool.id),
+        name=tool.name,
+        description=tool.description,
+        parameters=tool.parameters,
+        tool_type=getattr(tool, "tool_type", "custom"),
+        code=None if hide_code else tool.code,
+        webhook_url=getattr(tool, "webhook_url", None),
+        webhook_method=getattr(tool, "webhook_method", "POST"),
+        webhook_headers=getattr(tool, "webhook_headers", None),
+        is_builtin=tool.is_builtin,
+        requires_approval=tool.requires_approval,
+        approval_timeout=tool.approval_timeout,
+        is_active=tool.is_active,
+        created_at=tool.created_at,
+        updated_at=tool.updated_at,
+    )
+
+
 @router.post("", response_model=ToolResponse, status_code=201)
 async def create_tool(
     tool_data: ToolCreate,
@@ -61,7 +82,11 @@ async def create_tool(
         name=tool_data.name,
         description=tool_data.description,
         parameters=tool_data.parameters,
+        tool_type=tool_data.tool_type,
         code=tool_data.code,
+        webhook_url=tool_data.webhook_url,
+        webhook_method=tool_data.webhook_method,
+        webhook_headers=tool_data.webhook_headers,
         is_builtin=False,
         requires_approval=tool_data.requires_approval,
         approval_timeout=tool_data.approval_timeout,
@@ -72,19 +97,7 @@ async def create_tool(
     await session.commit()
     await session.refresh(tool)
 
-    return ToolResponse(
-        id=str(tool.id),
-        name=tool.name,
-        description=tool.description,
-        parameters=tool.parameters,
-        code=tool.code,
-        is_builtin=tool.is_builtin,
-        requires_approval=tool.requires_approval,
-        approval_timeout=tool.approval_timeout,
-        is_active=tool.is_active,
-        created_at=tool.created_at,
-        updated_at=tool.updated_at,
-    )
+    return _tool_response(tool)
 
 
 @router.get("", response_model=ToolsResponse)
@@ -126,22 +139,7 @@ async def list_tools(
     tools = result.scalars().all()
 
     return ToolsResponse(
-        tools=[
-            ToolResponse(
-                id=str(tool.id),
-                name=tool.name,
-                description=tool.description,
-                parameters=tool.parameters,
-                code=tool.code if not tool.is_builtin else None,  # Hide built-in code
-                is_builtin=tool.is_builtin,
-                requires_approval=tool.requires_approval,
-                approval_timeout=tool.approval_timeout,
-                is_active=tool.is_active,
-                created_at=tool.created_at,
-                updated_at=tool.updated_at,
-            )
-            for tool in tools
-        ],
+        tools=[_tool_response(tool, hide_code=tool.is_builtin) for tool in tools],
         total=total,
     )
 
@@ -167,19 +165,7 @@ async def get_tool(
     if not tool:
         raise HTTPException(status_code=404, detail="Tool not found")
 
-    return ToolResponse(
-        id=str(tool.id),
-        name=tool.name,
-        description=tool.description,
-        parameters=tool.parameters,
-        code=tool.code if not tool.is_builtin else None,
-        is_builtin=tool.is_builtin,
-        requires_approval=tool.requires_approval,
-        approval_timeout=tool.approval_timeout,
-        is_active=tool.is_active,
-        created_at=tool.created_at,
-        updated_at=tool.updated_at,
-    )
+    return _tool_response(tool, hide_code=tool.is_builtin)
 
 
 @router.patch("/{tool_name}", response_model=ToolResponse)
@@ -217,8 +203,16 @@ async def update_tool(
         tool.description = update_data.description
     if update_data.parameters is not None:
         tool.parameters = update_data.parameters
+    if update_data.tool_type is not None:
+        tool.tool_type = update_data.tool_type
     if update_data.code is not None:
         tool.code = update_data.code
+    if update_data.webhook_url is not None:
+        tool.webhook_url = update_data.webhook_url
+    if update_data.webhook_method is not None:
+        tool.webhook_method = update_data.webhook_method
+    if update_data.webhook_headers is not None:
+        tool.webhook_headers = update_data.webhook_headers
     if update_data.requires_approval is not None:
         tool.requires_approval = update_data.requires_approval
     if update_data.approval_timeout is not None:
@@ -229,19 +223,7 @@ async def update_tool(
     await session.commit()
     await session.refresh(tool)
 
-    return ToolResponse(
-        id=str(tool.id),
-        name=tool.name,
-        description=tool.description,
-        parameters=tool.parameters,
-        code=tool.code,
-        is_builtin=tool.is_builtin,
-        requires_approval=tool.requires_approval,
-        approval_timeout=tool.approval_timeout,
-        is_active=tool.is_active,
-        created_at=tool.created_at,
-        updated_at=tool.updated_at,
-    )
+    return _tool_response(tool)
 
 
 @router.delete("/{tool_name}", status_code=204)

@@ -51,6 +51,7 @@ async def seed_builtin_tools() -> None:
                 existing.parameters = tool_def.parameters
                 existing.requires_approval = tool_def.requires_approval
                 existing.approval_timeout = tool_def.approval_timeout
+                existing.tool_type = "builtin"
                 existing.is_active = True
                 updated_count += 1
             else:
@@ -59,6 +60,7 @@ async def seed_builtin_tools() -> None:
                     name=tool_def.name,
                     description=tool_def.description,
                     parameters=tool_def.parameters,
+                    tool_type="builtin",
                     code=None,
                     is_builtin=True,
                     requires_approval=tool_def.requires_approval,

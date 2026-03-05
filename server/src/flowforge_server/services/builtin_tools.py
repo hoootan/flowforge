@@ -4,9 +4,11 @@ These tools are automatically seeded into the database on startup.
 Users can reference them by name in their inline functions.
 """
 
+import ipaddress
 import os
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlparse
 
 
 @dataclass
@@ -63,6 +65,45 @@ BUILTIN_TOOLS: list[BuiltinToolDefinition] = [
                 },
             },
             "required": ["prompt"],
+        },
+    ),
+
+    # HTTP Tools
+    BuiltinToolDefinition(
+        name="http_request",
+        description=(
+            "Make an HTTP request to any URL. Use this for calling external APIs, "
+            "webhooks, or fetching data from web services."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": "The URL to send the request to",
+                },
+                "method": {
+                    "type": "string",
+                    "description": "HTTP method (GET, POST, PUT, PATCH, DELETE)",
+                    "default": "GET",
+                    "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"],
+                },
+                "headers": {
+                    "type": "object",
+                    "description": "HTTP headers as key-value pairs",
+                    "additionalProperties": {"type": "string"},
+                },
+                "body": {
+                    "type": ["object", "string", "null"],
+                    "description": "Request body (JSON object or string)",
+                },
+                "timeout": {
+                    "type": "integer",
+                    "description": "Request timeout in seconds (max 120, default 30)",
+                    "default": 30,
+                },
+            },
+            "required": ["url"],
         },
     ),
 
@@ -189,6 +230,74 @@ async def execute_generate_image(prompt: str, style: str = "professional", **kwa
     }
 
 
+def _is_private_ip(hostname: str) -> bool:
+    """Check if a hostname resolves to a private/reserved IP (SSRF protection)."""
+    try:
+        addr = ipaddress.ip_address(hostname)
+        return addr.is_private or addr.is_loopback or addr.is_reserved or addr.is_link_local
+    except ValueError:
+        # Not a raw IP — will be resolved by httpx; we check common names
+        return hostname in ("localhost", "0.0.0.0", "127.0.0.1", "::1")
+
+
+async def execute_http_request(
+    url: str,
+    method: str = "GET",
+    headers: dict[str, str] | None = None,
+    body: Any = None,
+    timeout: int = 30,
+    **kwargs,
+) -> dict[str, Any]:
+    """Execute a general-purpose HTTP request with SSRF protection."""
+    import httpx
+
+    # Clamp timeout
+    timeout = max(1, min(timeout, 120))
+
+    # SSRF protection: block private IPs
+    parsed = urlparse(url)
+    hostname = parsed.hostname or ""
+    if _is_private_ip(hostname):
+        return {"error": f"Requests to private/reserved addresses are blocked: {hostname}"}
+
+    method = method.upper()
+    if method not in ("GET", "POST", "PUT", "PATCH", "DELETE"):
+        return {"error": f"Unsupported HTTP method: {method}"}
+
+    try:
+        async with httpx.AsyncClient(follow_redirects=True) as client:
+            request_kwargs: dict[str, Any] = {
+                "method": method,
+                "url": url,
+                "headers": headers or {},
+                "timeout": float(timeout),
+            }
+            if body is not None and method in ("POST", "PUT", "PATCH"):
+                if isinstance(body, dict):
+                    request_kwargs["json"] = body
+                else:
+                    request_kwargs["content"] = str(body)
+
+            response = await client.request(**request_kwargs)
+
+            # Try to parse JSON
+            try:
+                response_body = response.json()
+            except Exception:
+                response_body = response.text[:10000]  # Cap at 10k chars
+
+            return {
+                "status_code": response.status_code,
+                "headers": dict(response.headers),
+                "body": response_body,
+                "url": str(response.url),
+            }
+    except httpx.TimeoutException:
+        return {"error": f"Request timed out after {timeout}s"}
+    except httpx.RequestError as e:
+        return {"error": f"Request failed: {str(e)}"}
+
+
 async def execute_ask_user(question: str, context: str | None = None, options: list[str] | None = None, **kwargs) -> dict[str, Any]:
     """
     Execute ask_user tool.
@@ -216,6 +325,7 @@ async def execute_ask_user(question: str, context: str | None = None, options: l
 TOOL_EXECUTORS: dict[str, callable] = {
     "web_search": execute_web_search,
     "generate_image": execute_generate_image,
+    "http_request": execute_http_request,
     "ask_user": execute_ask_user,
 }
 

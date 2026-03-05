@@ -61,12 +61,17 @@ export {
   type RunFilters,
   type FunctionFilters,
   type EventFilters,
+  type ToolType,
   type ToolFilters,
   type ApprovalFilters,
   type CreateFunctionInput,
   type UpdateFunctionInput,
   type CreateToolInput,
   type UpdateToolInput,
+  type Credential,
+  type CredentialsResponse,
+  type CreateCredentialInput,
+  type UpdateCredentialInput,
   type SendEventInput,
   type ClientOptions,
   // User types (admin API key required)
@@ -96,3 +101,4 @@ export { ApprovalsResource } from "./resources/approvals";
 export { HealthResource } from "./resources/health";
 export { UsersResource } from "./resources/users";
 export { ApiKeysResource } from "./resources/api-keys";
+export { CredentialsResource } from "./resources/credentials";

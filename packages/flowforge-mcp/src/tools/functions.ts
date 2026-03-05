@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { McpContext } from "../server.js";
+import crypto from "node:crypto";
+import { type McpContext, directFetch } from "../server.js";
 
 export function registerFunctionTools(
   server: McpServer,
@@ -69,78 +70,176 @@ export function registerFunctionTools(
 
   server.tool(
     "flowforge_create_function",
-    "Create a new workflow function.",
+    "Create a new workflow function (worker mode). The function runs on your own server at endpoint_url. For inline/serverless functions (AI agent), use flowforge_create_inline_function instead.",
     {
       name: z.string().describe("Function name"),
       trigger_type: z
-        .string()
-        .describe("Trigger type: 'event', 'cron', or 'webhook'"),
+        .enum(["event", "cron", "webhook"])
+        .describe("Trigger type"),
       trigger_value: z
         .string()
-        .describe("Trigger value (e.g., event name 'order/created' or cron expression)"),
+        .describe("Trigger value (e.g., event name 'order/created' or cron expression '0 9 * * *')"),
+      trigger_expression: z
+        .string()
+        .optional()
+        .describe("Optional filter expression for event triggers (e.g., 'event.data.amount > 100')"),
       endpoint_url: z.string().describe("URL that handles function execution"),
       config: z
         .record(z.unknown())
         .optional()
-        .describe("Function configuration (concurrency, retries, etc.)"),
+        .describe("Function configuration (retries, timeout, concurrency, etc.)"),
     },
     async (args) => {
-      const { data, error } = await ctx.client.functions.create({
+      const body = {
+        id: crypto.randomUUID(),
         name: args.name,
-        trigger_type: args.trigger_type as "event" | "cron" | "webhook",
-        trigger_value: args.trigger_value,
+        trigger: {
+          type: args.trigger_type,
+          value: args.trigger_value,
+          expression: args.trigger_expression,
+        },
         endpoint_url: args.endpoint_url,
-        config: args.config,
-      });
-      if (error) {
+        config: args.config || {},
+      };
+      try {
+        const data = await directFetch(ctx, "POST", "/functions", body);
         return {
           content: [
-            { type: "text" as const, text: `Error: ${error.message}` },
+            { type: "text" as const, text: JSON.stringify(data, null, 2) },
+          ],
+        };
+      } catch (err) {
+        return {
+          content: [
+            { type: "text" as const, text: `Error: ${(err as Error).message}` },
           ],
           isError: true,
         };
       }
-      return {
-        content: [
-          { type: "text" as const, text: JSON.stringify(data, null, 2) },
-        ],
+    }
+  );
+
+  server.tool(
+    "flowforge_create_inline_function",
+    "Create an inline/serverless AI agent function. The function runs on the FlowForge server using an LLM with tools — no endpoint_url needed.",
+    {
+      name: z.string().describe("Function name (e.g., 'Create Social Post')"),
+      trigger_type: z
+        .enum(["event", "cron", "webhook"])
+        .describe("Trigger type"),
+      trigger_value: z
+        .string()
+        .describe("Trigger value (e.g., event name 'content/requested' or cron expression)"),
+      trigger_expression: z
+        .string()
+        .optional()
+        .describe("Optional filter expression for event triggers"),
+      system_prompt: z
+        .string()
+        .describe("System prompt for the AI agent (defines its persona and instructions)"),
+      tools: z
+        .array(z.string())
+        .describe("List of tool names the agent can use (must exist in tools table)"),
+      agent_config: z
+        .object({
+          model: z
+            .string()
+            .optional()
+            .default("claude-sonnet-4-6")
+            .describe("AI model to use"),
+          max_iterations: z
+            .number()
+            .optional()
+            .default(30)
+            .describe("Maximum agent loop iterations (1-100)"),
+          max_tool_calls: z
+            .number()
+            .optional()
+            .default(50)
+            .describe("Maximum tool calls per run (1-200)"),
+        })
+        .optional()
+        .describe("Agent configuration (model, iteration limits)"),
+      config: z
+        .record(z.unknown())
+        .optional()
+        .describe("Function configuration (retries, timeout, etc.)"),
+    },
+    async (args) => {
+      const body = {
+        id: crypto.randomUUID(),
+        name: args.name,
+        trigger: {
+          type: args.trigger_type,
+          value: args.trigger_value,
+          expression: args.trigger_expression,
+        },
+        system_prompt: args.system_prompt,
+        tools: args.tools,
+        agent_config: args.agent_config || {},
+        config: args.config || {},
       };
+      try {
+        const data = await directFetch(ctx, "POST", "/functions/inline", body);
+        return {
+          content: [
+            { type: "text" as const, text: JSON.stringify(data, null, 2) },
+          ],
+        };
+      } catch (err) {
+        return {
+          content: [
+            { type: "text" as const, text: `Error: ${(err as Error).message}` },
+          ],
+          isError: true,
+        };
+      }
     }
   );
 
   server.tool(
     "flowforge_update_function",
-    "Update an existing workflow function.",
+    "Update an existing workflow function (works for both worker and inline functions).",
     {
       function_id: z.string().describe("The function ID to update"),
       name: z.string().optional().describe("New function name"),
-      trigger_value: z.string().optional().describe("New trigger value"),
-      endpoint_url: z.string().optional().describe("New endpoint URL"),
+      endpoint_url: z.string().optional().describe("New endpoint URL (worker functions only)"),
+      system_prompt: z.string().optional().describe("Updated system prompt (inline functions only)"),
+      tools: z
+        .array(z.string())
+        .optional()
+        .describe("Updated tool list (inline functions only)"),
+      agent_config: z
+        .object({
+          model: z.string().optional().describe("AI model to use"),
+          max_iterations: z.number().optional().describe("Maximum agent loop iterations"),
+          max_tool_calls: z.number().optional().describe("Maximum tool calls per run"),
+        })
+        .optional()
+        .describe("Updated agent config (inline functions only)"),
       config: z
         .record(z.unknown())
         .optional()
-        .describe("Updated configuration"),
+        .describe("Updated function configuration"),
       is_active: z.boolean().optional().describe("Set active status"),
     },
     async (args) => {
       const { function_id, ...updates } = args;
-      const { data, error } = await ctx.client.functions.update(
-        function_id,
-        updates
-      );
-      if (error) {
+      try {
+        const data = await directFetch(ctx, "PATCH", `/functions/${encodeURIComponent(function_id)}`, updates);
         return {
           content: [
-            { type: "text" as const, text: `Error: ${error.message}` },
+            { type: "text" as const, text: JSON.stringify(data, null, 2) },
+          ],
+        };
+      } catch (err) {
+        return {
+          content: [
+            { type: "text" as const, text: `Error: ${(err as Error).message}` },
           ],
           isError: true,
         };
       }
-      return {
-        content: [
-          { type: "text" as const, text: JSON.stringify(data, null, 2) },
-        ],
-      };
     }
   );
 

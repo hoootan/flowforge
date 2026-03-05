@@ -111,7 +111,11 @@ export interface Tool {
   name: string;
   description: string;
   parameters: Record<string, unknown>;
+  tool_type: string;
   code: string | null;
+  webhook_url: string | null;
+  webhook_method: string;
+  webhook_headers: Record<string, string> | null;
   is_builtin: boolean;
   requires_approval: boolean;
   approval_timeout: string | null;
@@ -352,6 +356,38 @@ export interface UpdateModelPricingRequest {
   is_active?: boolean;
 }
 
+// Credential types
+export interface Credential {
+  id: string;
+  name: string;
+  credential_type: string;
+  value_prefix: string;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CredentialsResponse {
+  credentials: Credential[];
+  total: number;
+}
+
+export interface CreateCredentialRequest {
+  name: string;
+  credential_type?: string;
+  value: string;
+  description?: string;
+}
+
+export interface UpdateCredentialRequest {
+  value?: string;
+  description?: string;
+  credential_type?: string;
+  is_active?: boolean;
+}
+
+const emptyCredentialsResponse: CredentialsResponse = { credentials: [], total: 0 };
 const emptyRunsResponse: RunsResponse = { runs: [], total: 0, page: 1, page_size: 50 };
 const emptyFunctionsResponse: FunctionsResponse = { functions: [], total: 0 };
 const emptyEventsResponse: EventsResponse = { events: [], total: 0, page: 1, page_size: 50 };
@@ -1116,6 +1152,48 @@ class FlowForgeAPI {
   async deleteModelPricing(pricingId: string): Promise<boolean> {
     try {
       await this.request(`/ai/pricing/${pricingId}`, {
+        method: "DELETE",
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // Credentials
+  async getCredentials(): Promise<CredentialsResponse> {
+    try {
+      return await this.request<CredentialsResponse>("/credentials");
+    } catch {
+      return emptyCredentialsResponse;
+    }
+  }
+
+  async createCredential(data: CreateCredentialRequest): Promise<Credential | null> {
+    try {
+      return await this.request<Credential>("/credentials", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async updateCredential(name: string, data: UpdateCredentialRequest): Promise<Credential | null> {
+    try {
+      return await this.request<Credential>(`/credentials/${name}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async deleteCredential(name: string): Promise<boolean> {
+    try {
+      await this.request(`/credentials/${name}`, {
         method: "DELETE",
       });
       return true;

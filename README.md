@@ -8,6 +8,8 @@ A production-ready AI workflow orchestration platform. Build durable, event-driv
 - **Event-Driven**: Trigger workflows from events, webhooks, or cron schedules.
 - **AI-Native**: Built-in `step.ai()` for LLM calls with automatic retries and model routing via LiteLLM.
 - **Flow Control**: Concurrency limiting, rate limiting, throttling, and debouncing.
+- **Executable Tools**: Three tool types — code (sandboxed Python with `httpx`), webhook (no-code HTTP config), and built-in (`http_request`, `web_search`, etc.).
+- **Credentials System**: Encrypted credential storage with `{{credential:name}}` placeholders for secure API key injection into tools.
 - **Multi-Tenant**: Fair queue with tenant isolation for SaaS workloads.
 - **Role-Based Access**: Admin, Member, and Viewer roles with granular permissions.
 - **Developer Experience**: CLI for local development with hot reload and event simulation.
@@ -179,6 +181,94 @@ curl -X POST http://localhost:8000/api/v1/functions/inline \
 ```
 
 No worker deployment needed — the server executes the agent internally using the configured tools.
+
+### Tools
+
+FlowForge supports three types of tools that agents can use:
+
+#### Built-in Tools
+
+Pre-configured tools that ship with FlowForge:
+
+| Tool | Description |
+|------|-------------|
+| `http_request` | General-purpose HTTP client (GET/POST/PUT/PATCH/DELETE) with SSRF protection |
+| `web_search` | Web search via Tavily API |
+| `generate_image` | Image generation via Google Gemini |
+| `ask_user` | Human-in-the-loop question/response (requires approval) |
+
+#### Webhook Tools (No-Code)
+
+Configure HTTP endpoints as tools without writing code. Supports `{{credential:name}}` and `{{env:VAR}}` placeholders for secure credential injection:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/tools \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "get_brands",
+    "description": "Fetch brands from Supabase",
+    "tool_type": "webhook",
+    "webhook_url": "https://xyz.supabase.co/rest/v1/brands",
+    "webhook_method": "GET",
+    "webhook_headers": {
+      "apikey": "{{credential:supabase_key}}",
+      "Authorization": "Bearer {{credential:supabase_key}}"
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "select": { "type": "string", "description": "Columns to select" }
+      }
+    }
+  }'
+```
+
+#### Code Tools (Sandboxed Python)
+
+Custom Python code executed in a restricted sandbox. The sandbox allows `httpx` for HTTP requests and read-only `os.environ` access:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/tools \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "lookup_user",
+    "description": "Look up a user by email",
+    "tool_type": "custom",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" }
+      },
+      "required": ["email"]
+    },
+    "code": "def execute(email):\n    import httpx\n    api_key = os.environ.get(\"MY_API_KEY\")\n    resp = httpx.get(f\"https://api.example.com/users?email={email}\", headers={\"Authorization\": f\"Bearer {api_key}\"})\n    return resp.json()"
+  }'
+```
+
+### Credentials
+
+Store encrypted secrets in FlowForge and reference them in webhook tool configurations:
+
+```bash
+# Create a credential
+curl -X POST http://localhost:8000/api/v1/credentials \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "supabase_key",
+    "credential_type": "api_key",
+    "value": "eyJhbGciOiJIUzI1NiIs...",
+    "description": "Supabase project API key"
+  }'
+
+# List credentials (values are never returned, only masked prefixes)
+curl http://localhost:8000/api/v1/credentials
+```
+
+Credentials are encrypted at rest using Fernet (AES-128-CBC) and can be managed via the dashboard under **Settings > Credentials**.
+
+Placeholder syntax:
+- `{{credential:name}}` — resolves to the decrypted credential value
+- `{{env:VAR_NAME}}` — resolves to the environment variable value
 
 ### 3. Production (Separate Server + Workers)
 
@@ -554,7 +644,7 @@ ANTHROPIC_API_KEY=sk-ant-...
 
 # Authentication & Security
 FLOWFORGE_JWT_SECRET=your-jwt-secret-change-in-production
-FLOWFORGE_ENCRYPTION_KEY=your-encryption-key  # Required for 2FA and storing AI provider keys
+FLOWFORGE_ENCRYPTION_KEY=your-encryption-key  # Required for 2FA, AI provider keys, and credentials
 
 # SDK/Worker configuration
 FLOWFORGE_SERVER_URL=http://localhost:8000

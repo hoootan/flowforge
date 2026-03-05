@@ -3,6 +3,7 @@
 from flowforge_server.db.models.ai_provider import AIProvider
 from flowforge_server.db.models.api_key import ALL_SCOPES, DEFAULT_SCOPES, ApiKey, ApiKeyType
 from flowforge_server.db.models.audit_log import AuditAction, AuditLog
+from flowforge_server.db.models.credential import Credential
 from flowforge_server.db.models.base import Base, TimestampMixin
 from flowforge_server.db.models.event import Event
 from flowforge_server.db.models.function import Function
@@ -44,4 +45,5 @@ __all__ = [
     "ModelPricing",
     "AuditLog",
     "AuditAction",
+    "Credential",
 ]

@@ -13,6 +13,7 @@ from flowforge_server.api.routes import (
     approvals_router,
     audit_router,
     auth_router,
+    credentials_router,
     dlq_router,
     events_router,
     functions_router,
@@ -194,6 +195,7 @@ FlowForge provides durable execution for AI-powered workflows with:
     app.include_router(model_pricing_router, prefix="/api/v1")
     app.include_router(audit_router, prefix="/api/v1")
     app.include_router(dlq_router, prefix="/api/v1")
+    app.include_router(credentials_router, prefix="/api/v1")
 
     # Prometheus metrics (no prefix - exposed at /metrics)
     app.include_router(metrics_router)

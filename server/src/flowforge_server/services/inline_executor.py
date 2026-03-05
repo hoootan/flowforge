@@ -12,6 +12,8 @@ from typing import Any
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import httpx
+
 from flowforge_server.db.models import (
     ApprovalStatus,
     Function,
@@ -25,6 +27,11 @@ from flowforge_server.db.models import (
 from flowforge_server.logging import Loggers
 from flowforge_server.services.ai import AIService, ToolCall
 from flowforge_server.services.builtin_tools import execute_builtin_tool, get_builtin_tool_names
+from flowforge_server.services.credentials import (
+    CredentialResolutionError,
+    resolve_dict_placeholders,
+    resolve_placeholders,
+)
 from flowforge_server.services.sandbox import (
     DEFAULT_TIMEOUT_SECONDS,
     SandboxError,
@@ -441,6 +448,11 @@ class InlineExecutor:
                     },
                     "is_builtin": tool.is_builtin,
                     "code": tool.code,
+                    "tool_type": getattr(tool, "tool_type", "custom"),
+                    "webhook_url": getattr(tool, "webhook_url", None),
+                    "webhook_method": getattr(tool, "webhook_method", "POST"),
+                    "webhook_headers": getattr(tool, "webhook_headers", None),
+                    "tenant_id": tool.tenant_id,
                     "requires_approval": tool.requires_approval,
                     "approval_timeout": tool.approval_timeout,
                 })
@@ -459,13 +471,76 @@ class InlineExecutor:
     ) -> Any:
         """Execute a tool with the given arguments."""
         if tool_info["is_builtin"]:
-            # Use built-in executor
             return await execute_builtin_tool(tool_info["name"], arguments)
+        elif tool_info.get("webhook_url"):
+            return await self._execute_webhook_tool(session, tool_info, arguments)
         elif tool_info.get("code"):
-            # Execute custom code
             return await self._execute_custom_tool(tool_info["code"], arguments)
         else:
             return {"error": f"Tool '{tool_info['name']}' has no implementation"}
+
+    async def _execute_webhook_tool(
+        self,
+        session: AsyncSession,
+        tool_info: dict[str, Any],
+        arguments: dict[str, Any],
+    ) -> Any:
+        """
+        Execute a webhook-based tool by calling its configured URL.
+
+        Resolves {{credential:name}} and {{env:VAR}} placeholders in
+        the URL and headers before making the HTTP call.
+        """
+        tenant_id = tool_info.get("tenant_id")
+        if not tenant_id:
+            return {"error": "Webhook tool is missing tenant context"}
+
+        try:
+            # Resolve credential placeholders in URL
+            url = await resolve_placeholders(
+                tool_info["webhook_url"], tenant_id, session
+            )
+
+            # Resolve credential placeholders in headers
+            raw_headers = tool_info.get("webhook_headers") or {}
+            headers = await resolve_dict_placeholders(
+                raw_headers, tenant_id, session
+            )
+
+            method = (tool_info.get("webhook_method") or "POST").upper()
+
+            async with httpx.AsyncClient(follow_redirects=True) as client:
+                request_kwargs: dict[str, Any] = {
+                    "method": method,
+                    "url": url,
+                    "headers": headers,
+                    "timeout": 30.0,
+                }
+                if arguments and method in ("POST", "PUT", "PATCH"):
+                    request_kwargs["json"] = arguments
+                elif arguments and method == "GET":
+                    request_kwargs["params"] = {
+                        k: str(v) for k, v in arguments.items()
+                    }
+
+                response = await client.request(**request_kwargs)
+
+                try:
+                    body = response.json()
+                except Exception:
+                    body = response.text[:10000]
+
+                return {
+                    "status_code": response.status_code,
+                    "body": body,
+                }
+
+        except CredentialResolutionError as e:
+            return {"error": f"Credential resolution failed: {str(e)}"}
+        except httpx.TimeoutException:
+            return {"error": "Webhook request timed out"}
+        except httpx.RequestError as e:
+            return {"error": f"Webhook request failed: {str(e)}"}
 
     async def _execute_custom_tool(
         self,

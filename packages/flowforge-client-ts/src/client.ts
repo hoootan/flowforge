@@ -11,6 +11,7 @@ import { ApprovalsResource } from "./resources/approvals";
 import { HealthResource } from "./resources/health";
 import { UsersResource } from "./resources/users";
 import { ApiKeysResource } from "./resources/api-keys";
+import { CredentialsResource } from "./resources/credentials";
 
 /**
  * FlowForge client instance with typed resource accessors.
@@ -32,6 +33,8 @@ export interface FlowForgeClient {
   users: UsersResource;
   /** API Keys resource - manage API key authentication */
   apiKeys: ApiKeysResource;
+  /** Credentials resource - manage encrypted service credentials */
+  credentials: CredentialsResource;
 }
 
 /**
@@ -327,5 +330,6 @@ export function createClient(
     health: new HealthResource(request),
     users: new UsersResource(request),
     apiKeys: new ApiKeysResource(request),
+    credentials: new CredentialsResource(request),
   };
 }

@@ -27,7 +27,7 @@ export function registerApprovalTools(
           "status",
           args.status as "pending" | "approved" | "rejected"
         );
-      if (args.run_id) query.eq("run_id", args.run_id);
+      if (args.run_id) (query as any).eq("run_id", args.run_id);
       query.limit(args.limit);
       const { data, error } = await query.execute();
       if (error) {

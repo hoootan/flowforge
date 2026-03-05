@@ -12,6 +12,7 @@ from flowforge_server.db.models.base import Base, TimestampMixin
 if TYPE_CHECKING:
     from flowforge_server.db.models.ai_provider import AIProvider
     from flowforge_server.db.models.api_key import ApiKey
+    from flowforge_server.db.models.credential import Credential
     from flowforge_server.db.models.event import Event
     from flowforge_server.db.models.function import Function
     from flowforge_server.db.models.model_pricing import ModelPricing
@@ -95,6 +96,12 @@ class Tenant(Base, TimestampMixin):
 
     model_pricing_configs: Mapped[list["ModelPricing"]] = relationship(
         "ModelPricing",
+        back_populates="tenant",
+        lazy="selectin",
+    )
+
+    credentials: Mapped[list["Credential"]] = relationship(
+        "Credential",
         back_populates="tenant",
         lazy="selectin",
     )

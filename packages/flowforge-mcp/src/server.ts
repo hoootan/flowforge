@@ -6,6 +6,7 @@ import { registerRunTools } from "./tools/runs.js";
 import { registerToolTools } from "./tools/tools.js";
 import { registerApprovalTools } from "./tools/approvals.js";
 import { registerHealthTools } from "./tools/health.js";
+import { registerCredentialTools } from "./tools/credentials.js";
 
 export interface McpContext {
   client: FlowForgeClient;
@@ -66,6 +67,7 @@ export function createMcpServer(
   registerToolTools(server, ctx);
   registerApprovalTools(server, ctx);
   registerHealthTools(server, ctx);
+  registerCredentialTools(server, ctx);
 
   return server;
 }

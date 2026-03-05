@@ -116,12 +116,18 @@ export interface FlowForgeFunction {
   updated_at: string;
 }
 
+export type ToolType = "custom" | "webhook" | "builtin";
+
 export interface Tool {
   id: string;
   name: string;
   description: string;
   parameters: Record<string, unknown>;
+  tool_type: ToolType;
   code: string | null;
+  webhook_url: string | null;
+  webhook_method: string;
+  webhook_headers: Record<string, string> | null;
   is_builtin: boolean;
   requires_approval: boolean;
   approval_timeout: string | null;
@@ -234,7 +240,11 @@ export interface CreateToolInput {
   name: string;
   description: string;
   parameters: Record<string, unknown>;
+  tool_type?: ToolType;
   code?: string;
+  webhook_url?: string;
+  webhook_method?: string;
+  webhook_headers?: Record<string, string>;
   requires_approval?: boolean;
   approval_timeout?: string;
   is_active?: boolean;
@@ -243,10 +253,44 @@ export interface CreateToolInput {
 export interface UpdateToolInput {
   description?: string;
   parameters?: Record<string, unknown>;
+  tool_type?: ToolType;
   code?: string;
+  webhook_url?: string;
+  webhook_method?: string;
+  webhook_headers?: Record<string, string>;
   requires_approval?: boolean;
   approval_timeout?: string;
   is_active?: boolean;
+}
+
+export interface CreateCredentialInput {
+  name: string;
+  credential_type?: string;
+  value: string;
+  description?: string;
+}
+
+export interface UpdateCredentialInput {
+  value?: string;
+  description?: string;
+  credential_type?: string;
+  is_active?: boolean;
+}
+
+export interface Credential {
+  id: string;
+  name: string;
+  credential_type: string;
+  value_prefix: string;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CredentialsResponse {
+  credentials: Credential[];
+  total: number;
 }
 
 export interface SendEventInput {

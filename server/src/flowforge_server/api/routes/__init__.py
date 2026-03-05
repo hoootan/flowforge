@@ -4,6 +4,7 @@ from flowforge_server.api.routes.ai_providers import router as ai_providers_rout
 from flowforge_server.api.routes.approvals import router as approvals_router
 from flowforge_server.api.routes.audit import router as audit_router
 from flowforge_server.api.routes.auth import router as auth_router
+from flowforge_server.api.routes.credentials import router as credentials_router
 from flowforge_server.api.routes.dlq import router as dlq_router
 from flowforge_server.api.routes.events import router as events_router
 from flowforge_server.api.routes.functions import router as functions_router
@@ -32,4 +33,5 @@ __all__ = [
     "model_pricing_router",
     "audit_router",
     "dlq_router",
+    "credentials_router",
 ]
