@@ -188,6 +188,8 @@ class InlineExecutor:
                     temperature=0.7,
                     tools=[t["schema"] for t in tools] if tools else None,
                     tool_choice="auto" if tools else None,
+                    tenant_id=run.tenant_id,
+                    session=session,
                 ):
                     if chunk["type"] == "content":
                         chunk_count += 1

@@ -560,6 +560,8 @@ class AIService:
         temperature: float = 0.7,
         tools: list[Any] | None = None,
         tool_choice: str | dict[str, Any] = "auto",
+        tenant_id: uuid.UUID | None = None,
+        session: AsyncSession | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[dict[str, Any]]:
         """
@@ -621,6 +623,21 @@ class AIService:
             "stream": True,
             **kwargs,
         }
+
+        # Set up tenant-specific credential if provided
+        credential_override: str | None = None
+        if tenant_id and session and self._provider_registry:
+            try:
+                result = await self._provider_registry.get_api_key_for_tenant(
+                    session, tenant_id, provider
+                )
+                if result:
+                    credential_override, _ = result
+            except Exception:
+                pass
+
+        if credential_override:
+            completion_params["api_key"] = credential_override
 
         if tool_schemas:
             completion_params["tools"] = tool_schemas
