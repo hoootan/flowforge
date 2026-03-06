@@ -106,7 +106,11 @@ class InlineExecutor:
         messages = []
         if fn.system_prompt:
             messages.append({"role": "system", "content": fn.system_prompt})
-        messages.append({"role": "user", "content": task})
+
+        # Pass full event data as user message so the agent has all context
+        # (brand_context, content_items, fields, etc.)
+        user_message = json.dumps(event_data, indent=2, default=str)
+        messages.append({"role": "user", "content": user_message})
 
         # Run agent loop
         iteration = 0
