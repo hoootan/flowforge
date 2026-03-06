@@ -302,7 +302,7 @@ async def delete_function(
     tenant: TenantWithDevFallback,
     session: AsyncSession = Depends(get_session),
 ) -> None:
-    """Delete a function (soft delete by setting inactive)."""
+    """Delete a function."""
     result = await session.execute(
         select(Function).where(
             Function.tenant_id == tenant.id,
@@ -314,7 +314,7 @@ async def delete_function(
     if not fn:
         raise HTTPException(status_code=404, detail="Function not found")
 
-    fn.is_active = False
+    await session.delete(fn)
     await session.commit()
 
 
