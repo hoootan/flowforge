@@ -424,27 +424,6 @@ class InlineExecutor:
 
             await session.commit()
 
-        # Create summary agent step with full messages and tool calls
-        agent_summary = Step(
-            run_id=run.id,
-            step_id="agent-summary",
-            step_hash=f"agent:{run.id}:summary",
-            step_type=StepType.AGENT,
-            status=StepStatus.COMPLETED,
-            started_at=run.started_at,
-            ended_at=datetime.utcnow(),
-            output={
-                "result": final_output,
-                "iterations": iteration,
-                "tool_calls_count": tool_calls_count,
-                "tokens_used": tokens_used,
-                "messages": messages,
-                "tool_calls": all_tool_calls,
-            },
-        )
-        session.add(agent_summary)
-        await session.commit()
-
         # Publish completion event
         await publish_run_event(
             str(run.id),
