@@ -24,6 +24,7 @@ class StepType(str, Enum):
     WAIT_FOR_EVENT = "wait_for_event"
     INVOKE = "invoke"
     SEND_EVENT = "send_event"
+    AGENT = "agent"
 
 
 class StepStatus(str, Enum):
