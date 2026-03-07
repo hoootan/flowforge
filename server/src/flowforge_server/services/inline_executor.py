@@ -93,7 +93,7 @@ class InlineExecutor:
         max_tool_calls = agent_config.get("max_tool_calls", 50)
 
         # Load tools
-        tools = await self._load_tools(session, fn.tools_config or [])
+        tools = await self._load_tools(session, fn.tools_config or [], tenant_id=run.tenant_id)
 
         # Get the task from event data
         task = event_data.get("prompt", "")
@@ -441,6 +441,7 @@ class InlineExecutor:
         self,
         session: AsyncSession,
         tool_names: list[str],
+        tenant_id: Any = None,
     ) -> list[dict[str, Any]]:
         """Load tool definitions from database."""
         tools = []
@@ -452,7 +453,7 @@ class InlineExecutor:
                 select(Tool).where(
                     or_(
                         Tool.is_builtin == True,
-                        # TODO: Add tenant_id filter when multi-tenancy is implemented
+                        Tool.tenant_id == tenant_id,
                     ),
                     Tool.name == name,
                     Tool.is_active == True,
