@@ -64,6 +64,8 @@ export {
   type ToolType,
   type ToolFilters,
   type ApprovalFilters,
+  type SubAgentConfig,
+  type AgentConfig,
   type CreateFunctionInput,
   type UpdateFunctionInput,
   type CreateToolInput,

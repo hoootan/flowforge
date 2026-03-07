@@ -45,7 +45,8 @@ export type StepType =
   | "wait_for_event"
   | "invoke"
   | "send_event"
-  | "agent";
+  | "agent"
+  | "sub_agent";
 
 export type StepStatus =
   | "pending"
@@ -67,6 +68,7 @@ export interface Run {
   id: string;
   function_id: string;
   event_id: string | null;
+  parent_run_id: string | null;
   status: RunStatus;
   trigger_type: string;
   trigger_data: Record<string, unknown>;
@@ -209,6 +211,22 @@ export interface ApprovalFilters {
 // Input Types (for create/update operations)
 // ============================================================================
 
+export interface SubAgentConfig {
+  system_prompt: string;
+  model?: string;
+  tools?: string[];
+  max_iterations?: number;
+  max_tool_calls?: number;
+  description?: string;
+}
+
+export interface AgentConfig {
+  model?: string;
+  max_iterations?: number;
+  max_tool_calls?: number;
+  sub_agents?: Record<string, SubAgentConfig>;
+}
+
 export interface CreateFunctionInput {
   id: string;
   name: string;
@@ -219,7 +237,7 @@ export interface CreateFunctionInput {
   is_inline?: boolean;
   system_prompt?: string;
   tools_config?: string[];
-  agent_config?: Record<string, unknown>;
+  agent_config?: AgentConfig | Record<string, unknown>;
   config?: Record<string, unknown>;
   is_active?: boolean;
 }
@@ -386,6 +404,8 @@ export type RunEventType =
   | "tool_call_completed"
   | "approval_required"
   | "approval_resolved"
+  | "sub_agent_started"
+  | "sub_agent_completed"
   | "run_started"
   | "run_paused"
   | "run_resumed"

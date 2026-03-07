@@ -43,6 +43,9 @@ from flowforge_server.stream.pubsub import RunEventType, publish_run_event
 
 log = Loggers.inline_executor()
 
+# Maximum sub-agent nesting depth (server-side)
+MAX_SUB_AGENT_DEPTH = 3
+
 
 class InlineExecutor:
     """
@@ -51,7 +54,7 @@ class InlineExecutor:
     For inline functions (is_inline=True), this executor:
     1. Loads the function's tools from the database
     2. Runs an agent loop with the AI service
-    3. Handles tool calls (including approval flows)
+    3. Handles tool calls (including approval flows and sub-agents)
     4. Returns the final result
     """
 
@@ -90,9 +93,14 @@ class InlineExecutor:
         model = agent_config.get("model", "claude-sonnet-4-6")
         max_iterations = agent_config.get("max_iterations", 30)
         max_tool_calls = agent_config.get("max_tool_calls", 50)
+        sub_agents_config = agent_config.get("sub_agents", {})
 
         # Load tools
         tools = await self._load_tools(session, fn.tools_config or [], tenant_id=run.tenant_id)
+
+        # Synthesize sub-agent tools from config
+        sub_agent_tools = self._synthesize_sub_agent_tools(sub_agents_config)
+        tools.extend(sub_agent_tools)
 
         # Get the task from event data
         task = event_data.get("prompt", "")
@@ -103,7 +111,7 @@ class InlineExecutor:
             }
 
         # Build initial messages
-        messages = []
+        messages: list[dict[str, Any]] = []
         if fn.system_prompt:
             messages.append({"role": "system", "content": fn.system_prompt})
 
@@ -113,11 +121,64 @@ class InlineExecutor:
         messages.append({"role": "user", "content": user_message})
 
         # Run agent loop
+        result = await self._run_agent_loop(
+            session=session,
+            run=run,
+            model=model,
+            tools=tools,
+            messages=messages,
+            max_iterations=max_iterations,
+            max_tool_calls=max_tool_calls,
+            sub_agents_config=sub_agents_config,
+            step_prefix="agent",
+            depth=0,
+        )
+
+        return result
+
+    async def _run_agent_loop(
+        self,
+        session: AsyncSession,
+        run: Run,
+        model: str,
+        tools: list[dict[str, Any]],
+        messages: list[dict[str, Any]],
+        max_iterations: int,
+        max_tool_calls: int,
+        sub_agents_config: dict[str, Any],
+        step_prefix: str = "agent",
+        depth: int = 0,
+    ) -> dict[str, Any]:
+        """
+        Core agent loop shared by top-level execution and sub-agent calls.
+
+        Args:
+            session: Database session
+            run: The run record
+            model: LLM model to use
+            tools: List of tool info dicts (including sub-agent tools)
+            messages: Initial message history
+            max_iterations: Max LLM iterations
+            max_tool_calls: Max tool calls
+            sub_agents_config: Sub-agent configuration dict
+            step_prefix: Prefix for step hashes (e.g. "agent" or "sub-researcher")
+            depth: Current sub-agent nesting depth
+
+        Returns:
+            Result dictionary with status and output
+        """
         iteration = 0
         tool_calls_count = 0
         tokens_used = {"prompt": 0, "completion": 0, "total": 0}
         all_tool_calls: list[dict[str, Any]] = []
         final_output = None
+
+        task_preview = ""
+        for msg in messages:
+            if msg.get("role") == "user":
+                content = msg.get("content", "")
+                task_preview = content[:200] if isinstance(content, str) else str(content)[:200]
+                break
 
         await publish_run_event(
             str(run.id),
@@ -126,7 +187,9 @@ class InlineExecutor:
                 "run_id": str(run.id),
                 "model": model,
                 "status": "agent_started",
-                "task": task[:200],  # First 200 chars
+                "task": task_preview,
+                "depth": depth,
+                "step_prefix": step_prefix,
             },
         )
 
@@ -134,7 +197,7 @@ class InlineExecutor:
             iteration += 1
 
             # Check for existing step (for retries)
-            step_hash = f"agent:{run.id}:{iteration}"
+            step_hash = f"{step_prefix}:{run.id}:{iteration}"
             existing_step = await session.execute(
                 select(Step).where(
                     Step.run_id == run.id,
@@ -151,11 +214,12 @@ class InlineExecutor:
                 step.error = None
             else:
                 # Create new step for this iteration
+                step_type = StepType.SUB_AGENT if depth > 0 else StepType.AI
                 step = Step(
                     run_id=run.id,
-                    step_id=f"agent-iteration-{iteration}",
+                    step_id=f"{step_prefix}-iteration-{iteration}",
                     step_hash=step_hash,
-                    step_type=StepType.AI,
+                    step_type=step_type,
                     status=StepStatus.RUNNING,
                     started_at=datetime.utcnow(),
                 )
@@ -170,8 +234,9 @@ class InlineExecutor:
                 {
                     "run_id": str(run.id),
                     "step_id": step.step_id,
-                    "step_type": "ai",
+                    "step_type": "sub_agent" if depth > 0 else "ai",
                     "iteration": iteration,
+                    "depth": depth,
                 },
             )
 
@@ -185,6 +250,7 @@ class InlineExecutor:
                     "model": model,
                     "iteration": iteration,
                     "status": "calling_llm",
+                    "depth": depth,
                 },
             )
 
@@ -290,10 +356,11 @@ class InlineExecutor:
                     total_tokens=response.usage.total_tokens,
                     cost_usd=response.usage.cost_usd,
                     latency_ms=response.usage.latency_ms,
-                    request_type="inline_agent",
+                    request_type="inline_agent" if depth == 0 else "sub_agent",
                     extra_data={
                         "step_id": step.step_id,
                         "iteration": iteration,
+                        "depth": depth,
                     },
                 )
                 session.add(usage_record)
@@ -375,6 +442,105 @@ class InlineExecutor:
                         if approval_result.get("modified_arguments"):
                             tool_arguments.update(approval_result["modified_arguments"])
 
+                    # --- Sub-agent interception (server-side) ---
+                    if tool_info.get("is_sub_agent") and tool_call.name in sub_agents_config:
+                        if depth >= MAX_SUB_AGENT_DEPTH:
+                            messages.append({
+                                "role": "tool",
+                                "tool_call_id": tool_call.id,
+                                "content": f"Error: Sub-agent depth limit reached ({MAX_SUB_AGENT_DEPTH}). Cannot spawn further sub-agents.",
+                            })
+                            all_tool_calls.append({
+                                "id": tool_call.id,
+                                "tool_name": tool_call.name,
+                                "arguments": tool_arguments,
+                                "result": "depth_limit_reached",
+                                "iteration": iteration,
+                                "is_sub_agent": True,
+                            })
+                            continue
+
+                        sub_config = sub_agents_config[tool_call.name]
+                        sub_task = tool_arguments.get("task", "")
+
+                        # Publish sub-agent started event
+                        await publish_run_event(
+                            str(run.id),
+                            RunEventType.SUB_AGENT_STARTED,
+                            {
+                                "run_id": str(run.id),
+                                "sub_agent_name": tool_call.name,
+                                "task": sub_task[:200],
+                                "depth": depth + 1,
+                                "parent_step_id": step.step_id,
+                            },
+                        )
+
+                        # Build sub-agent messages
+                        sub_messages: list[dict[str, Any]] = []
+                        sub_system = sub_config.get("system_prompt", "")
+                        if sub_system:
+                            sub_messages.append({"role": "system", "content": sub_system})
+                        sub_messages.append({"role": "user", "content": sub_task})
+
+                        # Load sub-agent tools
+                        sub_tool_names = sub_config.get("tools", [])
+                        sub_tools = await self._load_tools(session, sub_tool_names, tenant_id=run.tenant_id)
+
+                        # Recursively run agent loop
+                        sub_result = await self._run_agent_loop(
+                            session=session,
+                            run=run,
+                            model=sub_config.get("model", model),
+                            tools=sub_tools,
+                            messages=sub_messages,
+                            max_iterations=sub_config.get("max_iterations", 15),
+                            max_tool_calls=sub_config.get("max_tool_calls", 30),
+                            sub_agents_config={},  # Sub-agents don't get nested sub-agents by default
+                            step_prefix=f"sub-{tool_call.name}",
+                            depth=depth + 1,
+                        )
+
+                        # Extract output
+                        sub_output = ""
+                        if sub_result.get("status") == "function_complete":
+                            sub_output = sub_result.get("output", {}).get("result", "") or ""
+                        elif sub_result.get("status") == "error":
+                            sub_output = f"Sub-agent error: {sub_result.get('error', {}).get('message', 'unknown')}"
+
+                        # Publish sub-agent completed event
+                        await publish_run_event(
+                            str(run.id),
+                            RunEventType.SUB_AGENT_COMPLETED,
+                            {
+                                "run_id": str(run.id),
+                                "sub_agent_name": tool_call.name,
+                                "output": sub_output[:500],
+                                "depth": depth + 1,
+                                "parent_step_id": step.step_id,
+                            },
+                        )
+
+                        result_str = sub_output
+
+                        all_tool_calls.append({
+                            "id": tool_call.id,
+                            "tool_name": tool_call.name,
+                            "arguments": tool_arguments,
+                            "result": result_str,
+                            "iteration": iteration,
+                            "is_sub_agent": True,
+                            "sub_agent_result": sub_result.get("output"),
+                        })
+
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "content": result_str,
+                        })
+                        continue
+                    # --- End sub-agent interception ---
+
                     # Publish tool call started event
                     await publish_run_event(
                         str(run.id),
@@ -441,10 +607,11 @@ class InlineExecutor:
             RunEventType.STEP_COMPLETED,
             {
                 "run_id": str(run.id),
-                "step_type": "agent",
+                "step_type": "sub_agent" if depth > 0 else "agent",
                 "iterations": iteration,
                 "tool_calls": tool_calls_count,
                 "output": (final_output or "")[:500],
+                "depth": depth,
             },
         )
 
@@ -459,6 +626,51 @@ class InlineExecutor:
                 "tool_calls": all_tool_calls,
             },
         }
+
+    def _synthesize_sub_agent_tools(
+        self,
+        sub_agents_config: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        """Synthesize tool definitions for sub-agents from agent_config.
+
+        Sub-agents defined in agent_config.sub_agents are exposed as
+        tools with a single ``task`` string parameter.
+        """
+        tools = []
+        for name, config in sub_agents_config.items():
+            description = config.get("description", f"Delegate a task to the '{name}' sub-agent.")
+            tools.append({
+                "name": name,
+                "description": description,
+                "schema": {
+                    "type": "function",
+                    "function": {
+                        "name": name,
+                        "description": description,
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "task": {
+                                    "type": "string",
+                                    "description": "The task to delegate to the sub-agent.",
+                                },
+                            },
+                            "required": ["task"],
+                        },
+                    },
+                },
+                "is_builtin": False,
+                "code": None,
+                "tool_type": "sub_agent",
+                "webhook_url": None,
+                "webhook_method": "POST",
+                "webhook_headers": None,
+                "tenant_id": None,
+                "requires_approval": False,
+                "approval_timeout": None,
+                "is_sub_agent": True,
+            })
+        return tools
 
     async def _load_tools(
         self,

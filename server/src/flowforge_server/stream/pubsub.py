@@ -49,6 +49,10 @@ class RunEventType(str, Enum):
     APPROVAL_REQUIRED = "approval_required"
     APPROVAL_RESOLVED = "approval_resolved"
 
+    # Sub-agent events
+    SUB_AGENT_STARTED = "sub_agent_started"
+    SUB_AGENT_COMPLETED = "sub_agent_completed"
+
     # Run lifecycle events
     RUN_STARTED = "run_started"
     RUN_PAUSED = "run_paused"

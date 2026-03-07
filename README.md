@@ -406,6 +406,97 @@ export FLOWFORGE_WORKER_URL=http://my-worker:8080/api/flowforge
 | `step.invoke(id, function_id=, data=)` | Call another FlowForge function |
 | `step.send_event(id, name=, data=)` | Emit an event |
 
+## Sub-Agents
+
+Sub-agents enable dynamic delegation where a parent agent spawns specialist sub-agents at runtime. Each sub-agent has its own system prompt, tools, and iteration limits.
+
+### SDK Usage
+
+```python
+from flowforge import agent_def, sub_agent, step, tool, trigger
+
+# Define tools for specialists
+@tool(name="web_search", description="Search the web")
+async def web_search(query: str) -> dict:
+    return {"results": [...]}
+
+# Define specialist agents
+researcher = agent_def(
+    name="researcher",
+    system="You are a research specialist. Search and synthesize findings.",
+    tools=[web_search],
+    model="claude-sonnet-4-6",
+)
+
+# Wrap as sub-agent tool
+research_tool = sub_agent(
+    researcher,
+    description="Delegate research tasks to a specialist.",
+    max_iterations=10,
+    max_tool_calls=20,
+)
+
+# Use in a parent agent
+@flowforge.function(id="manager", trigger=trigger.event("project/plan"))
+async def manager(ctx):
+    result = await step.agent(
+        "manager",
+        task=ctx.event.data["goal"],
+        model="claude-opus-4-6",
+        system="Break work into tasks and delegate to specialists.",
+        tools=[research_tool, send_email],
+    )
+    return result.output
+```
+
+### `sub_agent()` Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `agent` | required | `AgentDefinition` from `agent_def()` |
+| `description` | auto | Tool description for the parent agent |
+| `max_iterations` | 20 | Max LLM round-trips for the sub-agent |
+| `max_tool_calls` | 50 | Max tool calls for the sub-agent |
+| `temperature` | 0.7 | LLM temperature |
+| `context_mode` | `"task_only"` | How much parent context to share: `task_only`, `summary`, `full_history` |
+
+### Server-Side (Inline Functions)
+
+Configure sub-agents in `agent_config` when creating inline functions:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/functions/inline \
+  -H "Content-Type: application/json" \
+  -d '{
+    "function_id": "project-manager",
+    "name": "Project Manager",
+    "trigger_type": "event",
+    "trigger_value": "project/plan",
+    "system_prompt": "Break work into research and writing tasks...",
+    "tools": ["send_email"],
+    "agent_config": {
+      "model": "claude-opus-4-6",
+      "sub_agents": {
+        "researcher": {
+          "system_prompt": "You are a research specialist...",
+          "model": "claude-sonnet-4-6",
+          "tools": ["web_search"],
+          "max_iterations": 15,
+          "description": "Delegate research to a specialist."
+        }
+      }
+    }
+  }'
+```
+
+### Safety Guards
+
+- **Max nesting depth**: 3 levels (configurable). Prevents infinite sub-agent recursion.
+- **Independent limits**: Each sub-agent has its own `max_iterations` and `max_tool_calls`.
+- **Step memoization**: Sub-agent steps are checkpointed — if the parent crashes mid-sub-agent, it resumes from the last completed step.
+
+See [`examples/sub_agents.py`](./examples/sub_agents.py) for a complete example.
+
 ## TypeScript/Node.js Client
 
 Trigger workflows from your Next.js or Node.js app:

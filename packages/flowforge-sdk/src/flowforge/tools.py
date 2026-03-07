@@ -1,10 +1,15 @@
 """Tool definition API for FlowForge agents."""
 
+from __future__ import annotations
+
 import inspect
 import types as _builtintypes
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Literal, Union, get_args, get_origin, get_type_hints
+from typing import TYPE_CHECKING, Any, Literal, Union, get_args, get_origin, get_type_hints
+
+if TYPE_CHECKING:
+    from flowforge.agent_def import AgentDefinition
 
 
 @dataclass
@@ -270,3 +275,110 @@ def tool(
         )
 
     return decorator
+
+
+@dataclass
+class SubAgentConfig:
+    """Configuration for a sub-agent tool.
+
+    This is attached to a Tool via ``_sub_agent_config`` so that
+    ``step.agent()`` can detect the tool as a sub-agent delegation
+    and run a nested agent loop instead of calling ``tool.fn``.
+
+    Attributes:
+        agent: The agent definition to run as a sub-agent.
+        max_iterations: Max iterations for the sub-agent loop.
+        max_tool_calls: Max tool calls for the sub-agent loop.
+        temperature: Sampling temperature for the sub-agent LLM.
+        context_mode: How much parent context to share with the sub-agent.
+    """
+
+    agent: AgentDefinition
+    max_iterations: int = 20
+    max_tool_calls: int = 50
+    temperature: float = 0.7
+    context_mode: Literal["task_only", "summary", "full_history"] = "task_only"
+
+
+def sub_agent(
+    agent: AgentDefinition,
+    *,
+    description: str | None = None,
+    max_iterations: int = 20,
+    max_tool_calls: int = 50,
+    temperature: float = 0.7,
+    context_mode: Literal["task_only", "summary", "full_history"] = "task_only",
+) -> Tool:
+    """Create a Tool that delegates work to a sub-agent.
+
+    When the parent agent's LLM calls this tool, ``step.agent()``
+    intercepts the call and runs a nested agent loop with the
+    given agent definition, returning the sub-agent's output as
+    the tool result.
+
+    Args:
+        agent: Agent definition describing the sub-agent.
+        description: Tool description shown to the LLM. If omitted,
+            auto-generated from the agent name and system prompt.
+        max_iterations: Maximum reasoning iterations for the sub-agent.
+        max_tool_calls: Maximum tool calls for the sub-agent.
+        temperature: Sampling temperature for the sub-agent.
+        context_mode: How much parent context to pass:
+            - "task_only" (default): Only the delegated task string.
+            - "summary": Task + last 3 parent exchanges as context.
+            - "full_history": Task + full parent conversation.
+
+    Returns:
+        A Tool with a single ``task: str`` parameter and a
+        ``_sub_agent_config`` attribute for detection.
+
+    Example:
+        researcher = agent_def(
+            name="researcher",
+            system="You research topics thoroughly.",
+            tools=[web_search],
+        )
+
+        research_tool = sub_agent(researcher, description="Delegate research tasks.")
+
+        result = await step.agent(
+            "manager",
+            task="Plan a project",
+            model="claude-opus-4-6",
+            tools=[research_tool],
+        )
+    """
+    desc = description or f"Delegate a task to the '{agent.name}' sub-agent. {agent.system[:100]}"
+
+    async def _placeholder(task: str) -> str:  # noqa: ARG001
+        raise RuntimeError(
+            "Sub-agent tool should not be called directly. "
+            "It is intercepted by step.agent()."
+        )
+
+    t = Tool(
+        name=agent.name,
+        description=desc,
+        fn=_placeholder,
+        parameters={
+            "type": "object",
+            "properties": {
+                "task": {
+                    "type": "string",
+                    "description": "The task to delegate to the sub-agent.",
+                },
+            },
+            "required": ["task"],
+        },
+    )
+
+    # Attach sub-agent config as a marker for step.agent() detection
+    t._sub_agent_config = SubAgentConfig(  # type: ignore[attr-defined]
+        agent=agent,
+        max_iterations=max_iterations,
+        max_tool_calls=max_tool_calls,
+        temperature=temperature,
+        context_mode=context_mode,
+    )
+
+    return t

@@ -157,6 +157,19 @@ export function registerFunctionTools(
             .optional()
             .default(50)
             .describe("Maximum tool calls per run (1-200)"),
+          sub_agents: z
+            .record(
+              z.object({
+                system_prompt: z.string().describe("System prompt for the sub-agent"),
+                model: z.string().optional().describe("AI model for the sub-agent"),
+                tools: z.array(z.string()).optional().describe("Tool names the sub-agent can use"),
+                max_iterations: z.number().optional().describe("Max iterations for the sub-agent"),
+                max_tool_calls: z.number().optional().describe("Max tool calls for the sub-agent"),
+                description: z.string().optional().describe("Description shown to the parent agent"),
+              })
+            )
+            .optional()
+            .describe("Sub-agent definitions keyed by name. Each sub-agent becomes a tool the parent agent can call to delegate tasks."),
         })
         .optional()
         .describe("Agent configuration (model, iteration limits)"),
@@ -214,6 +227,19 @@ export function registerFunctionTools(
           model: z.string().optional().describe("AI model to use"),
           max_iterations: z.number().optional().describe("Maximum agent loop iterations"),
           max_tool_calls: z.number().optional().describe("Maximum tool calls per run"),
+          sub_agents: z
+            .record(
+              z.object({
+                system_prompt: z.string().describe("System prompt for the sub-agent"),
+                model: z.string().optional().describe("AI model for the sub-agent"),
+                tools: z.array(z.string()).optional().describe("Tool names the sub-agent can use"),
+                max_iterations: z.number().optional().describe("Max iterations for the sub-agent"),
+                max_tool_calls: z.number().optional().describe("Max tool calls for the sub-agent"),
+                description: z.string().optional().describe("Description shown to the parent agent"),
+              })
+            )
+            .optional()
+            .describe("Sub-agent definitions keyed by name"),
         })
         .optional()
         .describe("Updated agent config (inline functions only)"),

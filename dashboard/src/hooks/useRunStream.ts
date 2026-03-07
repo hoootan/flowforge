@@ -12,6 +12,8 @@ export type RunEventType =
   | "tool_call_completed"
   | "approval_required"
   | "approval_resolved"
+  | "sub_agent_started"
+  | "sub_agent_completed"
   | "run_started"
   | "run_paused"
   | "run_resumed"
@@ -164,6 +166,8 @@ export function useRunStream({
       "tool_call_completed",
       "approval_required",
       "approval_resolved",
+      "sub_agent_started",
+      "sub_agent_completed",
       "run_started",
       "run_paused",
       "run_resumed",

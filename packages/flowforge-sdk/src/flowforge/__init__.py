@@ -27,7 +27,7 @@ from flowforge.exceptions import (
 from flowforge.network import Network, NetworkResult, NetworkState, RouterContext, network
 from flowforge.steps import step
 from flowforge.streaming import RunEvent, RunEventType
-from flowforge.tools import Tool, tool
+from flowforge.tools import SubAgentConfig, Tool, sub_agent, tool
 from flowforge.triggers import Trigger, trigger
 
 __version__ = "0.1.0"
@@ -45,6 +45,8 @@ __all__ = [
     # Tools
     "Tool",
     "tool",
+    "sub_agent",
+    "SubAgentConfig",
     # Agent
     "AgentConfig",
     "AgentState",

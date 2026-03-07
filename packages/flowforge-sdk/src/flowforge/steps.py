@@ -11,7 +11,7 @@ from flowforge.agent_def import AgentDefinition
 from flowforge.exceptions import StepCompleted, StepFailed
 from flowforge.network import Network, NetworkResult, NetworkState, RouterContext
 from flowforge.router import LLMRouter
-from flowforge.tools import Tool
+from flowforge.tools import SubAgentConfig, Tool
 
 T = TypeVar("T")
 
@@ -458,6 +458,8 @@ class StepManager:
         checkpoint_strategy: str = "per_tool",
         max_tool_calls: int = 50,
         temperature: float = 0.7,
+        _depth: int = 0,
+        _max_depth: int = 3,
         **kwargs: Any,
     ) -> AgentResult:
         """
@@ -466,6 +468,9 @@ class StepManager:
         The agent will iteratively call the LLM, execute tools, and continue
         until the task is complete or limits are reached. Each tool execution
         is checkpointed for durability.
+
+        Sub-agent tools (created via ``sub_agent()``) are automatically
+        detected and executed as nested agent loops.
 
         Args:
             step_id: Unique identifier for this agent execution.
@@ -480,6 +485,8 @@ class StepManager:
                 - "final_only": Only checkpoint final result
             max_tool_calls: Maximum total tool calls across iterations (default 50).
             temperature: Sampling temperature for LLM (default 0.7).
+            _depth: Current nesting depth (internal, used by sub-agent recursion).
+            _max_depth: Maximum allowed nesting depth (default 3).
             **kwargs: Additional LLM parameters.
 
         Returns:
@@ -666,6 +673,88 @@ class StepManager:
 
                 # Execute tool via step.run for checkpointing
                 tool_step_id = f"{step_id}/iter-{state.iteration}/tool-{tool_call_id}"
+
+                # --- Sub-agent interception ---
+                # If the tool is a sub-agent wrapper, run a nested agent
+                # loop instead of calling tool.fn directly.
+                cfg: SubAgentConfig | None = getattr(tool, "_sub_agent_config", None)
+                if cfg is not None:
+                    # Depth guard: prevent infinite sub-agent recursion
+                    if _depth >= _max_depth:
+                        error_message = json.dumps({
+                            "error": f"Sub-agent depth limit reached ({_max_depth}). "
+                            "Cannot spawn further sub-agents.",
+                        })
+                        state.messages.append({
+                            "role": "tool",
+                            "tool_call_id": tool_call_id,
+                            "name": tool_name,
+                            "content": error_message,
+                        })
+                        tool_call_record["status"] = "failed"
+                        tool_call_record["error"] = "depth_limit_reached"
+                        state.tool_calls_count += 1
+                        continue
+
+                    sub_step_id = f"{step_id}/sub-{cfg.agent.name}-{tool_call_id}"
+
+                    # Build sub-agent system prompt with optional parent context
+                    sub_system = cfg.agent.system
+                    if cfg.context_mode == "summary":
+                        recent = state.messages[-6:]  # last 3 exchanges
+                        context_lines = [
+                            f"[{m['role']}]: {str(m.get('content', ''))[:200]}"
+                            for m in recent
+                        ]
+                        sub_system += "\n\nParent context:\n" + "\n".join(context_lines)
+                    elif cfg.context_mode == "full_history":
+                        sub_system += "\n\nFull parent conversation:\n" + json.dumps(state.messages)
+
+                    try:
+                        sub_result = await self.agent(
+                            sub_step_id,
+                            task=tool_args.get("task", ""),
+                            model=cfg.agent.model or model,
+                            system=sub_system,
+                            tools=cfg.agent.tools,
+                            max_iterations=cfg.max_iterations,
+                            max_tool_calls=cfg.max_tool_calls,
+                            temperature=cfg.temperature,
+                            _depth=_depth + 1,
+                            _max_depth=_max_depth,
+                            **kwargs,
+                        )
+                        sub_output = sub_result.output
+
+                        state.messages.append({
+                            "role": "tool",
+                            "tool_call_id": tool_call_id,
+                            "name": tool_name,
+                            "content": sub_output,
+                        })
+                        tool_call_record["status"] = "success"
+                        tool_call_record["result"] = sub_output
+                        tool_call_record["sub_agent"] = sub_result.to_dict()
+                    except StepCompleted:
+                        # Sub-agent completed its first execution — propagate
+                        # so the server can memoize the step. On replay the
+                        # nested agent() call returns normally.
+                        raise
+                    except (StepFailed, Exception) as e:
+                        err_msg = str(e)
+                        error_message = json.dumps({"error": err_msg})
+                        state.messages.append({
+                            "role": "tool",
+                            "tool_call_id": tool_call_id,
+                            "name": tool_name,
+                            "content": error_message,
+                        })
+                        tool_call_record["status"] = "failed"
+                        tool_call_record["error"] = err_msg
+
+                    state.tool_calls_count += 1
+                    continue
+                # --- End sub-agent interception ---
 
                 try:
                     tool_result = await self.run(
@@ -1129,6 +1218,8 @@ class _StepProxy:
         checkpoint_strategy: str = "per_tool",
         max_tool_calls: int = 50,
         temperature: float = 0.7,
+        _depth: int = 0,
+        _max_depth: int = 3,
         **kwargs: Any,
     ) -> AgentResult:
         return await self._get_manager().agent(
@@ -1141,6 +1232,8 @@ class _StepProxy:
             checkpoint_strategy=checkpoint_strategy,
             max_tool_calls=max_tool_calls,
             temperature=temperature,
+            _depth=_depth,
+            _max_depth=_max_depth,
             **kwargs,
         )
 

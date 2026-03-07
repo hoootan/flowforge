@@ -28,6 +28,44 @@ class TriggerSchema(BaseModel):
     )
 
 
+class SubAgentConfigSchema(BaseModel):
+    """Schema for a sub-agent configuration within an inline function."""
+
+    system_prompt: str = Field(
+        ...,
+        description="System prompt for the sub-agent",
+    )
+
+    model: str | None = Field(
+        default=None,
+        description="Model override for the sub-agent (defaults to parent model)",
+    )
+
+    tools: list[str] = Field(
+        default_factory=list,
+        description="Tool names available to the sub-agent",
+    )
+
+    max_iterations: int = Field(
+        default=15,
+        description="Maximum agent loop iterations for the sub-agent",
+        ge=1,
+        le=50,
+    )
+
+    max_tool_calls: int = Field(
+        default=30,
+        description="Maximum tool calls for the sub-agent",
+        ge=1,
+        le=100,
+    )
+
+    description: str | None = Field(
+        default=None,
+        description="Description shown to the parent agent LLM",
+    )
+
+
 class AgentConfigSchema(BaseModel):
     """Schema for agent configuration in inline functions."""
 
@@ -49,6 +87,11 @@ class AgentConfigSchema(BaseModel):
         description="Maximum tool calls per run",
         ge=1,
         le=200,
+    )
+
+    sub_agents: dict[str, SubAgentConfigSchema] = Field(
+        default_factory=dict,
+        description="Sub-agent definitions keyed by name",
     )
 
 

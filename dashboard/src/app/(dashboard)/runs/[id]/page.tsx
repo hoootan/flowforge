@@ -16,6 +16,7 @@ import {
   XCircle,
   Pause,
   PlayCircle,
+  Bot,
   Brain,
   Timer,
   Zap,
@@ -44,6 +45,10 @@ function getStepIcon(type: string) {
       return <Clock className="h-4 w-4" />;
     case "send_event":
       return <Zap className="h-4 w-4" />;
+    case "agent":
+      return <Brain className="h-4 w-4" />;
+    case "sub_agent":
+      return <Bot className="h-4 w-4" />;
     default:
       return <PlayCircle className="h-4 w-4" />;
   }
@@ -164,6 +169,8 @@ export default function RunDetailPage({
         case "tool_call_completed":
         case "approval_required":
         case "approval_resolved":
+        case "sub_agent_started":
+        case "sub_agent_completed":
         case "run_started":
         case "run_paused":
         case "run_resumed":

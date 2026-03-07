@@ -110,6 +110,14 @@ class Run(Base, TimestampMixin):
         index=True,
     )
 
+    # Parent run ID for sub-agent / invoke tracking
+    parent_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("runs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
     # Idempotency key for deduplication
     idempotency_key: Mapped[str | None] = mapped_column(
         String(255),
@@ -175,6 +183,20 @@ class Run(Base, TimestampMixin):
         order_by="Step.created_at",
     )
 
+    # Self-referential parent/child run relationship
+    parent_run: Mapped["Run | None"] = relationship(
+        "Run",
+        remote_side="Run.id",
+        foreign_keys=[parent_run_id],
+        back_populates="child_runs",
+    )
+
+    child_runs: Mapped[list["Run"]] = relationship(
+        "Run",
+        foreign_keys="Run.parent_run_id",
+        back_populates="parent_run",
+    )
+
     def __repr__(self) -> str:
         return f"<Run {self.id} ({self.status})>"
 
@@ -236,6 +258,7 @@ class Run(Base, TimestampMixin):
         return {
             "id": str(self.id),
             "function_id": str(self.function_id),
+            "parent_run_id": str(self.parent_run_id) if self.parent_run_id else None,
             "status": self.status.value,
             "trigger_type": self.trigger_type,
             "trigger_data": self.trigger_data,

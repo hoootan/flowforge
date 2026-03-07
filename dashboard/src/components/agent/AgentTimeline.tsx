@@ -4,8 +4,9 @@ import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Brain, ChevronDown, ChevronRight, Wrench } from "lucide-react";
+import { Bot, Brain, ChevronDown, ChevronRight, Wrench } from "lucide-react";
 import { ToolCallDetail } from "./ToolCallDetail";
+import { SubAgentCard } from "./SubAgentCard";
 
 interface AgentTimelineProps {
   agentResult: {
@@ -148,9 +149,13 @@ function IterationCard({ data }: { data: IterationData }) {
                 <span className="text-sm font-medium">Tool Calls</span>
               </div>
               <div className="space-y-3">
-                {data.toolCalls.map((toolCall, idx) => (
-                  <ToolCallDetail key={toolCall.id || idx} toolCall={toolCall} />
-                ))}
+                {data.toolCalls.map((toolCall, idx) =>
+                  toolCall.is_sub_agent || toolCall.sub_agent_result ? (
+                    <SubAgentCard key={toolCall.id || idx} toolCall={toolCall} />
+                  ) : (
+                    <ToolCallDetail key={toolCall.id || idx} toolCall={toolCall} />
+                  )
+                )}
               </div>
             </div>
           </CardContent>
@@ -161,8 +166,16 @@ function IterationCard({ data }: { data: IterationData }) {
           <CardContent className="pt-0">
             <div className="flex flex-wrap gap-2">
               {data.toolCalls.map((tc, idx) => (
-                <Badge key={idx} variant="outline" className="gap-1">
-                  <Wrench className="h-3 w-3" />
+                <Badge
+                  key={idx}
+                  variant={tc.is_sub_agent || tc.sub_agent_result ? "secondary" : "outline"}
+                  className="gap-1"
+                >
+                  {tc.is_sub_agent || tc.sub_agent_result ? (
+                    <Bot className="h-3 w-3" />
+                  ) : (
+                    <Wrench className="h-3 w-3" />
+                  )}
                   {tc.tool_name}
                   {tc.requires_approval && (
                     <span className="ml-1 text-yellow-600">*</span>
