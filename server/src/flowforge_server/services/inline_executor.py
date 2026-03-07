@@ -163,6 +163,18 @@ class InlineExecutor:
 
             await session.flush()
 
+            # Publish step started event for this iteration
+            await publish_run_event(
+                str(run.id),
+                RunEventType.STEP_STARTED,
+                {
+                    "run_id": str(run.id),
+                    "step_id": step.step_id,
+                    "step_type": "ai",
+                    "iteration": iteration,
+                },
+            )
+
             # Publish thinking event
             await publish_run_event(
                 str(run.id),

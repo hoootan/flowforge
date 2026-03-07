@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +30,7 @@ import { NotFoundState } from "@/components/empty-state";
 import { hasAgentSteps, extractAgentResult } from "@/lib/hooks/useAgent";
 import { AgentRunView } from "@/components/agent/AgentRunView";
 import { AgentTimeline } from "@/components/agent/AgentTimeline";
+import { useRunStream } from "@/hooks/useRunStream";
 
 function getStepIcon(type: string) {
   switch (type) {
@@ -130,15 +131,58 @@ export default function RunDetailPage({
   const [run, setRun] = useState<RunWithSteps | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    async function fetchRun() {
-      setLoading(true);
-      const data = await api.getRun(id);
-      setRun(data);
-      setLoading(false);
-    }
-    fetchRun();
+  const fetchRun = useCallback(async () => {
+    const data = await api.getRun(id);
+    setRun(data);
+    return data;
   }, [id]);
+
+  useEffect(() => {
+    setLoading(true);
+    fetchRun().finally(() => setLoading(false));
+  }, [fetchRun]);
+
+  const isActive = run?.status === "running" || run?.status === "pending" || run?.status === "paused";
+
+  // Debounced refetch to avoid hammering the API on rapid events
+  const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debouncedFetchRun = useCallback(() => {
+    if (refetchTimer.current) clearTimeout(refetchTimer.current);
+    refetchTimer.current = setTimeout(() => {
+      fetchRun();
+    }, 300);
+  }, [fetchRun]);
+
+  const { isConnected } = useRunStream({
+    runId: id,
+    enabled: isActive,
+    onEvent: (event) => {
+      switch (event.type) {
+        case "step_started":
+        case "step_completed":
+        case "step_failed":
+        case "tool_call_completed":
+        case "approval_required":
+        case "approval_resolved":
+        case "run_started":
+        case "run_paused":
+        case "run_resumed":
+        case "run_completed":
+        case "run_failed":
+          debouncedFetchRun();
+          break;
+      }
+    },
+  });
+
+  // Polling fallback for when SSE connection fails or events are missed
+  useEffect(() => {
+    if (!isActive) return;
+    const interval = setInterval(() => {
+      fetchRun();
+    }, isConnected ? 10000 : 3000);
+    return () => clearInterval(interval);
+  }, [isActive, isConnected, fetchRun]);
 
   const handleReplay = async () => {
     const result = await api.replayRun(id);
@@ -202,6 +246,12 @@ export default function RunDetailPage({
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold tracking-tight">{run.function_id}</h1>
             {getStatusBadge(run.status)}
+            {isConnected && (
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                Live
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
             <span className="font-mono">{run.id.slice(0, 8)}...</span>
