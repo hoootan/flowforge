@@ -9,10 +9,9 @@ import json
 from datetime import datetime, timedelta
 from typing import Any
 
+import httpx
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-import httpx
 
 from flowforge_server.db.models import (
     ApprovalStatus,
