@@ -22,6 +22,7 @@ import {
   RotateCw,
   Copy,
   StopCircle,
+  Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, RunWithSteps, Step } from "@/lib/api";
@@ -362,7 +363,22 @@ export default function RunDetailPage({
                           <div className="rounded-lg border bg-muted/50 p-3">
                             {step.step_type === "ai" ? (
                               <div className="space-y-2">
-                                <p className="text-sm">{(step.output as { content?: string }).content}</p>
+                                {(step.output as { content?: string }).content && (
+                                  <p className="text-sm">{(step.output as { content?: string }).content}</p>
+                                )}
+                                {(step.output as { tool_calls?: { id: string; name: string; arguments: Record<string, unknown> }[] }).tool_calls && (
+                                  <div className="space-y-1.5">
+                                    {(step.output as { tool_calls: { id: string; name: string; arguments: Record<string, unknown> }[] }).tool_calls.map((tc) => (
+                                      <div key={tc.id} className="flex items-start gap-2 rounded border bg-background p-2">
+                                        <Wrench className="h-3.5 w-3.5 mt-0.5 text-muted-foreground shrink-0" />
+                                        <div className="min-w-0">
+                                          <span className="text-sm font-medium">{tc.name}</span>
+                                          <pre className="text-xs text-muted-foreground mt-0.5 whitespace-pre-wrap break-all">{JSON.stringify(tc.arguments, null, 2)}</pre>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
                                 <div className="flex gap-4 text-xs text-muted-foreground">
                                   <span>Model: {(step.output as { model?: string }).model}</span>
                                   <span>Tokens: {(step.output as { usage?: { total_tokens?: number } }).usage?.total_tokens}</span>
