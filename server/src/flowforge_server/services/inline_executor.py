@@ -23,6 +23,7 @@ from flowforge_server.db.models import (
     StepType,
     Tool,
     ToolApproval,
+    UsageRecord,
 )
 from flowforge_server.logging import Loggers
 from flowforge_server.services.ai import AIService, ToolCall
@@ -260,11 +261,30 @@ class InlineExecutor:
                     "error": {"type": type(e).__name__, "message": str(e)},
                 }
 
-            # Track token usage
+            # Track token usage and record to database
             if response.usage:
                 tokens_used["prompt"] += response.usage.prompt_tokens
                 tokens_used["completion"] += response.usage.completion_tokens
                 tokens_used["total"] += response.usage.total_tokens
+
+                # Record usage to database
+                usage_record = UsageRecord(
+                    tenant_id=run.tenant_id,
+                    run_id=run.id,
+                    model=response.usage.model or model,
+                    provider=response.usage.provider or "unknown",
+                    prompt_tokens=response.usage.prompt_tokens,
+                    completion_tokens=response.usage.completion_tokens,
+                    total_tokens=response.usage.total_tokens,
+                    cost_usd=response.usage.cost_usd,
+                    latency_ms=response.usage.latency_ms,
+                    request_type="inline_agent",
+                    extra_data={
+                        "step_id": step.step_id,
+                        "iteration": iteration,
+                    },
+                )
+                session.add(usage_record)
 
             # Update step
             step.output = response.to_dict()
