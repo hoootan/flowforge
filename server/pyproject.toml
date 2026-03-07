@@ -36,6 +36,7 @@ dependencies = [
     "pyyaml>=6.0.0",
     "RestrictedPython>=7.0",
     "cryptography>=41.0.0",
+    "python-dotenv>=1.0.0",
 ]
 
 [project.optional-dependencies]

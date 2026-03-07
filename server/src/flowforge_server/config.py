@@ -3,7 +3,12 @@
 from functools import lru_cache
 from typing import Literal
 
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Load .env into os.environ so non-FLOWFORGE_ vars (e.g. TAVILY_API_KEY,
+# GOOGLE_API_KEY) are available to builtin tool implementations.
+load_dotenv()
 
 
 class Settings(BaseSettings):
