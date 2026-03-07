@@ -197,7 +197,7 @@ async def execute_generate_image(prompt: str, style: str = "professional", **kwa
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key={api_key}",
+                f"https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key={api_key}",
                 json={
                     "instances": [{"prompt": f"{prompt}, {style} style"}],
                     "parameters": {"sampleCount": 1},
