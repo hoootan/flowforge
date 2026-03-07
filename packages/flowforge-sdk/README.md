@@ -92,3 +92,42 @@ result = await flowforge.cancel_run("761c0321-...")
 `retry_run` is different from replaying: it preserves the memoized results of
 all completed steps so execution resumes from where it failed rather than
 starting over from scratch.
+
+## Streaming Run Events (SSE)
+
+Stream real-time events from a running workflow via Server-Sent Events:
+
+```python
+from flowforge import FlowForge, RunEvent
+
+flowforge = FlowForge(app_id="my-app", api_key="ff_live_...")
+
+# Async iterator
+async for event in flowforge.stream_run("run-uuid"):
+    print(f"[{event.event_type.value}] {event.data}")
+
+# With callback
+async for event in flowforge.stream_run("run-uuid", on_event=lambda e: print(e)):
+    pass
+```
+
+The stream automatically closes when the run completes or fails. Available event types:
+
+- `step_started`, `step_completed`, `step_failed`
+- `thinking`, `thinking_chunk`
+- `tool_call_started`, `tool_call_completed`
+- `approval_required`, `approval_resolved`
+- `run_started`, `run_paused`, `run_resumed`, `run_completed`, `run_failed`
+
+Options:
+
+```python
+async for event in flowforge.stream_run(
+    "run-uuid",
+    include_history=True,   # Include past events on connect (default: True)
+    timeout=300.0,          # Server-side stream timeout in seconds (default: 300)
+    on_event=my_callback,   # Optional callback for each event
+):
+    if event.is_terminal:
+        print("Run finished:", event.data)
+```

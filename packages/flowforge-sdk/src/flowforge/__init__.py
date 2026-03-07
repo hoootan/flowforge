@@ -26,6 +26,7 @@ from flowforge.exceptions import (
 )
 from flowforge.network import Network, NetworkResult, NetworkState, RouterContext, network
 from flowforge.steps import step
+from flowforge.streaming import RunEvent, RunEventType
 from flowforge.tools import Tool, tool
 from flowforge.triggers import Trigger, trigger
 
@@ -68,6 +69,9 @@ __all__ = [
     "concurrency",
     "rate_limit",
     "throttle",
+    # Streaming
+    "RunEvent",
+    "RunEventType",
     # Exceptions
     "FlowForgeError",
     "StepError",

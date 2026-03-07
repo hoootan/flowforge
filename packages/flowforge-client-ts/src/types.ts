@@ -373,6 +373,54 @@ export interface ApiKeyFilters {
 }
 
 // ============================================================================
+// SSE Streaming Types
+// ============================================================================
+
+export type RunEventType =
+  | "step_started"
+  | "step_completed"
+  | "step_failed"
+  | "thinking"
+  | "thinking_chunk"
+  | "tool_call_started"
+  | "tool_call_completed"
+  | "approval_required"
+  | "approval_resolved"
+  | "run_started"
+  | "run_paused"
+  | "run_resumed"
+  | "run_completed"
+  | "run_failed";
+
+export interface RunStreamEvent {
+  type: RunEventType;
+  data: Record<string, unknown>;
+  runId: string;
+  timestamp: string;
+}
+
+export interface StreamOptions {
+  /** Include historical events on connect (default: true) */
+  includeHistory?: boolean;
+  /** Server-side stream timeout in seconds (default: 300, max: 600) */
+  timeout?: number;
+  /** AbortSignal to cancel the stream */
+  signal?: AbortSignal;
+  /** Callback for each event */
+  onEvent?: (event: RunStreamEvent) => void;
+  /** Callback when run completes or fails */
+  onComplete?: (event: RunStreamEvent) => void;
+  /** Callback on stream error */
+  onError?: (error: FlowForgeError) => void;
+}
+
+export interface StreamConfig {
+  baseUrl: string;
+  apiKey?: string;
+  fetchFn: typeof fetch;
+}
+
+// ============================================================================
 // Client Options
 // ============================================================================
 

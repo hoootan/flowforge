@@ -323,7 +323,11 @@ export function createClient(
 
   return {
     events: new EventsResource(request),
-    runs: new RunsResource(request),
+    runs: new RunsResource(request, {
+      baseUrl: normalizedBaseUrl,
+      apiKey: options.apiKey,
+      fetchFn,
+    }),
     functions: new FunctionsResource(request),
     tools: new ToolsResource(request),
     approvals: new ApprovalsResource(request),

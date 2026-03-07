@@ -151,6 +151,30 @@ await ff.runs.cancel('run-id');
 
 // Replay a failed run
 const { data: newRun } = await ff.runs.replay('run-id');
+
+// Stream real-time events (SSE)
+for await (const event of ff.runs.stream('run-id')) {
+  console.log(event.type, event.data);
+}
+
+// Stream with callbacks
+await ff.runs.stream('run-id', {
+  onEvent: (e) => console.log(e.type),
+  onComplete: (e) => console.log('Done:', e.data),
+  onError: (e) => console.error('Error:', e.message),
+}).drain();
+
+// Collect all events into an array
+const events = await ff.runs.stream('run-id').collect();
+
+// Cancel a stream early
+const stream = ff.runs.stream('run-id');
+for await (const event of stream) {
+  if (event.type === 'step_completed') {
+    stream.close();
+    break;
+  }
+}
 ```
 
 ### Functions
@@ -309,6 +333,12 @@ import type {
   CreateToolInput,
   UpdateToolInput,
   SendEventInput,
+
+  // Streaming types
+  RunEventType,
+  RunStreamEvent,
+  StreamOptions,
+  StreamConfig,
 
   // Result type
   Result,

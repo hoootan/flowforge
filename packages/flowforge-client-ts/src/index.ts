@@ -87,6 +87,11 @@ export {
   type CreateApiKeyInput,
   type ApiKeysResponse,
   type ApiKeyFilters,
+  // SSE streaming types
+  type RunEventType,
+  type RunStreamEvent,
+  type StreamOptions,
+  type StreamConfig,
 } from "./types";
 
 // Query builder (for advanced usage)
@@ -102,3 +107,6 @@ export { HealthResource } from "./resources/health";
 export { UsersResource } from "./resources/users";
 export { ApiKeysResource } from "./resources/api-keys";
 export { CredentialsResource } from "./resources/credentials";
+
+// SSE streaming
+export { RunStream } from "./stream";

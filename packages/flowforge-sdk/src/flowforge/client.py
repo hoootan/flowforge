@@ -5,7 +5,7 @@ import hmac
 import json
 import os
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import datetime
 from typing import Any, TypeVar
 
@@ -33,6 +33,7 @@ from flowforge.context import Context, Event
 from flowforge.decorators import FlowForgeFunction
 from flowforge.decorators import function as make_function
 from flowforge.execution import ExecutionEngine, FunctionDefinition
+from flowforge.streaming import RunEvent, RunEventType
 from flowforge.triggers import TriggerBuilder
 
 T = TypeVar("T")
@@ -447,6 +448,85 @@ class FlowForge:
         response = await client.post(f"/api/v1/runs/{run_id}/retry", headers=headers)
         response.raise_for_status()
         return response.json()
+
+    async def stream_run(
+        self,
+        run_id: str,
+        *,
+        include_history: bool = True,
+        timeout: float = 300.0,
+        on_event: Callable[[RunEvent], None] | None = None,
+    ) -> AsyncIterator[RunEvent]:
+        """
+        Stream real-time SSE events for a run.
+
+        Args:
+            run_id: The run UUID to stream.
+            include_history: Whether to include past events on connect.
+            timeout: Server-side stream timeout in seconds.
+            on_event: Optional callback invoked for each event.
+
+        Yields:
+            RunEvent for each SSE event. Stops on terminal events
+            (run_completed, run_failed).
+
+        Example:
+            async for event in flowforge.stream_run("run-uuid"):
+                print(f"[{event.event_type.value}] {event.data}")
+        """
+        params = {
+            "include_history": str(include_history).lower(),
+            "timeout": str(int(timeout)),
+        }
+        url = f"{self.api_url}/api/v1/runs/{run_id}/stream"
+
+        headers: dict[str, str] = {"Accept": "text/event-stream"}
+        if self.api_key:
+            headers["X-FlowForge-API-Key"] = self.api_key
+
+        # Use a dedicated client with extended read timeout for streaming
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(connect=10.0, read=timeout + 30.0, write=10.0, pool=10.0),
+        ) as client:
+            async with client.stream(
+                "GET", url, params=params, headers=headers,
+            ) as response:
+                response.raise_for_status()
+
+                event_type: str | None = None
+                data_buf: list[str] = []
+
+                async for line in response.aiter_lines():
+                    # Skip keepalive comments
+                    if line.startswith(":"):
+                        continue
+
+                    # Blank line = dispatch event
+                    if not line:
+                        if event_type and data_buf:
+                            raw_data = "\n".join(data_buf)
+                            try:
+                                evt = RunEvent.from_raw(event_type, raw_data, run_id)
+                            except (ValueError, json.JSONDecodeError):
+                                event_type = None
+                                data_buf = []
+                                continue
+
+                            if on_event:
+                                on_event(evt)
+                            yield evt
+
+                            if evt.is_terminal:
+                                return
+
+                        event_type = None
+                        data_buf = []
+                        continue
+
+                    if line.startswith("event:"):
+                        event_type = line[len("event:"):].strip()
+                    elif line.startswith("data:"):
+                        data_buf.append(line[len("data:"):].strip())
 
     async def close(self) -> None:
         """Close the HTTP client."""

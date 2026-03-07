@@ -3,10 +3,22 @@
  */
 
 import { QueryBuilder, type RequestFn } from "../builder";
-import type { Run, RunWithSteps, RunFilters, Result, FlowForgeError } from "../types";
+import { RunStream } from "../stream";
+import type {
+  Run,
+  RunWithSteps,
+  RunFilters,
+  Result,
+  FlowForgeError,
+  StreamConfig,
+  StreamOptions,
+} from "../types";
 
 export class RunsResource {
-  constructor(private request: RequestFn) {}
+  constructor(
+    private request: RequestFn,
+    private streamConfig?: StreamConfig
+  ) {}
 
   /**
    * Get a run by ID, including its steps.
@@ -67,6 +79,31 @@ export class RunsResource {
    */
   async replay(runId: string): Promise<Result<RunWithSteps>> {
     return this.request<RunWithSteps>("POST", `/runs/${runId}/replay`);
+  }
+
+  /**
+   * Stream real-time SSE events for a run.
+   *
+   * @example Async iterator
+   * ```ts
+   * for await (const event of ff.runs.stream('run-id')) {
+   *   console.log(event.type, event.data);
+   * }
+   * ```
+   *
+   * @example Callback-based
+   * ```ts
+   * await ff.runs.stream('run-id', {
+   *   onEvent: (e) => console.log(e.type),
+   *   onComplete: (e) => console.log('Done'),
+   * }).drain();
+   * ```
+   */
+  stream(runId: string, options?: StreamOptions): RunStream {
+    if (!this.streamConfig) {
+      throw new Error("Stream config not available");
+    }
+    return new RunStream(runId, this.streamConfig, options);
   }
 
   /**
