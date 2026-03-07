@@ -621,6 +621,7 @@ class AIService:
             "max_tokens": max_tokens,
             "temperature": temperature,
             "stream": True,
+            "stream_options": {"include_usage": True},
             **kwargs,
         }
 
@@ -691,6 +692,14 @@ class AIService:
                 if hasattr(chunk, "usage") and chunk.usage:
                     prompt_tokens = chunk.usage.prompt_tokens or 0
                     completion_tokens = chunk.usage.completion_tokens or 0
+
+                # Fallback: estimate tokens if usage not available from stream
+                if prompt_tokens == 0 and completion_tokens == 0:
+                    try:
+                        prompt_tokens = litellm.token_counter(model=model, messages=messages)
+                        completion_tokens = litellm.token_counter(model=model, text=accumulated_content)
+                    except Exception:
+                        pass
 
                 # Parse accumulated tool calls
                 tool_calls_list = []
