@@ -6,6 +6,7 @@ import { Bot, Server, Zap, Clock, Globe, Wrench, Check, MessageSquare } from "lu
 import type { FunctionMode } from "./function-step-type";
 import type { TriggerType } from "./function-step-identity";
 import type { Tool } from "@/lib/api";
+import type { SubAgentEntry } from "./function-step-sub-agents";
 
 const TRIGGER_LABELS: Record<TriggerType, { label: string; icon: typeof Zap }> = {
   event: { label: "Event", icon: Zap },
@@ -24,6 +25,7 @@ interface FunctionStepReviewProps {
   systemPrompt: string;
   selectedTools: string[];
   availableTools: Tool[];
+  subAgents?: SubAgentEntry[];
   // Worker
   endpointUrl: string;
 }
@@ -38,6 +40,7 @@ export function FunctionStepReview({
   systemPrompt,
   selectedTools,
   availableTools,
+  subAgents = [],
   endpointUrl,
 }: FunctionStepReviewProps) {
   const TriggerIcon = TRIGGER_LABELS[triggerType].icon;
@@ -144,6 +147,29 @@ export function FunctionStepReview({
               </Card>
             )}
           </div>
+
+          {/* Sub-Agents */}
+          {subAgents.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Bot className="h-4 w-4 text-muted-foreground" />
+                  Sub-Agents
+                </div>
+                <Badge variant="secondary" className="text-xs">
+                  {subAgents.length} configured
+                </Badge>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {subAgents.map((sa) => (
+                  <Badge key={sa.name} variant="outline" className="font-mono text-xs gap-1.5">
+                    {sa.name || "unnamed"}
+                    <span className="text-muted-foreground font-sans">({sa.model.split("-").slice(0, 2).join(" ")})</span>
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       ) : (
         /* Worker details */

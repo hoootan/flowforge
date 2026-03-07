@@ -19,13 +19,7 @@ import {
 import { Bot, Server, ChevronRight, Settings } from "lucide-react";
 import { useState } from "react";
 import type { FunctionMode } from "./function-step-type";
-
-const MODEL_OPTIONS = [
-  { value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6", desc: "Best balance of speed and quality" },
-  { value: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5", desc: "Fastest and most affordable" },
-  { value: "gpt-5", label: "GPT-5", desc: "OpenAI flagship" },
-  { value: "gpt-5-mini", label: "GPT-5 Mini", desc: "Faster, lower cost" },
-];
+import { MODEL_OPTIONS } from "./constants";
 
 interface FunctionStepConfigProps {
   mode: FunctionMode;

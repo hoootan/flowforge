@@ -13,6 +13,7 @@ import { FunctionStepType, FunctionMode } from "./function-step-type";
 import { FunctionStepIdentity, TriggerType } from "./function-step-identity";
 import { FunctionStepConfig } from "./function-step-config";
 import { FunctionStepTools } from "./function-step-tools";
+import { FunctionStepSubAgents, SubAgentEntry } from "./function-step-sub-agents";
 import { FunctionStepReview } from "./function-step-review";
 
 // Template type for functions
@@ -94,6 +95,7 @@ export function FunctionWizard({ initialData }: FunctionWizardProps) {
   const [systemPrompt, setSystemPrompt] = useState("");
   const [selectedTools, setSelectedTools] = useState<string[]>([]);
   const [endpointUrl, setEndpointUrl] = useState("");
+  const [subAgents, setSubAgents] = useState<SubAgentEntry[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
 
@@ -123,9 +125,33 @@ export function FunctionWizard({ initialData }: FunctionWizardProps) {
       if (initialData.is_inline) {
         setSystemPrompt(initialData.system_prompt || "");
         setSelectedTools(initialData.tools_config || []);
-        const agentConfig = initialData.agent_config as { model?: string } | null;
+        const agentConfig = initialData.agent_config as {
+          model?: string;
+          sub_agents?: Record<string, {
+            system_prompt: string;
+            model?: string;
+            tools?: string[];
+            max_iterations?: number;
+            max_tool_calls?: number;
+            description?: string;
+          }>;
+        } | null;
         if (agentConfig?.model) {
           setModel(agentConfig.model);
+        }
+        if (agentConfig?.sub_agents) {
+          const entries: SubAgentEntry[] = Object.entries(agentConfig.sub_agents).map(
+            ([name, cfg]) => ({
+              name,
+              description: cfg.description || "",
+              model: cfg.model || "claude-sonnet-4-6",
+              systemPrompt: cfg.system_prompt || "",
+              tools: cfg.tools || [],
+              maxIterations: cfg.max_iterations ?? 20,
+              maxToolCalls: cfg.max_tool_calls ?? 50,
+            })
+          );
+          setSubAgents(entries);
         }
       } else {
         setEndpointUrl(initialData.endpoint_url || "");
@@ -179,9 +205,10 @@ export function FunctionWizard({ initialData }: FunctionWizardProps) {
       { id: "config", label: "Config", validate: validateConfig },
     ];
 
-    // Only add tools step for AI Agent mode
+    // Only add tools and sub-agents steps for AI Agent mode
     if (mode === "inline") {
       baseSteps.push({ id: "tools", label: "Tools", optional: true });
+      baseSteps.push({ id: "sub-agents", label: "Sub-Agents", optional: true });
     }
 
     baseSteps.push({ id: "review", label: "Review" });
@@ -193,6 +220,37 @@ export function FunctionWizard({ initialData }: FunctionWizardProps) {
   const handleComplete = useCallback(async () => {
     setLoading(true);
 
+    // Build agent_config with optional sub_agents
+    const agentConfig: {
+      model: string;
+      max_iterations: number;
+      max_tool_calls: number;
+      sub_agents?: Record<string, {
+        system_prompt: string;
+        model?: string;
+        tools?: string[];
+        max_iterations?: number;
+        max_tool_calls?: number;
+        description?: string;
+      }>;
+    } = { model, max_iterations: 30, max_tool_calls: 50 };
+
+    if (subAgents.length > 0) {
+      agentConfig.sub_agents = Object.fromEntries(
+        subAgents.map((sa) => [
+          sa.name,
+          {
+            system_prompt: sa.systemPrompt,
+            model: sa.model,
+            tools: sa.tools,
+            max_iterations: sa.maxIterations,
+            max_tool_calls: sa.maxToolCalls,
+            description: sa.description,
+          },
+        ])
+      );
+    }
+
     let result;
     if (isEditMode) {
       // Update existing function
@@ -202,7 +260,7 @@ export function FunctionWizard({ initialData }: FunctionWizardProps) {
           trigger: { type: triggerType, value: triggerValue.trim() },
           system_prompt: systemPrompt.trim(),
           tools: selectedTools,
-          agent_config: { model, max_iterations: 30, max_tool_calls: 50 },
+          agent_config: agentConfig,
         });
       } else {
         result = await api.updateFunction(initialData!.function_id, {
@@ -220,7 +278,7 @@ export function FunctionWizard({ initialData }: FunctionWizardProps) {
           trigger: { type: triggerType, value: triggerValue.trim() },
           system_prompt: systemPrompt.trim(),
           tools: selectedTools,
-          agent_config: { model, max_iterations: 30, max_tool_calls: 50 },
+          agent_config: agentConfig,
         });
       } else {
         result = await api.createWorkerFunction({
@@ -241,7 +299,7 @@ export function FunctionWizard({ initialData }: FunctionWizardProps) {
     } else {
       toast.error(isEditMode ? "Failed to update function" : "Failed to create function");
     }
-  }, [isEditMode, initialData, mode, id, name, triggerType, triggerValue, systemPrompt, selectedTools, model, endpointUrl, router]);
+  }, [isEditMode, initialData, mode, id, name, triggerType, triggerValue, systemPrompt, selectedTools, model, endpointUrl, subAgents, router]);
 
   // Wizard hook
   const wizard = useWizard({
@@ -273,6 +331,7 @@ export function FunctionWizard({ initialData }: FunctionWizardProps) {
       systemPrompt,
       selectedTools,
       endpointUrl,
+      subAgents,
     });
     toast.success("Draft saved");
   };
@@ -328,6 +387,15 @@ export function FunctionWizard({ initialData }: FunctionWizardProps) {
             disabled={loading}
           />
         );
+      case "sub-agents":
+        return (
+          <FunctionStepSubAgents
+            subAgents={subAgents}
+            onSubAgentsChange={setSubAgents}
+            availableTools={availableTools}
+            disabled={loading}
+          />
+        );
       case "review":
         return (
           <FunctionStepReview
@@ -341,6 +409,7 @@ export function FunctionWizard({ initialData }: FunctionWizardProps) {
             selectedTools={selectedTools}
             availableTools={availableTools}
             endpointUrl={endpointUrl}
+            subAgents={subAgents}
           />
         );
       default:

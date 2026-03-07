@@ -31,7 +31,7 @@ export interface Run {
 export interface Step {
   id: string;
   step_id: string;
-  step_type: "run" | "sleep" | "ai" | "wait_for_event" | "invoke" | "send_event" | "agent";
+  step_type: "run" | "sleep" | "ai" | "wait_for_event" | "invoke" | "send_event" | "agent" | "sub_agent";
   status: "pending" | "running" | "completed" | "failed" | "sleeping" | "waiting";
   input: Record<string, unknown> | null;
   output: Record<string, unknown> | null;
@@ -665,7 +665,19 @@ class FlowForgeAPI {
     trigger: { type: string; value: string; expression?: string };
     system_prompt: string;
     tools: string[];
-    agent_config?: { model?: string; max_iterations?: number; max_tool_calls?: number };
+    agent_config?: {
+      model?: string;
+      max_iterations?: number;
+      max_tool_calls?: number;
+      sub_agents?: Record<string, {
+        system_prompt: string;
+        model?: string;
+        tools?: string[];
+        max_iterations?: number;
+        max_tool_calls?: number;
+        description?: string;
+      }>;
+    };
     config?: Record<string, unknown>;
   }): Promise<Function | null> {
     try {
@@ -702,7 +714,19 @@ class FlowForgeAPI {
       trigger: { type: string; value: string; expression?: string };
       system_prompt: string;
       tools: string[];
-      agent_config: { model?: string; max_iterations?: number; max_tool_calls?: number };
+      agent_config: {
+        model?: string;
+        max_iterations?: number;
+        max_tool_calls?: number;
+        sub_agents?: Record<string, {
+          system_prompt: string;
+          model?: string;
+          tools?: string[];
+          max_iterations?: number;
+          max_tool_calls?: number;
+          description?: string;
+        }>;
+      };
       endpoint_url: string;
       config: Record<string, unknown>;
       is_active: boolean;
