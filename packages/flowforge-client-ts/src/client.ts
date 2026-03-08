@@ -209,6 +209,11 @@ export function createClient(
         return { data: null, error };
       }
 
+      // Handle 204 No Content (e.g. DELETE responses)
+      if (response.status === 204) {
+        return { data: { success: true, message: "Deleted" } as T, error: null };
+      }
+
       const data = await response.json();
       return { data: data as T, error: null };
     } catch (err) {

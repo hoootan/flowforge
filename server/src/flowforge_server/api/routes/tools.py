@@ -226,12 +226,12 @@ async def update_tool(
     return _tool_response(tool)
 
 
-@router.delete("/{tool_name}", status_code=204)
+@router.delete("/{tool_name}")
 async def delete_tool(
     tool_name: str,
     tenant: TenantWithDevFallback,
     session: AsyncSession = Depends(get_session),
-) -> None:
+) -> dict:
     """Delete a tool (soft delete by setting inactive). Built-in tools cannot be deleted."""
     result = await session.execute(
         select(Tool).where(
@@ -258,3 +258,5 @@ async def delete_tool(
 
     tool.is_active = False
     await session.commit()
+
+    return {"success": True, "message": f"Tool '{tool_name}' deleted"}

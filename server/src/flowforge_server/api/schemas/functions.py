@@ -159,10 +159,9 @@ class InlineFunctionCreate(BaseModel):
     )
 
     tools: list[str] = Field(
-        ...,
-        description="List of tool names to use (must exist in tools table)",
+        default_factory=list,
+        description="List of tool names to use (must exist in tools table). Can be empty for text-only agents.",
         examples=[["web_search", "generate_image", "ask_user"]],
-        min_length=1,
     )
 
     agent_config: AgentConfigSchema = Field(

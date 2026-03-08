@@ -123,6 +123,10 @@ export function registerFunctionTools(
     "flowforge_create_inline_function",
     "Create an inline/serverless AI agent function. The function runs on the FlowForge server using an LLM with tools — no endpoint_url needed.",
     {
+      id: z
+        .string()
+        .optional()
+        .describe("Optional function ID. If not provided, one is auto-generated."),
       name: z.string().describe("Function name (e.g., 'Create Social Post')"),
       trigger_type: z
         .enum(["event", "cron", "webhook"])
@@ -180,7 +184,7 @@ export function registerFunctionTools(
     },
     async (args) => {
       const body = {
-        id: crypto.randomUUID(),
+        id: args.id || `fn-${crypto.randomUUID().slice(0, 8)}`,
         name: args.name,
         trigger: {
           type: args.trigger_type,

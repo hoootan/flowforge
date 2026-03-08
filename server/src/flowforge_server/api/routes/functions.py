@@ -296,12 +296,12 @@ async def update_function(
     return fn_to_response(fn)
 
 
-@router.delete("/{function_id}", status_code=204)
+@router.delete("/{function_id}")
 async def delete_function(
     function_id: str,
     tenant: TenantWithDevFallback,
     session: AsyncSession = Depends(get_session),
-) -> None:
+) -> dict:
     """Delete a function."""
     result = await session.execute(
         select(Function).where(
@@ -316,6 +316,8 @@ async def delete_function(
 
     await session.delete(fn)
     await session.commit()
+
+    return {"success": True, "message": f"Function '{function_id}' deleted"}
 
 
 @router.post("/heartbeat")
