@@ -42,7 +42,7 @@ services:
     container_name: flowforge-server
     # Dockerfile sets USER flowforge (uid 1000) - this is redundant but explicit
     ports:
-      - "127.0.0.1:9473:8000"
+      - "8000:8000"
     environment:
       - FLOWFORGE_ENV=${FLOWFORGE_ENV:-development}
       - FLOWFORGE_DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-flowforge}:${POSTGRES_PASSWORD:-flowforge}@postgres:5432/${POSTGRES_DB:-flowforge}
@@ -136,7 +136,7 @@ services:
     container_name: flowforge-dashboard
     # Dockerfile sets USER nextjs (uid 1001)
     ports:
-      - "127.0.0.1:9474:3000"
+      - "3000:3000"
     environment:
       - NEXT_PUBLIC_API_URL=http://192.168.2.3:8000/api/v1
     depends_on:
