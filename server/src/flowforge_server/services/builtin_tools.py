@@ -4,9 +4,12 @@ These tools are automatically seeded into the database on startup.
 Users can reference them by name in their inline functions.
 """
 
+import base64
 import ipaddress
 import os
+import uuid as uuid_mod
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
@@ -187,6 +190,57 @@ async def execute_web_search(query: str, num_results: int = 10, **kwargs) -> dic
         }
 
 
+def _save_image(image_bytes: bytes, filename: str) -> str:
+    """Save image bytes to local disk or S3 and return the public URL."""
+    storage = os.environ.get("FLOWFORGE_MEDIA_STORAGE", "local")
+
+    if storage == "s3":
+        bucket = os.environ.get("FLOWFORGE_S3_BUCKET")
+        if not bucket:
+            raise RuntimeError("FLOWFORGE_S3_BUCKET must be set when media_storage=s3")
+
+        try:
+            import boto3
+        except ImportError:
+            raise RuntimeError(
+                "boto3 is required for S3 media storage. "
+                "Install it with: pip install 'flowforge-server[s3]'"
+            )
+
+        region = os.environ.get("FLOWFORGE_S3_REGION")
+        endpoint_url = os.environ.get("FLOWFORGE_S3_ENDPOINT_URL")
+
+        boto_kwargs: dict[str, Any] = {"service_name": "s3"}
+        if region:
+            boto_kwargs["region_name"] = region
+        if endpoint_url:
+            boto_kwargs["endpoint_url"] = endpoint_url
+
+        access_key = os.environ.get("FLOWFORGE_S3_ACCESS_KEY_ID")
+        secret_key = os.environ.get("FLOWFORGE_S3_SECRET_ACCESS_KEY")
+        if access_key and secret_key:
+            boto_kwargs["aws_access_key_id"] = access_key
+            boto_kwargs["aws_secret_access_key"] = secret_key
+
+        s3_client = boto3.client(**boto_kwargs)
+        key = f"generated/{filename}"
+        s3_client.put_object(Bucket=bucket, Key=key, Body=image_bytes, ContentType="image/png")
+
+        if endpoint_url:
+            return f"{endpoint_url.rstrip('/')}/{bucket}/{key}"
+        return f"https://{bucket}.s3.{region or 'us-east-1'}.amazonaws.com/{key}"
+
+    # Default: local storage
+    media_dir = Path(os.environ.get("FLOWFORGE_MEDIA_DIR", "/app/media")) / "generated"
+    media_dir.mkdir(parents=True, exist_ok=True)
+
+    filepath = media_dir / filename
+    filepath.write_bytes(image_bytes)
+
+    public_url = os.environ.get("FLOWFORGE_PUBLIC_URL", "http://localhost:8000")
+    return f"{public_url}/api/v1/media/generated/{filename}"
+
+
 async def execute_generate_image(prompt: str, style: str = "professional", **kwargs) -> dict[str, Any]:
     """Execute image generation using Google Gemini (Nano Banana) if available, otherwise return placeholder."""
     api_key = os.environ.get("GOOGLE_API_KEY")
@@ -209,13 +263,17 @@ async def execute_generate_image(prompt: str, style: str = "professional", **kwa
 
             # Extract image URL from response
             image_data = data.get("predictions", [{}])[0]
-            image_url = image_data.get("bytesBase64Encoded")
+            b64_data = image_data.get("bytesBase64Encoded")
 
-            if image_url:
+            if b64_data:
+                filename = f"{uuid_mod.uuid4().hex}.png"
+                image_bytes = base64.b64decode(b64_data)
+                url = _save_image(image_bytes, filename)
+
                 return {
                     "prompt": prompt,
                     "style": style,
-                    "url": f"data:image/png;base64,{image_url}",
+                    "url": url,
                     "simulated": False,
                 }
 

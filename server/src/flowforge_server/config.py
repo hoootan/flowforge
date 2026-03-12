@@ -120,6 +120,16 @@ class Settings(BaseSettings):
     login_lockout_threshold: int = 5  # Failed attempts before lockout
     login_lockout_duration: int = 900  # Lockout duration in seconds (15 min)
 
+    # Media / file storage
+    media_dir: str = "/app/media"  # Directory for generated media files
+    public_url: str = "http://localhost:8000"  # Public base URL for serving media
+    media_storage: Literal["local", "s3"] = "local"  # "local" or "s3"
+    s3_bucket: str | None = None
+    s3_region: str | None = None
+    s3_access_key_id: str | None = None
+    s3_secret_access_key: str | None = None
+    s3_endpoint_url: str | None = None  # For S3-compatible services (MinIO, R2, etc.)
+
     # OpenTelemetry / Observability
     otlp_endpoint: str | None = None  # OTLP collector endpoint (e.g., "http://localhost:4317")
     otlp_insecure: bool = True  # Use insecure connection for local development

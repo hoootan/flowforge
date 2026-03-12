@@ -194,7 +194,7 @@ Pre-configured tools that ship with FlowForge:
 |------|-------------|
 | `http_request` | General-purpose HTTP client (GET/POST/PUT/PATCH/DELETE) with SSRF protection |
 | `web_search` | Web search via Tavily API |
-| `generate_image` | Image generation via Google Gemini |
+| `generate_image` | Image generation via Google Gemini (saves to local disk or S3) |
 | `ask_user` | Human-in-the-loop question/response (requires approval) |
 
 #### Webhook Tools (No-Code)
@@ -742,6 +742,24 @@ FLOWFORGE_SERVER_URL=http://localhost:8000
 FLOWFORGE_EVENT_KEY=ff_live_xxx
 FLOWFORGE_SIGNING_KEY=sk_xxx
 FLOWFORGE_WORKER_URL=http://localhost:8080/api/flowforge
+
+# Media storage (default: local disk)
+FLOWFORGE_MEDIA_STORAGE=local          # "local" or "s3"
+FLOWFORGE_MEDIA_DIR=/app/media         # Local directory (when storage=local)
+FLOWFORGE_PUBLIC_URL=http://localhost:8000
+
+# S3 storage (when FLOWFORGE_MEDIA_STORAGE=s3)
+FLOWFORGE_S3_BUCKET=my-bucket
+FLOWFORGE_S3_REGION=us-east-1
+FLOWFORGE_S3_ACCESS_KEY_ID=AKIA...
+FLOWFORGE_S3_SECRET_ACCESS_KEY=...
+FLOWFORGE_S3_ENDPOINT_URL=              # Optional: for S3-compatible services (MinIO, R2, etc.)
+```
+
+To use S3 storage, install the `s3` extra:
+
+```bash
+pip install "flowforge-server[s3]"
 ```
 
 **Generate an encryption key:**

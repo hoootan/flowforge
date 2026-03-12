@@ -49,6 +49,9 @@ COPY --from=builder /opt/venv /opt/venv
 COPY --chown=flowforge:flowforge src/ src/
 COPY --chown=flowforge:flowforge migrations/ /app/migrations/
 
+# Create media directory for generated images (writable by flowforge user)
+RUN mkdir -p /app/media/generated && chown -R flowforge:flowforge /app/media
+
 ENV PATH="/opt/venv/bin:$PATH"
 ENV FLOWFORGE_MIGRATIONS_DIR=/app/migrations
 ENV PYTHONDONTWRITEBYTECODE=1

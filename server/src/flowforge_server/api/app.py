@@ -2,9 +2,11 @@
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.staticfiles import StaticFiles
 
 from flowforge_server.api.error_handlers import register_error_handlers
 from flowforge_server.api.middleware import add_api_middleware
@@ -196,6 +198,11 @@ FlowForge provides durable execution for AI-powered workflows with:
     app.include_router(audit_router, prefix="/api/v1")
     app.include_router(dlq_router, prefix="/api/v1")
     app.include_router(credentials_router, prefix="/api/v1")
+
+    # Static media files (generated images, etc.)
+    media_path = Path(settings.media_dir)
+    media_path.mkdir(parents=True, exist_ok=True)
+    app.mount("/api/v1/media", StaticFiles(directory=str(media_path)), name="media")
 
     # Prometheus metrics (no prefix - exposed at /metrics)
     app.include_router(metrics_router)
