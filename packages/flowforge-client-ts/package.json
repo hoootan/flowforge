@@ -1,6 +1,6 @@
 {
   "name": "flowforge-client",
-  "version": "0.3.5",
+  "version": "0.1.0",
   "description": "TypeScript client for FlowForge workflow orchestration",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
