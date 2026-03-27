@@ -62,7 +62,7 @@ def run_to_response(run: Run) -> RunResponse:
                 ended_at=step.ended_at,
                 created_at=step.created_at,
             )
-            for step in run.steps
+            for step in (run.steps if "steps" in run.__dict__ else [])
         ],
     )
 
@@ -77,15 +77,9 @@ async def list_runs(
     session: AsyncSession = Depends(get_session),
 ) -> RunsResponse:
     """List runs with optional filtering."""
-    query = (
-        select(Run)
-        .where(Run.tenant_id == tenant.id)
-        .options(selectinload(Run.steps))
-    )
+    filters = [Run.tenant_id == tenant.id]
 
     if function_id:
-        # Find function by function_id
-        from flowforge_server.db.models import Function
         fn_result = await session.execute(
             select(Function.id).where(
                 Function.tenant_id == tenant.id,
@@ -94,37 +88,24 @@ async def list_runs(
         )
         fn_uuid = fn_result.scalar_one_or_none()
         if fn_uuid:
-            query = query.where(Run.function_id == fn_uuid)
+            filters.append(Run.function_id == fn_uuid)
 
     if status:
-        query = query.where(Run.status == status)
+        filters.append(Run.status == status)
 
-    # Get total count
-    count_query = select(func.count()).select_from(
-        select(Run.id).where(Run.tenant_id == tenant.id).subquery()
+    # Single count query respecting all filters
+    total = (await session.execute(
+        select(func.count()).select_from(select(Run.id).where(*filters).subquery())
+    )).scalar() or 0
+
+    # Fetch runs without steps — steps are heavy and not needed for the list view
+    result = await session.execute(
+        select(Run)
+        .where(*filters)
+        .order_by(Run.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
     )
-    if function_id and fn_uuid:
-        count_query = select(func.count()).select_from(
-            select(Run.id).where(
-                Run.tenant_id == tenant.id,
-                Run.function_id == fn_uuid,
-            ).subquery()
-        )
-    if status:
-        count_query = select(func.count()).select_from(
-            select(Run.id).where(
-                Run.tenant_id == tenant.id,
-                Run.status == status,
-            ).subquery()
-        )
-
-    total = (await session.execute(count_query)).scalar() or 0
-
-    # Get paginated results
-    query = query.order_by(Run.created_at.desc())
-    query = query.offset((page - 1) * page_size).limit(page_size)
-
-    result = await session.execute(query)
     runs = result.scalars().unique().all()
 
     return RunsResponse(

@@ -179,7 +179,7 @@ class Run(Base, TimestampMixin):
     steps: Mapped[list["Step"]] = relationship(
         "Step",
         back_populates="run",
-        lazy="selectin",
+        lazy="select",
         order_by="Step.created_at",
     )
 
