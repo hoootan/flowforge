@@ -60,6 +60,16 @@ class InlineExecutor:
 
     def __init__(self, ai_service: AIService) -> None:
         self.ai_service = ai_service
+        self._http_client: httpx.AsyncClient | None = None
+
+    async def _get_http_client(self) -> httpx.AsyncClient:
+        if self._http_client is None or self._http_client.is_closed:
+            self._http_client = httpx.AsyncClient(follow_redirects=True, timeout=30.0)
+        return self._http_client
+
+    async def close(self) -> None:
+        if self._http_client and not self._http_client.is_closed:
+            await self._http_client.aclose()
 
     async def execute(
         self,
@@ -771,31 +781,30 @@ class InlineExecutor:
 
             method = (tool_info.get("webhook_method") or "POST").upper()
 
-            async with httpx.AsyncClient(follow_redirects=True) as client:
-                request_kwargs: dict[str, Any] = {
-                    "method": method,
-                    "url": url,
-                    "headers": headers,
-                    "timeout": 30.0,
+            client = await self._get_http_client()
+            request_kwargs: dict[str, Any] = {
+                "method": method,
+                "url": url,
+                "headers": headers,
+            }
+            if arguments and method in ("POST", "PUT", "PATCH"):
+                request_kwargs["json"] = arguments
+            elif arguments and method == "GET":
+                request_kwargs["params"] = {
+                    k: str(v) for k, v in arguments.items()
                 }
-                if arguments and method in ("POST", "PUT", "PATCH"):
-                    request_kwargs["json"] = arguments
-                elif arguments and method == "GET":
-                    request_kwargs["params"] = {
-                        k: str(v) for k, v in arguments.items()
-                    }
 
-                response = await client.request(**request_kwargs)
+            response = await client.request(**request_kwargs)
 
-                try:
-                    body = response.json()
-                except Exception:
-                    body = response.text[:10000]
+            try:
+                body = response.json()
+            except Exception:
+                body = response.text[:10000]
 
-                return {
-                    "status_code": response.status_code,
-                    "body": body,
-                }
+            return {
+                "status_code": response.status_code,
+                "body": body,
+            }
 
         except CredentialResolutionError as e:
             return {"error": f"Credential resolution failed: {str(e)}"}

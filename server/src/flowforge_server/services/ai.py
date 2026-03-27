@@ -12,8 +12,11 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, TypeVar
 
+import litellm
 import redis.asyncio as redis
 from pydantic import BaseModel
+
+litellm.drop_params = True  # Ignore unsupported params globally
 
 from flowforge_server.config import get_settings
 
@@ -377,16 +380,6 @@ class AIService:
                     # Assume it's already a schema dict
                     tool_schemas.append(tool)
 
-        # Try to import litellm
-        try:
-            import litellm
-            litellm.drop_params = True  # Ignore unsupported params
-        except ImportError:
-            raise ImportError(
-                "litellm package required for AI service. "
-                "Install with: pip install litellm"
-            )
-
         # Add provider prefix for litellm routing if needed
         litellm_model = model
         if model.startswith("claude") and not model.startswith("anthropic/"):
@@ -497,7 +490,7 @@ class AIService:
                     usage=usage,
                     finish_reason=response.choices[0].finish_reason,
                     tool_calls=tool_calls_list,
-                    raw_response=response.model_dump() if hasattr(response, "model_dump") else {},
+                    raw_response={},
                 )
 
                 # Cache successful response

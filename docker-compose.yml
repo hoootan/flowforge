@@ -40,6 +40,7 @@ services:
       context: ./server
       dockerfile: Dockerfile
     container_name: flowforge-server
+    restart: unless-stopped
     # Dockerfile sets USER flowforge (uid 1000) - this is redundant but explicit
     ports:
       - "8000:8000"
@@ -78,6 +79,7 @@ services:
       context: ./server
       dockerfile: Dockerfile
     container_name: flowforge-runner
+    restart: unless-stopped
     # Dockerfile sets USER flowforge (uid 1000)
     command: python -u -m flowforge_server.services.runner
     environment:
@@ -97,6 +99,7 @@ services:
       context: ./server
       dockerfile: Dockerfile
     container_name: flowforge-executor
+    restart: unless-stopped
     # Dockerfile sets USER flowforge (uid 1000)
     command: python -u -m flowforge_server.services.executor
     environment:
@@ -136,7 +139,7 @@ services:
     container_name: flowforge-dashboard
     # Dockerfile sets USER nextjs (uid 1001)
     ports:
-      - "3000:3000"
+      - "3001:3000"
     environment:
       - NEXT_PUBLIC_API_URL=http://192.168.2.3:8000/api/v1
     depends_on:

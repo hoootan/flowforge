@@ -135,6 +135,9 @@ class Executor:
         if self._http_client:
             await self._http_client.aclose()
 
+        if self._inline_executor:
+            await self._inline_executor.close()
+
         if self._ai_service:
             await self._ai_service.close()
 
