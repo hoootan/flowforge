@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from flowforge_server.config import get_settings
 from flowforge_server.db import get_session_context
@@ -236,7 +237,9 @@ class Executor:
         async with get_session_context() as session:
             # Get run
             run_result = await session.execute(
-                select(Run).where(Run.id == uuid.UUID(job.run_id))
+                select(Run)
+                .where(Run.id == uuid.UUID(job.run_id))
+                .options(selectinload(Run.steps))
             )
             run = run_result.scalar_one_or_none()
 
