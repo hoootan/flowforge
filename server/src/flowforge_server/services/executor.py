@@ -487,6 +487,16 @@ class Executor:
             print(f"[Executor] Unknown result status: {status}")
             await self.queue.complete(job.id)
 
+    def _sanitize_output(self, value: Any) -> Any:
+        """Recursively strip null bytes from strings so PostgreSQL JSONB accepts the value."""
+        if isinstance(value, str):
+            return value.replace("\x00", "")
+        if isinstance(value, dict):
+            return {k: self._sanitize_output(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [self._sanitize_output(v) for v in value]
+        return value
+
     async def _save_step(
         self,
         session: AsyncSession,
@@ -496,6 +506,7 @@ class Executor:
         step_result: Any,
     ) -> Step:
         """Save a step result to the database."""
+        step_result = self._sanitize_output(step_result)
         # Check if step exists
         existing = None
         for s in run.steps:
