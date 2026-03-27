@@ -61,9 +61,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         if OTEL_AVAILABLE:
             log.info("opentelemetry_initialized", endpoint=settings.otlp_endpoint)
 
-    if settings.is_development:
-        # Initialize database tables in development
-        await init_db()
+    # Initialize database tables (creates base schema before migrations run)
+    await init_db()
 
     # Run any pending migrations
     await run_migrations()
