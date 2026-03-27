@@ -12,11 +12,20 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, TypeVar
 
-import litellm
 import redis.asyncio as redis
 from pydantic import BaseModel
 
-litellm.drop_params = True  # Ignore unsupported params globally
+# Lazy-load litellm so the server process (which never calls AI) doesn't pay the
+# ~100MB import cost. The executor loads it on first use and it stays cached.
+_litellm: Any = None
+
+def _get_litellm() -> Any:
+    global _litellm
+    if _litellm is None:
+        import litellm as _mod
+        _mod.drop_params = True
+        _litellm = _mod
+    return _litellm
 
 from flowforge_server.config import get_settings
 
@@ -427,7 +436,7 @@ class AIService:
                     if tool_choice != "auto":
                         completion_params["tool_choice"] = tool_choice
 
-                response = await litellm.acompletion(**completion_params)
+                response = await _get_litellm().acompletion(**completion_params)
 
                 latency_ms = int((time.time() - start_time) * 1000)
 
@@ -592,16 +601,6 @@ class AIService:
                 else:
                     tool_schemas.append(tool)
 
-        # Try to import litellm
-        try:
-            import litellm
-            litellm.drop_params = True
-        except ImportError:
-            raise ImportError(
-                "litellm package required for AI service. "
-                "Install with: pip install litellm"
-            )
-
         # Add provider prefix for litellm routing if needed
         litellm_model = model
         if model.startswith("claude") and not model.startswith("anthropic/"):
@@ -689,8 +688,8 @@ class AIService:
                 # Fallback: estimate tokens if usage not available from stream
                 if prompt_tokens == 0 and completion_tokens == 0:
                     try:
-                        prompt_tokens = litellm.token_counter(model=model, messages=messages)
-                        completion_tokens = litellm.token_counter(model=model, text=accumulated_content)
+                        prompt_tokens = _get_litellm().token_counter(model=model, messages=messages)
+                        completion_tokens = _get_litellm().token_counter(model=model, text=accumulated_content)
                     except Exception:
                         pass
 
