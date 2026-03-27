@@ -312,6 +312,14 @@ async def replay_run(
     await session.commit()
     await session.refresh(new_run)
 
+    # Fetch the function to build the job payload
+    fn_result = await session.execute(
+        select(Function).where(Function.id == new_run.function_id)
+    )
+    fn = fn_result.scalar_one_or_none()
+    if not fn:
+        raise HTTPException(status_code=404, detail="Function not found")
+
     # Load steps relationship
     result = await session.execute(
         select(Run)
@@ -319,6 +327,26 @@ async def replay_run(
         .options(selectinload(Run.steps))
     )
     new_run = result.scalar_one()
+
+    # Enqueue the new run so the executor picks it up
+    queue = FairQueue()
+    try:
+        job = Job(
+            job_type="execute_run",
+            run_id=str(new_run.id),
+            function_id=fn.function_id,
+            tenant_id=str(tenant.id),
+            data={
+                "function_uuid": str(fn.id),
+                "endpoint_url": fn.endpoint_url,
+                "config": fn.config,
+                "trigger_data": new_run.trigger_data,
+            },
+            max_attempts=fn.retries,
+        )
+        await queue.enqueue(job)
+    finally:
+        await queue.close()
 
     return run_to_response(new_run)
 
