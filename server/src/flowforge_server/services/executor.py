@@ -447,7 +447,7 @@ class Executor:
         elif status == "error":
             # Error occurred
             error = result.get("error", {})
-            retryable = error.get("retryable", True)
+            retryable = error.get("retryable", False)
 
             if retryable and run.attempt < run.max_attempts:
                 # Retry
