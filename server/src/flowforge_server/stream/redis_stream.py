@@ -119,6 +119,8 @@ class RedisEventStream(EventStream):
             )
         except redis.ResponseError as e:
             if "NOGROUP" in str(e):
+                # Group was deleted externally — clear cache so it gets recreated
+                self._consumer_groups_created.discard(consumer_group)
                 await self._ensure_consumer_group(consumer_group)
                 return []
             raise
