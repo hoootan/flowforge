@@ -15,6 +15,8 @@ from typing import TYPE_CHECKING, Any, TypeVar
 import redis.asyncio as redis
 from pydantic import BaseModel
 
+from flowforge_server.config import get_settings
+
 # Lazy-load litellm so the server process (which never calls AI) doesn't pay the
 # ~100MB import cost. The executor loads it on first use and it stays cached.
 _litellm: Any = None
@@ -26,8 +28,6 @@ def _get_litellm() -> Any:
         _mod.drop_params = True
         _litellm = _mod
     return _litellm
-
-from flowforge_server.config import get_settings
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -637,7 +637,7 @@ class AIService:
             if tool_choice != "auto":
                 completion_params["tool_choice"] = tool_choice
 
-        response = await litellm.acompletion(**completion_params)
+        response = await _get_litellm().acompletion(**completion_params)
 
         # Track accumulated data
         accumulated_content = ""
