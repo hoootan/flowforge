@@ -5,7 +5,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
   SelectContent,
@@ -129,8 +128,7 @@ export function ToolStepParameters({
           </CardContent>
         </Card>
       ) : (
-        <ScrollArea className="max-h-[400px]">
-          <div className="space-y-3 pr-1">
+        <div className="max-h-[400px] overflow-y-auto space-y-3 pr-1">
             {parameters.map((param, index) => (
               <Card key={param.id}>
                 <CardContent className="p-4">
@@ -217,8 +215,7 @@ export function ToolStepParameters({
                 </CardContent>
               </Card>
             ))}
-          </div>
-        </ScrollArea>
+        </div>
       )}
 
       {/* View as JSON */}
