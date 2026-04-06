@@ -88,6 +88,20 @@ function getStatusBadge(status: string) {
   );
 }
 
+function computeAIUsageTotals(steps: Step[]): { totalTokens: number; totalCost: number } {
+  return steps.reduce(
+    (acc, step) => {
+      if (step.step_type !== "ai" || !step.output) return acc;
+      const usage = (step.output as { usage?: { total_tokens?: number; cost_usd?: number } }).usage;
+      return {
+        totalTokens: acc.totalTokens + (usage?.total_tokens ?? 0),
+        totalCost: acc.totalCost + (usage?.cost_usd ?? 0),
+      };
+    },
+    { totalTokens: 0, totalCost: 0 }
+  );
+}
+
 function formatDuration(startedAt: string | null, endedAt: string | null): string {
   if (!startedAt) return "—";
   const start = new Date(startedAt).getTime();
@@ -306,6 +320,25 @@ export default function RunDetailPage({
                 <CardTitle>Run Info</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                {(() => {
+                  const { totalTokens, totalCost } = computeAIUsageTotals(run.steps);
+                  if (totalTokens === 0) return null;
+                  return (
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-muted-foreground">Total Tokens</span>
+                        <span className="font-mono text-sm">{totalTokens.toLocaleString()}</span>
+                      </div>
+                      {totalCost > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-sm text-muted-foreground">Total Cost</span>
+                          <span className="font-mono text-sm">${totalCost.toFixed(4)}</span>
+                        </div>
+                      )}
+                      <Separator />
+                    </>
+                  );
+                })()}
                 <div className="flex justify-between">
                   <span className="text-sm text-muted-foreground">Status</span>
                   <div className="flex items-center gap-2">
@@ -475,6 +508,25 @@ export default function RunDetailPage({
               <CardTitle>Run Info</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              {(() => {
+                const { totalTokens, totalCost } = computeAIUsageTotals(run.steps);
+                if (totalTokens === 0) return null;
+                return (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-muted-foreground">Total Tokens</span>
+                      <span className="font-mono text-sm">{totalTokens.toLocaleString()}</span>
+                    </div>
+                    {totalCost > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-sm text-muted-foreground">Total Cost</span>
+                        <span className="font-mono text-sm">${totalCost.toFixed(4)}</span>
+                      </div>
+                    )}
+                    <Separator />
+                  </>
+                );
+              })()}
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">Status</span>
                 <div className="flex items-center gap-2">
