@@ -24,12 +24,14 @@ class ExecutionResult:
         step_result: Any = None,
         output: Any = None,
         error: dict[str, Any] | None = None,
+        started_at: str | None = None,
     ) -> None:
         self.status = status  # "step_complete", "function_complete", "error"
         self.step_id = step_id
         self.step_result = step_result
         self.output = output
         self.error = error
+        self.started_at = started_at  # ISO 8601 from SDK step timing
 
     def to_dict(self) -> dict[str, Any]:
         result: dict[str, Any] = {"status": self.status}
@@ -46,6 +48,9 @@ class ExecutionResult:
 
         if self.error:
             result["error"] = self.error
+
+        if self.started_at:
+            result["started_at"] = self.started_at
 
         return result
 
@@ -123,11 +128,12 @@ class ExecutionEngine:
             )
 
         except StepCompleted as e:
-            # Step completed, yield to server
+            # Step completed, yield to server (with timing from SDK)
             return ExecutionResult(
                 status="step_complete",
                 step_id=e.step_id,
                 step_result=e.result,
+                started_at=e.started_at,
             )
 
         except StepFailed as e:
