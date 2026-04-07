@@ -165,42 +165,50 @@ function WaterfallTimeline({
   // Zoom to actual step span instead of full run duration
   const { spanStart, spanDuration } = computeStepSpan(steps, totalDuration, now);
 
-  // Pre-compute effective durations: use inter-step gaps when recorded duration ≈ 0
-  // This handles existing DB data where started_at == ended_at (both set at save time)
+  // Pre-compute effective durations, keyed by step.id.
+  // Legacy DB data has started_at == ended_at (both set to utcnow() at save time).
+  // For those, infer duration from the gap to the next step's started_at.
   const effectiveDurations = useMemo(() => {
-    // Sort by started_at for gap calculation
-    const sorted = [...steps]
-      .map((s, origIdx) => ({ step: s, origIdx }))
-      .sort((a, b) => {
-        const aT = a.step.started_at ? new Date(a.step.started_at).getTime() : 0;
-        const bT = b.step.started_at ? new Date(b.step.started_at).getTime() : 0;
-        return aT - bT;
-      });
+    const MIN_VISUAL_MS = 100;
 
-    const durations = new Map<number, number>();
+    // Only include steps that have actually started for gap inference
+    const withStart = steps.filter((s) => s.started_at);
+    const sorted = [...withStart].sort(
+      (a, b) => new Date(a.started_at!).getTime() - new Date(b.started_at!).getTime(),
+    );
+
+    const durations = new Map<string, number>();
+
+    // Steps without started_at get a fixed minimal duration (not yet started)
+    for (const s of steps) {
+      if (!s.started_at) {
+        durations.set(s.id, MIN_VISUAL_MS);
+      }
+    }
+
     for (let i = 0; i < sorted.length; i++) {
-      const s = sorted[i].step;
-      const start = s.started_at ? new Date(s.started_at).getTime() : spanStart;
+      const s = sorted[i];
+      const start = new Date(s.started_at!).getTime();
       const end = s.ended_at ? new Date(s.ended_at).getTime() : now;
       const recorded = end - start;
 
-      if (recorded > 100) {
-        // Real timing from SDK fix — use it
-        durations.set(sorted[i].origIdx, recorded);
+      // Detect legacy records: both timestamps exist and are nearly equal
+      const isLegacy = s.started_at && s.ended_at && Math.abs(recorded) < 50;
+
+      if (!isLegacy) {
+        // Real timing — use it (even if < 100ms)
+        durations.set(s.id, Math.max(recorded, MIN_VISUAL_MS));
       } else if (i < sorted.length - 1) {
-        // Infer from gap to next step's started_at
-        const nextStepStart = sorted[i + 1].step.started_at;
-        const nextStart = nextStepStart
-          ? new Date(nextStepStart).getTime()
-          : now;
-        durations.set(sorted[i].origIdx, Math.max(nextStart - start, 100));
+        // Legacy record: infer from gap to next step
+        const nextStart = new Date(sorted[i + 1].started_at!).getTime();
+        durations.set(s.id, Math.max(nextStart - start, MIN_VISUAL_MS));
       } else {
-        // Last step — use minimum visible duration
-        durations.set(sorted[i].origIdx, Math.max(recorded, 100));
+        // Legacy + last step: no next step to infer from
+        durations.set(s.id, MIN_VISUAL_MS);
       }
     }
     return durations;
-  }, [steps, spanStart, now]);
+  }, [steps, now]);
 
   // Limit visible steps
   const visibleSteps = expanded ? steps : steps.slice(0, INITIAL_VISIBLE_STEPS);
@@ -236,13 +244,11 @@ function WaterfallTimeline({
 
       {/* Step bars */}
       <div className="space-y-1.5">
-        {visibleSteps.map((step, visibleIdx) => {
-          // Find original index for duration lookup
-          const origIdx = expanded ? visibleIdx : visibleIdx;
+        {visibleSteps.map((step) => {
           const stepStart = step.started_at
             ? new Date(step.started_at).getTime()
             : spanStart;
-          const duration = effectiveDurations.get(origIdx) ?? 100;
+          const duration = effectiveDurations.get(step.id) ?? 100;
           const offset = Math.max(
             ((stepStart - spanStart) / spanDuration) * 100,
             0,
