@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CollapsibleJson } from "@/components/ui/collapsible-json";
 import {
+  Activity,
   ArrowLeft,
   CheckCircle,
   Clock,
@@ -26,6 +27,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
+import { formatDistanceToNow } from "date-fns";
 import { api, RunWithSteps, Step } from "@/lib/api";
 import { NotFoundState } from "@/components/empty-state";
 import { hasAgentSteps, extractAgentResult } from "@/lib/hooks/useAgent";
@@ -57,34 +59,125 @@ function getStepIcon(type: string) {
 function getStatusIcon(status: string) {
   switch (status) {
     case "completed":
-      return <CheckCircle className="h-5 w-5 text-green-500" />;
+      return <CheckCircle className="h-5 w-5 text-emerald-500" />;
     case "running":
-      return <Clock className="h-5 w-5 text-blue-500 animate-spin" />;
+      return <Clock className="h-5 w-5 text-primary animate-spin" />;
     case "failed":
-      return <XCircle className="h-5 w-5 text-red-500" />;
+      return <XCircle className="h-5 w-5 text-destructive" />;
     case "paused":
     case "sleeping":
     case "waiting":
-      return <Pause className="h-5 w-5 text-yellow-500" />;
+      return <Pause className="h-5 w-5 text-amber-500" />;
     default:
       return <Clock className="h-5 w-5 text-muted-foreground" />;
   }
 }
 
-function getStatusBadge(status: string) {
-  const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-    completed: "default",
-    running: "secondary",
-    failed: "destructive",
-    paused: "outline",
-    sleeping: "outline",
-    waiting: "outline",
-  };
+const statusBadgeStyles: Record<string, string> = {
+  completed: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400",
+  running: "border-primary/20 bg-primary/10 text-primary",
+  failed: "border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-400",
+  paused: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-400",
+  sleeping: "border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-950 dark:text-cyan-400",
+  waiting: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-400",
+};
 
+function getStatusBadge(status: string) {
   return (
-    <Badge variant={variants[status] || "outline"} className="capitalize">
+    <Badge variant="outline" className={`capitalize ${statusBadgeStyles[status] || ""}`}>
       {status}
     </Badge>
+  );
+}
+
+// ── Step color mapping for waterfall (matches Paper design) ────
+
+const stepTypeColors: Record<string, { bg: string; text: string; label: string }> = {
+  run: { bg: "bg-[var(--chart-1)]", text: "text-white", label: "run" },
+  ai: { bg: "bg-[var(--chart-6)]", text: "text-white", label: "ai" },
+  wait_for_event: { bg: "bg-[var(--chart-4)]", text: "text-black", label: "wait" },
+  sleep: { bg: "bg-[var(--chart-2)]", text: "text-white", label: "sleep" },
+  invoke: { bg: "bg-[var(--chart-3)]", text: "text-white", label: "invoke" },
+  send_event: { bg: "bg-[var(--chart-3)]", text: "text-white", label: "send" },
+  agent: { bg: "bg-[var(--chart-6)]", text: "text-white", label: "agent" },
+  sub_agent: { bg: "bg-[var(--chart-6)]", text: "text-white", label: "sub_agent" },
+};
+
+// ── Waterfall Timeline Component ───────────────────────────────
+
+function WaterfallTimeline({ steps, totalDuration }: { steps: Step[]; totalDuration: number }) {
+  if (steps.length === 0 || totalDuration === 0) return null;
+
+  // Calculate cumulative offset for each step
+  const runStart = steps[0]?.started_at ? new Date(steps[0].started_at).getTime() : 0;
+
+  // Time axis labels
+  const formatMs = (ms: number) => {
+    if (ms < 1000) return `${Math.round(ms)}ms`;
+    return `${(ms / 1000).toFixed(1)}s`;
+  };
+
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((pct) => ({
+    label: formatMs(totalDuration * pct),
+    pct: pct * 100,
+  }));
+
+  return (
+    <div className="space-y-3">
+      {/* Time axis */}
+      <div className="relative h-5 text-xs text-muted-foreground">
+        {ticks.map((tick) => (
+          <span
+            key={tick.pct}
+            className="absolute font-mono"
+            style={{ left: `${tick.pct}%`, transform: tick.pct === 100 ? "translateX(-100%)" : tick.pct === 0 ? "none" : "translateX(-50%)" }}
+          >
+            {tick.label}
+          </span>
+        ))}
+      </div>
+
+      {/* Step bars */}
+      <div className="space-y-1.5">
+        {steps.map((step) => {
+          const stepStart = step.started_at ? new Date(step.started_at).getTime() : runStart;
+          const stepEnd = step.ended_at ? new Date(step.ended_at).getTime() : Date.now();
+          const offset = ((stepStart - runStart) / totalDuration) * 100;
+          const width = Math.max(((stepEnd - stepStart) / totalDuration) * 100, 2);
+          const duration = stepEnd - stepStart;
+          const colors = stepTypeColors[step.step_type] || stepTypeColors.run;
+
+          return (
+            <div key={step.id} className="flex items-center gap-3 h-8">
+              <span className="w-36 truncate text-right text-xs font-mono text-muted-foreground flex-shrink-0">
+                {step.step_id}
+              </span>
+              <div className="relative flex-1 h-full">
+                <div
+                  className={`absolute top-0 h-full rounded ${colors.bg} ${step.status === "failed" ? "!bg-destructive" : ""} flex items-center px-2 min-w-[60px]`}
+                  style={{ left: `${offset}%`, width: `${Math.min(width, 100 - offset)}%` }}
+                >
+                  <span className={`text-xs font-medium ${step.status === "failed" ? "text-white" : colors.text} truncate`}>
+                    {formatMs(duration)}{" "}
+                    <span className="opacity-70">{colors.label}</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Legend */}
+      <div className="flex flex-wrap gap-3 pt-2 text-xs text-muted-foreground">
+        {Object.entries(stepTypeColors).slice(0, 6).map(([type, colors]) => (
+          <span key={type} className="flex items-center gap-1.5">
+            <span className={`h-2.5 w-2.5 rounded-sm ${colors.bg}`} />
+            {colors.label}
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -253,6 +346,14 @@ export default function RunDetailPage({
   const triggerData = run.trigger_data as { event?: { name?: string; data?: Record<string, unknown> } };
   const isAgentRun = hasAgentSteps(run);
   const agentResult = extractAgentResult(run);
+  const { totalTokens, totalCost } = computeAIUsageTotals(run.steps);
+  const runDurationMs = run.started_at
+    ? (run.ended_at ? new Date(run.ended_at).getTime() : Date.now()) - new Date(run.started_at).getTime()
+    : 0;
+  const aiModel = run.steps.find((s) => s.step_type === "ai" && s.output)?.output as { model?: string } | undefined;
+  const aiLatency = run.steps.filter((s) => s.step_type === "ai" && s.started_at && s.ended_at).reduce((sum, s) => {
+    return sum + (new Date(s.ended_at!).getTime() - new Date(s.started_at!).getTime());
+  }, 0);
 
   return (
     <div className="space-y-6">
@@ -265,40 +366,87 @@ export default function RunDetailPage({
         </Link>
         <div className="flex-1">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold tracking-tight">{run.function_id}</h1>
+            <h1 className="text-2xl font-bold tracking-tight font-mono">{run.function_id}</h1>
             {getStatusBadge(run.status)}
             {isConnected && (
               <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
                 Live
               </span>
             )}
           </div>
-          <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
-            <span className="font-mono">{run.id.slice(0, 8)}...</span>
-            <span>&bull;</span>
-            <span>Attempt {run.attempt}/{run.max_attempts}</span>
-            <span>&bull;</span>
-            <span>{formatDuration(run.started_at, run.ended_at)}</span>
+          <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
+            <span className="font-mono text-xs">{run.id.slice(0, 12)}</span>
+            <span className="text-border">|</span>
+            <span>Trigger: {run.trigger_type}</span>
+            <span className="text-border">|</span>
+            <span>Duration: {formatDuration(run.started_at, run.ended_at)}</span>
+            <span className="text-border">|</span>
+            <span>Started {run.started_at ? formatDistanceToNow(new Date(run.started_at), { addSuffix: true }) : "—"}</span>
           </div>
         </div>
         <div className="flex gap-2">
           {canCancel && (
-            <Button variant="destructive" size="sm" onClick={handleCancel}>
-              <StopCircle className="mr-2 h-4 w-4" />
+            <Button variant="outline" size="sm" onClick={handleCancel}>
               Cancel
             </Button>
           )}
-          <Button variant="outline" size="sm" onClick={handleReplay}>
+          <Button size="sm" onClick={handleReplay}>
             <RotateCw className="mr-2 h-4 w-4" />
             Replay
           </Button>
-          <Button variant="outline" size="sm" onClick={handleCopyId}>
-            <Copy className="mr-2 h-4 w-4" />
-            Copy ID
-          </Button>
         </div>
       </div>
+
+      {/* Run Stats Cards (matching Paper design) */}
+      {totalTokens > 0 && (
+        <div className="grid gap-4 md:grid-cols-4">
+          <Card className="bg-muted/30">
+            <CardContent className="flex items-center gap-3 p-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                <Activity className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold tabular-nums">{totalTokens.toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground">Total Tokens</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-muted/30">
+            <CardContent className="flex items-center gap-3 p-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10">
+                <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">$</span>
+              </div>
+              <div>
+                <p className="text-2xl font-bold tabular-nums">${totalCost.toFixed(3)}</p>
+                <p className="text-xs text-muted-foreground">Total Cost</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-muted/30">
+            <CardContent className="flex items-center gap-3 p-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--chart-6)]/10">
+                <Brain className="h-5 w-5 text-[var(--chart-6)]" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{aiModel?.model || "—"}</p>
+                <p className="text-xs text-muted-foreground">Model Used</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-muted/30">
+            <CardContent className="flex items-center gap-3 p-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/10">
+                <Timer className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold tabular-nums">{aiLatency > 0 ? `${aiLatency}ms` : "—"}</p>
+                <p className="text-xs text-muted-foreground">AI Latency</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Content */}
       {isAgentRun && agentResult ? (
@@ -399,9 +547,26 @@ export default function RunDetailPage({
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Steps Timeline */}
           <div className="lg:col-span-2 space-y-4">
+            {/* Waterfall Timeline Card */}
+            {run.steps.length > 0 && runDurationMs > 0 && (
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle>Execution Timeline</CardTitle>
+                    <CardDescription>
+                      Step-by-step waterfall view — {formatDuration(run.started_at, run.ended_at)} total
+                    </CardDescription>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <WaterfallTimeline steps={run.steps} totalDuration={runDurationMs} />
+                </CardContent>
+              </Card>
+            )}
+
             <Card>
             <CardHeader>
-              <CardTitle>Step Timeline</CardTitle>
+              <CardTitle>Step Details</CardTitle>
               <CardDescription>
                 Execution flow and step-by-step progress
               </CardDescription>
@@ -418,11 +583,11 @@ export default function RunDetailPage({
                         <div
                           className={`flex h-10 w-10 items-center justify-center rounded-full border-2 ${
                             step.status === "completed"
-                              ? "border-green-500 bg-green-50 text-green-600"
+                              ? "border-emerald-500 bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400"
                               : step.status === "running"
-                              ? "border-blue-500 bg-blue-50 text-blue-600"
+                              ? "border-primary bg-primary/10 text-primary"
                               : step.status === "failed"
-                              ? "border-red-500 bg-red-50 text-red-600"
+                              ? "border-destructive bg-red-50 text-destructive dark:bg-red-950"
                               : "border-muted bg-muted text-muted-foreground"
                           }`}
                         >

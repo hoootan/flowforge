@@ -1,62 +1,87 @@
 import { NavItem } from '@/types';
 
+export interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
 /**
- * FlowForge Navigation Configuration
+ * FlowForge Navigation — grouped by purpose (matches Paper design)
  */
-export const navItems: NavItem[] = [
+export const navGroups: NavGroup[] = [
   {
-    title: 'Overview',
-    url: '/',
-    icon: 'dashboard',
-    isActive: false,
-    shortcut: ['d', 'd'],
-    items: []
+    label: 'Monitor',
+    items: [
+      {
+        title: 'Overview',
+        url: '/',
+        icon: 'dashboard',
+        isActive: false,
+        shortcut: ['d', 'd'],
+        items: []
+      },
+      {
+        title: 'Runs',
+        url: '/runs',
+        icon: 'activity',
+        isActive: false,
+        shortcut: ['r', 'r'],
+        items: []
+      },
+      {
+        title: 'Events',
+        url: '/events',
+        icon: 'zap',
+        isActive: false,
+        shortcut: ['e', 'e'],
+        items: []
+      },
+    ]
   },
   {
-    title: 'Runs',
-    url: '/runs',
-    icon: 'activity',
-    isActive: false,
-    shortcut: ['r', 'r'],
-    items: []
+    label: 'Build',
+    items: [
+      {
+        title: 'Functions',
+        url: '/functions',
+        icon: 'box',
+        isActive: false,
+        shortcut: ['f', 'f'],
+        items: []
+      },
+      {
+        title: 'Tools',
+        url: '/tools',
+        icon: 'wrench',
+        isActive: false,
+        shortcut: ['t', 't'],
+        items: []
+      },
+    ]
   },
   {
-    title: 'Functions',
-    url: '/functions',
-    icon: 'box',
-    isActive: false,
-    shortcut: ['f', 'f'],
-    items: []
-  },
-  {
-    title: 'Tools',
-    url: '/tools',
-    icon: 'wrench',
-    isActive: false,
-    shortcut: ['t', 't'],
-    items: []
-  },
-  {
-    title: 'Events',
-    url: '/events',
-    icon: 'zap',
-    isActive: false,
-    shortcut: ['e', 'e'],
-    items: []
-  },
-  {
-    title: 'Approvals',
-    url: '/approvals',
-    icon: 'check',
-    isActive: false,
-    shortcut: ['a', 'a'],
-    items: []
-  },
-  {
-    title: 'Settings',
-    url: '/settings',
-    icon: 'settings',
-    isActive: false,
-    items: []
+    label: 'Manage',
+    items: [
+      {
+        title: 'Approvals',
+        url: '/approvals',
+        icon: 'check',
+        isActive: false,
+        shortcut: ['a', 'a'],
+        items: []
+      },
+      {
+        title: 'Settings',
+        url: '/settings',
+        icon: 'settings',
+        isActive: false,
+        items: []
+      }
+    ]
   }
 ];
+
+/**
+ * Flat nav items — backward compatible export
+ */
+export const navItems: NavItem[] = navGroups.flatMap((group) => group.items);

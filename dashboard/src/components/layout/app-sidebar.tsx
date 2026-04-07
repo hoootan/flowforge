@@ -33,8 +33,7 @@ import {
 } from '@/components/ui/sidebar';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { navItems } from '@/config/nav-config';
-import { useFilteredNavItems } from '@/hooks/use-nav';
+import { navGroups } from '@/config/nav-config';
 import { useAuthStore, usePermissions } from '@/stores/auth-store';
 import {
   ChevronRight,
@@ -74,20 +73,17 @@ export default function AppSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { state } = useSidebar();
-  const filteredItems = useFilteredNavItems(navItems);
   const [pendingApprovals, setPendingApprovals] = React.useState(0);
 
   const { user, logout, token, isAuthenticated, isLoading, refreshUser, refreshAccessToken } = useAuthStore();
   const { canCreateResources, isAdmin } = usePermissions();
 
-  // Initialize auth on mount
   React.useEffect(() => {
     if (token && !user) {
       refreshUser();
     }
   }, [token, user, refreshUser]);
 
-  // Set token provider and refresh handler for API client
   React.useEffect(() => {
     api.setTokenProvider(() => token);
     api.setRefreshHandler(refreshAccessToken);
@@ -97,7 +93,6 @@ export default function AppSidebar() {
     });
   }, [token, refreshAccessToken, logout, router]);
 
-  // Fetch pending approvals count
   React.useEffect(() => {
     const fetchApprovals = async () => {
       if (!isAuthenticated) return;
@@ -119,11 +114,9 @@ export default function AppSidebar() {
     router.push('/login');
   };
 
-  // Get role config
   const role = user?.role ? roleConfig[user.role as keyof typeof roleConfig] : null;
   const RoleIcon = role?.icon || User;
 
-  // Get user initials
   const initials = user?.name
     ? user.name
         .split(' ')
@@ -132,18 +125,6 @@ export default function AppSidebar() {
         .toUpperCase()
         .slice(0, 2)
     : 'FF';
-
-  // Filter nav items based on permissions
-  const visibleNavItems = React.useMemo(() => {
-    return filteredItems.filter((item) => {
-      // Hide certain items for viewers
-      if (!canCreateResources) {
-        // Viewers can still see these but won't be able to create
-        return true;
-      }
-      return true;
-    });
-  }, [filteredItems, canCreateResources]);
 
   return (
     <Sidebar collapsible='icon'>
@@ -162,7 +143,7 @@ export default function AppSidebar() {
                 <div className='grid flex-1 text-left text-sm leading-tight'>
                   <span className='truncate font-semibold'>FlowForge</span>
                   <span className='truncate text-xs text-muted-foreground'>
-                    Dashboard
+                    Workflow Platform
                   </span>
                 </div>
               </Link>
@@ -171,67 +152,71 @@ export default function AppSidebar() {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent className='overflow-x-hidden'>
-        <SidebarGroup>
-          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
-          <SidebarMenu>
-            {visibleNavItems.map((item) => {
-              const Icon = item.icon ? Icons[item.icon] : Icons.logo;
-              const isActive =
-                pathname === item.url ||
-                (item.url !== '/' && pathname.startsWith(item.url));
-              const showBadge = item.title === 'Approvals' && pendingApprovals > 0;
+        {navGroups.map((group) => (
+          <SidebarGroup key={group.label}>
+            <SidebarGroupLabel className='text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60'>
+              {group.label}
+            </SidebarGroupLabel>
+            <SidebarMenu>
+              {group.items.map((item) => {
+                const Icon = item.icon ? Icons[item.icon] : Icons.logo;
+                const isActive =
+                  pathname === item.url ||
+                  (item.url !== '/' && pathname.startsWith(item.url));
+                const showBadge = item.title === 'Approvals' && pendingApprovals > 0;
 
-              return item?.items && item?.items?.length > 0 ? (
-                <Collapsible
-                  key={item.title}
-                  asChild
-                  defaultOpen={item.isActive}
-                  className='group/collapsible'
-                >
-                  <SidebarMenuItem>
-                    <CollapsibleTrigger asChild>
-                      <SidebarMenuButton tooltip={item.title} isActive={isActive}>
-                        {item.icon && <Icon />}
+                return item?.items && item?.items?.length > 0 ? (
+                  <Collapsible
+                    key={item.title}
+                    asChild
+                    defaultOpen={item.isActive}
+                    className='group/collapsible'
+                  >
+                    <SidebarMenuItem>
+                      <CollapsibleTrigger asChild>
+                        <SidebarMenuButton tooltip={item.title} isActive={isActive}>
+                          {item.icon && <Icon />}
+                          <span>{item.title}</span>
+                          <ChevronRight className='ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90' />
+                        </SidebarMenuButton>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <SidebarMenuSub>
+                          {item.items?.map((subItem) => (
+                            <SidebarMenuSubItem key={subItem.title}>
+                              <SidebarMenuSubButton
+                                asChild
+                                isActive={pathname === subItem.url}
+                              >
+                                <Link href={subItem.url}>
+                                  <span>{subItem.title}</span>
+                                </Link>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          ))}
+                        </SidebarMenuSub>
+                      </CollapsibleContent>
+                    </SidebarMenuItem>
+                  </Collapsible>
+                ) : (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild tooltip={item.title} isActive={isActive}>
+                      <Link href={item.url}>
+                        <Icon />
                         <span>{item.title}</span>
-                        <ChevronRight className='ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90' />
-                      </SidebarMenuButton>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <SidebarMenuSub>
-                        {item.items?.map((subItem) => (
-                          <SidebarMenuSubItem key={subItem.title}>
-                            <SidebarMenuSubButton
-                              asChild
-                              isActive={pathname === subItem.url}
-                            >
-                              <Link href={subItem.url}>
-                                <span>{subItem.title}</span>
-                              </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                        ))}
-                      </SidebarMenuSub>
-                    </CollapsibleContent>
+                      </Link>
+                    </SidebarMenuButton>
+                    {showBadge && (
+                      <SidebarMenuBadge className='bg-destructive text-destructive-foreground text-[10px] min-w-5 h-5 rounded-full flex items-center justify-center'>
+                        {pendingApprovals > 99 ? '99+' : pendingApprovals}
+                      </SidebarMenuBadge>
+                    )}
                   </SidebarMenuItem>
-                </Collapsible>
-              ) : (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild tooltip={item.title} isActive={isActive}>
-                    <Link href={item.url}>
-                      <Icon />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                  {showBadge && (
-                    <SidebarMenuBadge className='bg-destructive text-destructive-foreground'>
-                      {pendingApprovals > 99 ? '99+' : pendingApprovals}
-                    </SidebarMenuBadge>
-                  )}
-                </SidebarMenuItem>
-              );
-            })}
-          </SidebarMenu>
-        </SidebarGroup>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroup>
+        ))}
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
@@ -244,7 +229,7 @@ export default function AppSidebar() {
                 >
                   <Avatar className='size-8 rounded-lg'>
                     <AvatarImage src='' alt={user?.name || 'User'} />
-                    <AvatarFallback className='rounded-lg'>{initials}</AvatarFallback>
+                    <AvatarFallback className='rounded-lg bg-primary/10 text-primary text-xs font-semibold'>{initials}</AvatarFallback>
                   </Avatar>
                   <div className='grid flex-1 text-left text-sm leading-tight'>
                     <span className='truncate font-semibold'>
@@ -267,7 +252,7 @@ export default function AppSidebar() {
                   <div className='flex items-center gap-2 px-1 py-1.5 text-left text-sm'>
                     <Avatar className='size-8 rounded-lg'>
                       <AvatarImage src='' alt={user?.name || 'User'} />
-                      <AvatarFallback className='rounded-lg'>{initials}</AvatarFallback>
+                      <AvatarFallback className='rounded-lg bg-primary/10 text-primary text-xs font-semibold'>{initials}</AvatarFallback>
                     </Avatar>
                     <div className='grid flex-1 text-left text-sm leading-tight'>
                       <span className='truncate font-semibold'>
