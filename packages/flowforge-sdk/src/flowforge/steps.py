@@ -3,7 +3,7 @@
 import hashlib
 import json
 from collections.abc import Awaitable, Callable
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any, TypeVar
 
 from flowforge.agent import AgentResult, AgentState
@@ -119,7 +119,7 @@ class StepManager:
             return result  # type: ignore
 
         # Execute the function with timing
-        started_at = datetime.now(timezone.utc).isoformat()
+        started_at = datetime.now(UTC).isoformat()
         try:
             if callable(fn):
                 result = fn(*args, **kwargs)
