@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useCallback, useEffect, useRef, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -165,6 +165,43 @@ function WaterfallTimeline({
   // Zoom to actual step span instead of full run duration
   const { spanStart, spanDuration } = computeStepSpan(steps, totalDuration, now);
 
+  // Pre-compute effective durations: use inter-step gaps when recorded duration ≈ 0
+  // This handles existing DB data where started_at == ended_at (both set at save time)
+  const effectiveDurations = useMemo(() => {
+    // Sort by started_at for gap calculation
+    const sorted = [...steps]
+      .map((s, origIdx) => ({ step: s, origIdx }))
+      .sort((a, b) => {
+        const aT = a.step.started_at ? new Date(a.step.started_at).getTime() : 0;
+        const bT = b.step.started_at ? new Date(b.step.started_at).getTime() : 0;
+        return aT - bT;
+      });
+
+    const durations = new Map<number, number>();
+    for (let i = 0; i < sorted.length; i++) {
+      const s = sorted[i].step;
+      const start = s.started_at ? new Date(s.started_at).getTime() : spanStart;
+      const end = s.ended_at ? new Date(s.ended_at).getTime() : now;
+      const recorded = end - start;
+
+      if (recorded > 100) {
+        // Real timing from SDK fix — use it
+        durations.set(sorted[i].origIdx, recorded);
+      } else if (i < sorted.length - 1) {
+        // Infer from gap to next step's started_at
+        const nextStepStart = sorted[i + 1].step.started_at;
+        const nextStart = nextStepStart
+          ? new Date(nextStepStart).getTime()
+          : now;
+        durations.set(sorted[i].origIdx, Math.max(nextStart - start, 100));
+      } else {
+        // Last step — use minimum visible duration
+        durations.set(sorted[i].origIdx, Math.max(recorded, 100));
+      }
+    }
+    return durations;
+  }, [steps, spanStart, now]);
+
   // Limit visible steps
   const visibleSteps = expanded ? steps : steps.slice(0, INITIAL_VISIBLE_STEPS);
   const hiddenCount = steps.length - INITIAL_VISIBLE_STEPS;
@@ -199,22 +236,21 @@ function WaterfallTimeline({
 
       {/* Step bars */}
       <div className="space-y-1.5">
-        {visibleSteps.map((step) => {
+        {visibleSteps.map((step, visibleIdx) => {
+          // Find original index for duration lookup
+          const origIdx = expanded ? visibleIdx : visibleIdx;
           const stepStart = step.started_at
             ? new Date(step.started_at).getTime()
             : spanStart;
-          const stepEnd = step.ended_at
-            ? new Date(step.ended_at).getTime()
-            : now;
+          const duration = effectiveDurations.get(origIdx) ?? 100;
           const offset = Math.max(
             ((stepStart - spanStart) / spanDuration) * 100,
             0,
           );
           const width = Math.max(
-            ((stepEnd - stepStart) / spanDuration) * 100,
-            3,
+            (duration / spanDuration) * 100,
+            2,
           );
-          const duration = stepEnd - stepStart;
           const colors = stepTypeColors[step.step_type] || stepTypeColors.run;
 
           return (
