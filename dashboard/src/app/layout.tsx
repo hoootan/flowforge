@@ -7,8 +7,8 @@ import './globals.css';
 import './theme.css';
 
 const META_THEME_COLORS = {
-  light: '#ffffff',
-  dark: '#09090b'
+  light: '#f8fafc',
+  dark: '#0f172a'
 };
 
 export const metadata: Metadata = {

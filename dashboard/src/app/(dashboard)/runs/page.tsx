@@ -48,11 +48,11 @@ function getStatusIcon(status: string) {
     case "completed":
       return <CheckCircle className="h-4 w-4 text-emerald-500" />
     case "running":
-      return <PlayCircle className="h-4 w-4 text-blue-500 animate-pulse" />
+      return <PlayCircle className="h-4 w-4 text-primary animate-pulse" />
     case "failed":
-      return <XCircle className="h-4 w-4 text-red-500" />
+      return <XCircle className="h-4 w-4 text-destructive" />
     case "paused":
-      return <Pause className="h-4 w-4 text-yellow-500" />
+      return <Pause className="h-4 w-4 text-amber-500" />
     default:
       return <Clock className="h-4 w-4 text-muted-foreground" />
   }
@@ -63,11 +63,11 @@ function getStatusBadge(status: string) {
     string,
     { variant: "default" | "secondary" | "destructive" | "outline"; className?: string }
   > = {
-    completed: { variant: "default", className: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" },
-    running: { variant: "secondary", className: "bg-blue-500/10 text-blue-500 border-blue-500/20" },
-    failed: { variant: "destructive" },
-    pending: { variant: "outline" },
-    paused: { variant: "outline", className: "bg-yellow-500/10 text-yellow-600 border-yellow-500/20" },
+    completed: { variant: "outline", className: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400" },
+    running: { variant: "outline", className: "border-primary/20 bg-primary/10 text-primary" },
+    failed: { variant: "outline", className: "border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-400" },
+    pending: { variant: "outline", className: "border-muted text-muted-foreground" },
+    paused: { variant: "outline", className: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-400" },
   }
 
   const { variant, className } = config[status] || { variant: "outline" as const }
