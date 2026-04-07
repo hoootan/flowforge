@@ -90,7 +90,7 @@ services:
       - FLOWFORGE_ENCRYPTION_KEY=${FLOWFORGE_ENCRYPTION_KEY:-flowforge-dev-encryption-key-change-in-prod}
       - FLOWFORGE_ENCRYPTION_SALT=${FLOWFORGE_ENCRYPTION_SALT:-}
     healthcheck:
-      test: ["CMD-SHELL", "pgrep -f flowforge_server.services.runner || exit 1"]
+      test: ["CMD", "python", "-c", "import os; os.kill(1, 0)"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -132,7 +132,7 @@ services:
     volumes:
       - media_data:/app/media
     healthcheck:
-      test: ["CMD-SHELL", "pgrep -f flowforge_server.services.executor || exit 1"]
+      test: ["CMD", "python", "-c", "import os; os.kill(1, 0)"]
       interval: 30s
       timeout: 5s
       retries: 3
