@@ -22,8 +22,6 @@ import {
   Timer,
   Zap,
   RotateCw,
-  Copy,
-  StopCircle,
   Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -105,11 +103,28 @@ const stepTypeColors: Record<string, { bg: string; text: string; label: string }
 
 // ── Waterfall Timeline Component ───────────────────────────────
 
-function WaterfallTimeline({ steps, totalDuration }: { steps: Step[]; totalDuration: number }) {
+function WaterfallTimeline({
+  steps,
+  totalDuration,
+  runStartedAt,
+  now,
+}: {
+  steps: Step[];
+  totalDuration: number;
+  runStartedAt?: string | null;
+  now: number;
+}) {
   if (steps.length === 0 || totalDuration === 0) return null;
 
-  // Calculate cumulative offset for each step
-  const runStart = steps[0]?.started_at ? new Date(steps[0].started_at).getTime() : 0;
+  // Use the earliest non-null step start, falling back to run.started_at
+  const stepStartTimes = steps
+    .map((s) => (s.started_at ? new Date(s.started_at).getTime() : null))
+    .filter((t): t is number => t !== null);
+  const fallbackRunStart =
+    runStartedAt && !Number.isNaN(new Date(runStartedAt).getTime())
+      ? new Date(runStartedAt).getTime()
+      : 0;
+  const runStart = stepStartTimes.length > 0 ? Math.min(...stepStartTimes) : fallbackRunStart;
 
   // Time axis labels
   const formatMs = (ms: number) => {
@@ -141,7 +156,7 @@ function WaterfallTimeline({ steps, totalDuration }: { steps: Step[]; totalDurat
       <div className="space-y-1.5">
         {steps.map((step) => {
           const stepStart = step.started_at ? new Date(step.started_at).getTime() : runStart;
-          const stepEnd = step.ended_at ? new Date(step.ended_at).getTime() : Date.now();
+          const stepEnd = step.ended_at ? new Date(step.ended_at).getTime() : now;
           const offset = ((stepStart - runStart) / totalDuration) * 100;
           const width = Math.max(((stepEnd - stepStart) / totalDuration) * 100, 2);
           const duration = stepEnd - stepStart;
@@ -242,6 +257,12 @@ export default function RunDetailPage({
   const { id } = use(params);
   const [run, setRun] = useState<RunWithSteps | null>(null);
   const [loading, setLoading] = useState(true);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const ticker = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(ticker);
+  }, []);
 
   const fetchRun = useCallback(async () => {
     const data = await api.getRun(id);
@@ -318,10 +339,6 @@ export default function RunDetailPage({
     }
   };
 
-  const handleCopyId = () => {
-    navigator.clipboard.writeText(id);
-  };
-
   const canCancel = run?.status === "running" || run?.status === "pending" || run?.status === "paused";
 
   if (loading) {
@@ -348,7 +365,7 @@ export default function RunDetailPage({
   const agentResult = extractAgentResult(run);
   const { totalTokens, totalCost } = computeAIUsageTotals(run.steps);
   const runDurationMs = run.started_at
-    ? (run.ended_at ? new Date(run.ended_at).getTime() : Date.now()) - new Date(run.started_at).getTime()
+    ? (run.ended_at ? new Date(run.ended_at).getTime() : now) - new Date(run.started_at).getTime()
     : 0;
   const aiModel = run.steps.find((s) => s.step_type === "ai" && s.output)?.output as { model?: string } | undefined;
   const aiLatency = run.steps.filter((s) => s.step_type === "ai" && s.started_at && s.ended_at).reduce((sum, s) => {
@@ -559,7 +576,7 @@ export default function RunDetailPage({
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <WaterfallTimeline steps={run.steps} totalDuration={runDurationMs} />
+                  <WaterfallTimeline steps={run.steps} totalDuration={runDurationMs} runStartedAt={run.started_at} now={now} />
                 </CardContent>
               </Card>
             )}

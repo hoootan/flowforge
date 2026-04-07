@@ -5,7 +5,6 @@ import { api, type Stats, type Run, type Function as FunctionType, type DailyUsa
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { StatCard } from '@/components/charts/stat-card';
 import {
   Select,
   SelectContent,
@@ -21,7 +20,6 @@ import {
   Clock,
   Timer,
   Box,
-  ArrowUpRight,
   TrendingUp,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
@@ -208,7 +206,7 @@ function ErrorRateChart({ data, loading }: { data: DailyUsage[]; loading: boolea
   // Simulate error data from usage (replace with real data when available)
   const last12 = data.slice(-12);
   const chartData = last12.map((d) => ({
-    time: new Date(d.date).toLocaleDateString('en-US', { hour: '2-digit' }).split(',')[0],
+    time: new Date(d.date).toLocaleDateString('en-US'),
     errors: d.requests > 0 ? Math.round(d.requests * 0.08) : 0,
   }));
 
@@ -333,7 +331,7 @@ function FunctionHealth({ functions, stats, loading }: { functions: FunctionType
       .slice(0, 6)
       .map((fn) => ({
         name: fn.name,
-        rate: Math.round(60 + Math.random() * 39), // Simulated - replace with real data
+        rate: Math.round(60 + (fn.name.split('').reduce((s, c) => s + c.charCodeAt(0), 0) % 40)), // Deterministic placeholder
       }))
       .sort((a, b) => b.rate - a.rate);
   }, [functions]);
