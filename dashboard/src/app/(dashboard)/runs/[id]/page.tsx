@@ -124,35 +124,14 @@ function shortenStepId(id: string): string {
   return id.replace(/^stage:\d+-/, "") || id;
 }
 
-/** Compute the actual time span that steps occupy. */
-function computeStepSpan(
-  steps: Step[],
-  fallbackMs: number,
-  now: number,
-): { spanStart: number; spanDuration: number } {
-  const starts: number[] = [];
-  const ends: number[] = [];
-  for (const s of steps) {
-    if (s.started_at) starts.push(new Date(s.started_at).getTime());
-    if (s.ended_at) ends.push(new Date(s.ended_at).getTime());
-    else if (s.started_at) ends.push(now);
-  }
-  if (starts.length === 0) return { spanStart: 0, spanDuration: fallbackMs };
-  const spanStart = Math.min(...starts);
-  const spanEnd = Math.max(...ends);
-  return { spanStart, spanDuration: Math.max(spanEnd - spanStart, 1) };
-}
-
 // ── Waterfall Timeline Component ───────────────────────────────
 
 const INITIAL_VISIBLE_STEPS = 15;
 
 function WaterfallTimeline({
   steps,
-  totalDuration,
 }: {
   steps: Step[];
-  totalDuration: number;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -168,32 +147,36 @@ function WaterfallTimeline({
 
   if (sorted.length === 0) return null;
 
-  // Timeline spans from first step start to last step start (+ small padding)
   const firstStart = new Date(sorted[0].started_at!).getTime();
-  const lastStart = new Date(sorted[sorted.length - 1].started_at!).getTime();
-  const timelineSpan = Math.max(lastStart - firstStart, 1000); // at least 1s
 
-  // For each step, compute duration as gap to next step (legacy fix)
-  // This works because all existing data has started_at ≈ ended_at (useless),
-  // but the started_at values between steps reflect real execution timing.
+  // Compute per-step durations.
+  // Legacy data: started_at ≈ ended_at (both set to utcnow() at save time) → infer from gap to next step.
+  // SDK-fixed data: started_at and ended_at differ meaningfully → use real duration.
   const stepDurations: number[] = sorted.map((step, i) => {
     const start = new Date(step.started_at!).getTime();
     const end = step.ended_at ? new Date(step.ended_at).getTime() : Date.now();
     const selfDuration = end - start;
+    const isLegacy = step.ended_at && Math.abs(selfDuration) <= 1;
 
-    // If step has real duration (> 500ms), use it (future SDK-fixed data)
-    if (selfDuration > 500) return selfDuration;
+    if (!isLegacy) return Math.max(selfDuration, 0);
 
-    // Otherwise, infer from gap to next step
+    // Legacy: infer from gap to next step
     if (i < sorted.length - 1) {
       const nextStart = new Date(sorted[i + 1].started_at!).getTime();
       const gap = nextStart - start;
       if (gap > 0) return gap;
     }
 
-    // Last step or no gap: use a minimum visible duration
-    return Math.max(selfDuration, 200);
+    // Last legacy step: minimum visible duration
+    return 200;
   });
+
+  // Timeline span: from first start to the max effective end (start + duration)
+  const maxEnd = sorted.reduce((max, step, i) => {
+    const start = new Date(step.started_at!).getTime();
+    return Math.max(max, start + stepDurations[i]);
+  }, firstStart);
+  const timelineSpan = Math.max(maxEnd - firstStart, 1000);
 
   // Visible subset
   const visibleCount = expanded ? sorted.length : Math.min(sorted.length, INITIAL_VISIBLE_STEPS);
@@ -682,7 +665,7 @@ export default function RunDetailPage({
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <WaterfallTimeline steps={run.steps} totalDuration={runDurationMs} />
+                  <WaterfallTimeline steps={run.steps} />
                 </CardContent>
               </Card>
             )}
