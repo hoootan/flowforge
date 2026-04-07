@@ -26,9 +26,10 @@ class StepCompleted(FlowForgeError):
     result and re-invoke the function to continue execution.
     """
 
-    def __init__(self, step_id: str, result: Any) -> None:
+    def __init__(self, step_id: str, result: Any, started_at: str | None = None) -> None:
         self.step_id = step_id
         self.result = result
+        self.started_at = started_at  # ISO 8601 timestamp
         super().__init__(f"Step '{step_id}' completed")
 
 

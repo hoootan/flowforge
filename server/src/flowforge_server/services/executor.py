@@ -403,6 +403,7 @@ class Executor:
             step_id = result.get("step_id")
             step_hash = result.get("step_hash")
             step_result = result.get("step_result")
+            step_started_at = result.get("started_at")  # ISO 8601 from SDK
 
             # Create or update step record
             step = await self._save_step(
@@ -411,6 +412,7 @@ class Executor:
                 step_id,
                 step_hash,
                 step_result,
+                started_at=step_started_at,
             )
 
             # Handle special step types
@@ -507,9 +509,29 @@ class Executor:
         step_id: str,
         step_hash: str,
         step_result: Any,
+        started_at: str | None = None,
     ) -> Step:
-        """Save a step result to the database."""
+        """Save a step result to the database.
+
+        Args:
+            started_at: ISO 8601 timestamp from the SDK indicating when the step
+                        actually started executing on the worker. If provided, this
+                        gives accurate step duration for the waterfall timeline.
+        """
         step_result = self._sanitize_output(step_result)
+
+        # Parse started_at from SDK if provided (ISO 8601 string)
+        sdk_started_at = None
+        if started_at:
+            try:
+                parsed = datetime.fromisoformat(started_at)
+                # Strip timezone to match datetime.utcnow() (naive UTC)
+                sdk_started_at = parsed.replace(tzinfo=None) if parsed.tzinfo is None else parsed.astimezone().replace(tzinfo=None)
+            except (ValueError, TypeError):
+                sdk_started_at = None
+
+        now = datetime.utcnow()
+
         # Check if step exists
         existing = None
         for s in run.steps:
@@ -520,7 +542,10 @@ class Executor:
         if existing:
             existing.status = StepStatus.COMPLETED
             existing.output = step_result
-            existing.ended_at = datetime.utcnow()
+            existing.ended_at = now
+            # Update started_at if SDK provided a more accurate timestamp
+            if sdk_started_at and (existing.started_at is None or existing.started_at == existing.ended_at):
+                existing.started_at = sdk_started_at
             return existing
         else:
             # Determine step type
@@ -542,8 +567,8 @@ class Executor:
                 step_type=step_type,
                 status=StepStatus.COMPLETED,
                 output=step_result,
-                started_at=datetime.utcnow(),
-                ended_at=datetime.utcnow(),
+                started_at=sdk_started_at or now,
+                ended_at=now,
             )
             session.add(step)
             run.steps.append(step)

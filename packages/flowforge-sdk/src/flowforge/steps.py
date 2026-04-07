@@ -3,7 +3,7 @@
 import hashlib
 import json
 from collections.abc import Awaitable, Callable
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, TypeVar
 
 from flowforge.agent import AgentResult, AgentState
@@ -118,7 +118,8 @@ class StepManager:
         if is_memoized:
             return result  # type: ignore
 
-        # Execute the function
+        # Execute the function with timing
+        started_at = datetime.now(UTC).isoformat()
         try:
             if callable(fn):
                 result = fn(*args, **kwargs)
@@ -132,8 +133,8 @@ class StepManager:
             # Let the server handle retries
             raise StepFailed(step_id=step_id, error=e) from e
 
-        # Signal completion to the server
-        raise StepCompleted(step_id=step_id, result=result)
+        # Signal completion to the server (with timing)
+        raise StepCompleted(step_id=step_id, result=result, started_at=started_at)
 
     async def sleep(
         self,

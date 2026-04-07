@@ -101,7 +101,51 @@ const stepTypeColors: Record<string, { bg: string; text: string; label: string }
   sub_agent: { bg: "bg-[var(--chart-6)]", text: "text-white", label: "sub_agent" },
 };
 
+// ── Waterfall helpers ───────────────────────────────────────────
+
+/** Format ms to human-readable: 120ms, 3.2s, 2m 15s, 1h 30m */
+function formatWaterfallDuration(ms: number): string {
+  if (ms < 0) ms = 0;
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+  const totalSec = Math.round(ms / 1000);
+  if (totalSec < 3600) {
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    return s > 0 ? `${m}m ${s}s` : `${m}m`;
+  }
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
+/** Strip common step_id prefixes like "stage:N-" for cleaner display */
+function shortenStepId(id: string): string {
+  return id.replace(/^stage:\d+-/, "") || id;
+}
+
+/** Compute the actual time span that steps occupy. */
+function computeStepSpan(
+  steps: Step[],
+  fallbackMs: number,
+  now: number,
+): { spanStart: number; spanDuration: number } {
+  const starts: number[] = [];
+  const ends: number[] = [];
+  for (const s of steps) {
+    if (s.started_at) starts.push(new Date(s.started_at).getTime());
+    if (s.ended_at) ends.push(new Date(s.ended_at).getTime());
+    else if (s.started_at) ends.push(now);
+  }
+  if (starts.length === 0) return { spanStart: 0, spanDuration: fallbackMs };
+  const spanStart = Math.min(...starts);
+  const spanEnd = Math.max(...ends);
+  return { spanStart, spanDuration: Math.max(spanEnd - spanStart, 1) };
+}
+
 // ── Waterfall Timeline Component ───────────────────────────────
+
+const INITIAL_VISIBLE_STEPS = 15;
 
 function WaterfallTimeline({
   steps,
@@ -114,38 +158,39 @@ function WaterfallTimeline({
   runStartedAt?: string | null;
   now: number;
 }) {
-  if (steps.length === 0 || totalDuration === 0) return null;
+  const [expanded, setExpanded] = useState(false);
 
-  // Use the earliest non-null step start, falling back to run.started_at
-  const stepStartTimes = steps
-    .map((s) => (s.started_at ? new Date(s.started_at).getTime() : null))
-    .filter((t): t is number => t !== null);
-  const fallbackRunStart =
-    runStartedAt && !Number.isNaN(new Date(runStartedAt).getTime())
-      ? new Date(runStartedAt).getTime()
-      : 0;
-  const runStart = stepStartTimes.length > 0 ? Math.min(...stepStartTimes) : fallbackRunStart;
+  if (steps.length === 0) return null;
 
-  // Time axis labels
-  const formatMs = (ms: number) => {
-    if (ms < 1000) return `${Math.round(ms)}ms`;
-    return `${(ms / 1000).toFixed(1)}s`;
-  };
+  // Zoom to actual step span instead of full run duration
+  const { spanStart, spanDuration } = computeStepSpan(steps, totalDuration, now);
+
+  // Limit visible steps
+  const visibleSteps = expanded ? steps : steps.slice(0, INITIAL_VISIBLE_STEPS);
+  const hiddenCount = steps.length - INITIAL_VISIBLE_STEPS;
 
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((pct) => ({
-    label: formatMs(totalDuration * pct),
+    label: formatWaterfallDuration(spanDuration * pct),
     pct: pct * 100,
   }));
 
   return (
     <div className="space-y-3">
       {/* Time axis */}
-      <div className="relative h-5 text-xs text-muted-foreground">
+      <div className="relative h-5 text-xs text-muted-foreground ml-[200px]">
         {ticks.map((tick) => (
           <span
             key={tick.pct}
             className="absolute font-mono"
-            style={{ left: `${tick.pct}%`, transform: tick.pct === 100 ? "translateX(-100%)" : tick.pct === 0 ? "none" : "translateX(-50%)" }}
+            style={{
+              left: `${tick.pct}%`,
+              transform:
+                tick.pct === 100
+                  ? "translateX(-100%)"
+                  : tick.pct === 0
+                    ? "none"
+                    : "translateX(-50%)",
+            }}
           >
             {tick.label}
           </span>
@@ -154,27 +199,48 @@ function WaterfallTimeline({
 
       {/* Step bars */}
       <div className="space-y-1.5">
-        {steps.map((step) => {
-          const stepStart = step.started_at ? new Date(step.started_at).getTime() : runStart;
-          const stepEnd = step.ended_at ? new Date(step.ended_at).getTime() : now;
-          const offset = ((stepStart - runStart) / totalDuration) * 100;
-          const width = Math.max(((stepEnd - stepStart) / totalDuration) * 100, 2);
+        {visibleSteps.map((step) => {
+          const stepStart = step.started_at
+            ? new Date(step.started_at).getTime()
+            : spanStart;
+          const stepEnd = step.ended_at
+            ? new Date(step.ended_at).getTime()
+            : now;
+          const offset = Math.max(
+            ((stepStart - spanStart) / spanDuration) * 100,
+            0,
+          );
+          const width = Math.max(
+            ((stepEnd - stepStart) / spanDuration) * 100,
+            3,
+          );
           const duration = stepEnd - stepStart;
           const colors = stepTypeColors[step.step_type] || stepTypeColors.run;
 
           return (
-            <div key={step.id} className="flex items-center gap-3 h-8">
-              <span className="w-36 truncate text-right text-xs font-mono text-muted-foreground flex-shrink-0">
-                {step.step_id}
+            <div key={step.id} className="flex items-center gap-3 h-7">
+              <span
+                className="w-[188px] truncate text-right text-xs font-mono text-muted-foreground flex-shrink-0"
+                title={step.step_id}
+              >
+                {shortenStepId(step.step_id)}
               </span>
               <div className="relative flex-1 h-full">
                 <div
-                  className={`absolute top-0 h-full rounded ${colors.bg} ${step.status === "failed" ? "!bg-destructive" : ""} flex items-center px-2 min-w-[60px]`}
-                  style={{ left: `${offset}%`, width: `${Math.min(width, 100 - offset)}%` }}
+                  className={`absolute top-0 h-full rounded ${colors.bg} ${step.status === "failed" ? "!bg-destructive" : ""} flex items-center px-2`}
+                  style={{
+                    left: `${offset}%`,
+                    width: `${Math.min(width, 100 - offset)}%`,
+                    minWidth: "48px",
+                  }}
                 >
-                  <span className={`text-xs font-medium ${step.status === "failed" ? "text-white" : colors.text} truncate`}>
-                    {formatMs(duration)}{" "}
-                    <span className="opacity-70">{colors.label}</span>
+                  <span
+                    className={`text-[11px] font-medium ${step.status === "failed" ? "text-white" : colors.text} truncate whitespace-nowrap`}
+                  >
+                    {formatWaterfallDuration(duration)}
+                    {width > 8 && (
+                      <span className="opacity-60 ml-1">{colors.label}</span>
+                    )}
                   </span>
                 </div>
               </div>
@@ -183,14 +249,34 @@ function WaterfallTimeline({
         })}
       </div>
 
+      {/* Expand / collapse */}
+      {hiddenCount > 0 && !expanded && (
+        <button
+          onClick={() => setExpanded(true)}
+          className="text-xs text-primary hover:underline font-medium ml-[200px]"
+        >
+          Show {hiddenCount} more step{hiddenCount > 1 ? "s" : ""}
+        </button>
+      )}
+      {expanded && hiddenCount > 0 && (
+        <button
+          onClick={() => setExpanded(false)}
+          className="text-xs text-muted-foreground hover:text-foreground font-medium ml-[200px]"
+        >
+          Show fewer
+        </button>
+      )}
+
       {/* Legend */}
       <div className="flex flex-wrap gap-3 pt-2 text-xs text-muted-foreground">
-        {Object.entries(stepTypeColors).slice(0, 6).map(([type, colors]) => (
-          <span key={type} className="flex items-center gap-1.5">
-            <span className={`h-2.5 w-2.5 rounded-sm ${colors.bg}`} />
-            {colors.label}
-          </span>
-        ))}
+        {Object.entries(stepTypeColors)
+          .slice(0, 6)
+          .map(([type, colors]) => (
+            <span key={type} className="flex items-center gap-1.5">
+              <span className={`h-2.5 w-2.5 rounded-sm ${colors.bg}`} />
+              {colors.label}
+            </span>
+          ))}
       </div>
     </div>
   );
@@ -571,7 +657,7 @@ export default function RunDetailPage({
                   <div>
                     <CardTitle>Execution Timeline</CardTitle>
                     <CardDescription>
-                      Step-by-step waterfall view — {formatDuration(run.started_at, run.ended_at)} total
+                      Step-by-step waterfall view — {run.steps.length} steps
                     </CardDescription>
                   </div>
                 </CardHeader>
