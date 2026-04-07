@@ -20,7 +20,7 @@ import {
   BreadcrumbSeparator
 } from '../ui/breadcrumb';
 import { ModeToggle } from './ThemeToggle/theme-toggle';
-import { Circle, Search, Command } from 'lucide-react';
+import { Search, Command } from 'lucide-react';
 import { api } from '@/lib/api';
 
 function ServerStatus() {

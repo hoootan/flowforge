@@ -34,7 +34,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { navGroups } from '@/config/nav-config';
-import { useAuthStore, usePermissions } from '@/stores/auth-store';
+import { useAuthStore } from '@/stores/auth-store';
 import {
   ChevronRight,
   ChevronsUpDown,
@@ -76,7 +76,7 @@ export default function AppSidebar() {
   const [pendingApprovals, setPendingApprovals] = React.useState(0);
 
   const { user, logout, token, isAuthenticated, isLoading, refreshUser, refreshAccessToken } = useAuthStore();
-  const { canCreateResources, isAdmin } = usePermissions();
+
 
   React.useEffect(() => {
     if (token && !user) {
