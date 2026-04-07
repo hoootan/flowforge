@@ -89,6 +89,12 @@ services:
       - FLOWFORGE_REDIS_URL=redis://redis:6379/0
       - FLOWFORGE_ENCRYPTION_KEY=${FLOWFORGE_ENCRYPTION_KEY:-flowforge-dev-encryption-key-change-in-prod}
       - FLOWFORGE_ENCRYPTION_SALT=${FLOWFORGE_ENCRYPTION_SALT:-}
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f flowforge_server.services.runner || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     depends_on:
       server:
         condition: service_healthy
@@ -125,6 +131,12 @@ services:
       - FLOWFORGE_S3_ENDPOINT_URL=${FLOWFORGE_S3_ENDPOINT_URL:-}
     volumes:
       - media_data:/app/media
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f flowforge_server.services.executor || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     depends_on:
       server:
         condition: service_healthy
