@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
+import { redactSensitiveFields } from "@/lib/redact";
 
 interface CollapsibleJsonProps {
   value: unknown;
@@ -13,6 +14,8 @@ interface CollapsibleJsonProps {
   maxHeightClassName?: string;
   collapseThreshold?: number;
   collapsedLines?: number;
+  /** Set to false to skip sensitive field redaction (e.g. for non-user-data) */
+  redact?: boolean;
 }
 
 const DEFAULT_COLLAPSE_THRESHOLD = 1200;
@@ -24,16 +27,18 @@ export function CollapsibleJson({
   maxHeightClassName = "max-h-64",
   collapseThreshold = DEFAULT_COLLAPSE_THRESHOLD,
   collapsedLines = DEFAULT_COLLAPSED_LINES,
+  redact = true,
 }: CollapsibleJsonProps) {
   const jsonString = useMemo(() => {
     if (value === null || value === undefined) return "";
     if (typeof value === "string") return value;
     try {
-      return JSON.stringify(value, null, 2);
+      const displayValue = redact ? redactSensitiveFields(value) : value;
+      return JSON.stringify(displayValue, null, 2);
     } catch (error) {
       return String(value);
     }
-  }, [value]);
+  }, [value, redact]);
 
   const lines = useMemo(() => jsonString.split("\n").length, [jsonString]);
   const shouldCollapse = jsonString.length > collapseThreshold || lines > collapsedLines;
