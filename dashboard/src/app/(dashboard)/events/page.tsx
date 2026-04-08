@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react"
 import { useViewMode } from "@/hooks/use-view-mode"
+import { redactSensitiveFields } from "@/lib/redact"
 import {
   ColumnDef,
   ColumnFiltersState,
@@ -151,7 +152,7 @@ function EventCard({
                     <Eye className="h-4 w-4" />
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-2xl">
+                <DialogContent className="max-w-2xl overflow-hidden">
                   <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                       <Zap className="h-5 w-5 text-amber-500" />
@@ -189,8 +190,8 @@ function EventCard({
                     </div>
                     <div className="space-y-2">
                       <p className="text-sm font-medium">Event Data</p>
-                      <pre className="rounded-lg border bg-muted/50 p-4 text-xs overflow-auto max-h-64 font-mono">
-                        {JSON.stringify(event.data, null, 2)}
+                      <pre className="rounded-lg border bg-muted/50 p-4 text-xs overflow-auto max-h-64 font-mono whitespace-pre-wrap break-all">
+                        {JSON.stringify(redactSensitiveFields(event.data), null, 2)}
                       </pre>
                     </div>
                   </div>
@@ -373,7 +374,7 @@ export default function EventsPage() {
                     <Eye className="h-4 w-4" />
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-2xl">
+                <DialogContent className="max-w-2xl overflow-hidden">
                   <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                       <Zap className="h-5 w-5 text-amber-500" />
@@ -411,8 +412,8 @@ export default function EventsPage() {
                     </div>
                     <div className="space-y-2">
                       <p className="text-sm font-medium">Event Data</p>
-                      <pre className="rounded-lg border bg-muted/50 p-4 text-xs overflow-auto max-h-64 font-mono">
-                        {JSON.stringify(event.data, null, 2)}
+                      <pre className="rounded-lg border bg-muted/50 p-4 text-xs overflow-auto max-h-64 font-mono whitespace-pre-wrap break-all">
+                        {JSON.stringify(redactSensitiveFields(event.data), null, 2)}
                       </pre>
                     </div>
                   </div>
