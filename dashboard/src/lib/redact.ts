@@ -10,19 +10,20 @@ const SENSITIVE_KEY_PATTERNS = [
   /secret/i,
   /password/i,
   /api[_-]?key/i,
-  /auth/i,
+  /\bauth(?:orization|_token|_key|_secret)?\b/i,
+  /\boauth/i,
   /credential/i,
   /private[_-]?key/i,
   /access[_-]?key/i,
   /session[_-]?id/i,
   /cookie/i,
-  /jwt/i,
+  /\bjwt\b/i,
   /bearer/i,
   /refresh[_-]?token/i,
   /client[_-]?secret/i,
   /signing[_-]?key/i,
   /encryption[_-]?key/i,
-  /ssn/i,
+  /\bssn\b/i,
   /credit[_-]?card/i,
 ];
 
@@ -38,6 +39,12 @@ function redactValue(value: string): string {
   return `${value.slice(0, 4)}${REDACTED}${value.slice(-4)}`;
 }
 
+function isPlainObject(obj: unknown): obj is Record<string, unknown> {
+  if (typeof obj !== "object" || obj === null) return false;
+  const proto = Object.getPrototypeOf(obj);
+  return proto === Object.prototype || proto === null;
+}
+
 export function redactSensitiveFields(obj: unknown): unknown {
   if (obj === null || obj === undefined) return obj;
 
@@ -45,17 +52,15 @@ export function redactSensitiveFields(obj: unknown): unknown {
     return obj.map((item) => redactSensitiveFields(item));
   }
 
-  if (typeof obj === "object") {
-    const result: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
-      if (isSensitiveKey(key) && typeof value === "string" && value.length > 0) {
-        result[key] = redactValue(value);
-      } else {
-        result[key] = redactSensitiveFields(value);
-      }
-    }
-    return result;
-  }
+  if (!isPlainObject(obj)) return obj;
 
-  return obj;
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (isSensitiveKey(key) && typeof value === "string" && value.length > 0) {
+      result[key] = redactValue(value);
+    } else {
+      result[key] = redactSensitiveFields(value);
+    }
+  }
+  return result;
 }

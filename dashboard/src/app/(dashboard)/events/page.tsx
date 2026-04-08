@@ -218,8 +218,8 @@ function EventCard({
             <div className="mt-3 pt-3 border-t">
               <p className="text-xs text-muted-foreground mb-1">Data preview</p>
               <code className="text-xs text-muted-foreground line-clamp-1">
-                {JSON.stringify(event.data).slice(0, 100)}
-                {JSON.stringify(event.data).length > 100 && "..."}
+                {JSON.stringify(redactSensitiveFields(event.data)).slice(0, 100)}
+                {JSON.stringify(redactSensitiveFields(event.data)).length > 100 && "..."}
               </code>
             </div>
           )}
