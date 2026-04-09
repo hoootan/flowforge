@@ -148,6 +148,33 @@ flowforge-create-admin -e admin@example.com -p secret123 -n "Admin User"
 - Memoization uses step hashes - completed steps return cached results on replay
 - `_StepProxy` provides global `step` instance configured per-execution context
 
+### Agent Team Platform (Multica-inspired)
+
+FlowForge includes an agent team management layer where AI agents are first-class team members:
+
+**Agents** (`/api/v1/agents`): Named AI identities with status (online/idle/busy/offline), avatar, model, system prompt, and enabled skills. Agents can be assigned to tasks and linked to functions.
+
+**Tasks** (`/api/v1/tasks`): Kanban-style task board with statuses (todo, in_progress, in_review, done, blocked, cancelled). Tasks support priorities, labels, sub-tasks, and can be assigned to humans or agents. Human-readable identifiers (FF-1, FF-2, etc.).
+
+**Comments** (`/api/v1/comments`): Unified activity timeline on tasks and runs. Supports user and agent authors, @mentions, emoji reactions.
+
+**Notifications** (`/api/v1/notifications`): Inbox system for approvals, task assignments, mentions, agent blockers, run failures. Mark read/archive.
+
+**Skills** (`/api/v1/skills`): Reusable function+tool configuration templates AND imported knowledge from external marketplaces.
+- **Local skills**: Capture function configs via "Save as Skill" from the Functions page
+- **Marketplace**: Search skills.sh, preview SKILL.md content, import into FlowForge
+- **Runtime injection**: Skills are NOT baked into system prompts. Instead, each function/agent has an `enabled_skills[]` list. The `InlineExecutor` loads only enabled skills at runtime and wraps them in `<skill-knowledge>` tags.
+- **Endpoints**: `GET /skills/marketplace/search`, `GET /skills/marketplace/preview`, `POST /skills/marketplace/import`, `POST /skills/{id}/refresh`
+- **Skill toggle**: `PUT /functions/{id}/skills`, `PUT /agents/{id}/skills`
+
+**Cost Dashboard** (`/costs`): Token usage, costs by provider/model, daily trends. Surfaces existing usage data prominently.
+
+**Live Activity Panel**: Real-time SSE-powered panel on run detail pages showing agent thinking, tool calls, and events as they happen.
+
+**Key Models**: Agent, Task, Comment, Notification, SkillTemplate (all in `server/src/flowforge_server/db/models/`)
+
+**Key Services**: `skill_marketplace.py` (skills.sh HTTP client + SKILL.md parser)
+
 ## Configuration
 
 Environment variables for the server:

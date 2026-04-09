@@ -11,19 +11,24 @@ from starlette.staticfiles import StaticFiles
 from flowforge_server.api.error_handlers import register_error_handlers
 from flowforge_server.api.middleware import add_api_middleware
 from flowforge_server.api.routes import (
+    agents_router,
     ai_providers_router,
     approvals_router,
     audit_router,
     auth_router,
+    comments_router,
     credentials_router,
     dlq_router,
     events_router,
     functions_router,
     health_router,
     model_pricing_router,
+    notifications_router,
     runs_router,
+    skills_router,
     stats_router,
     stream_router,
+    tasks_router,
     tools_router,
     usage_router,
     users_router,
@@ -197,6 +202,11 @@ FlowForge provides durable execution for AI-powered workflows with:
     app.include_router(audit_router, prefix="/api/v1")
     app.include_router(dlq_router, prefix="/api/v1")
     app.include_router(credentials_router, prefix="/api/v1")
+    app.include_router(agents_router, prefix="/api/v1")
+    app.include_router(tasks_router, prefix="/api/v1")
+    app.include_router(comments_router, prefix="/api/v1")
+    app.include_router(notifications_router, prefix="/api/v1")
+    app.include_router(skills_router, prefix="/api/v1")
 
     # Static media files (generated images, etc.)
     media_path = Path(settings.media_dir)

@@ -387,6 +387,248 @@ export interface UpdateCredentialRequest {
   is_active?: boolean;
 }
 
+// ── Agent types ──────────────────────────────────────────────
+
+export interface AgentType {
+  id: string;
+  name: string;
+  slug: string;
+  avatar_url: string | null;
+  description: string | null;
+  status: "online" | "idle" | "busy" | "offline";
+  model: string | null;
+  system_prompt: string | null;
+  capabilities: Record<string, unknown>;
+  config: Record<string, unknown>;
+  stats: Record<string, unknown>;
+  enabled_skills: string[];
+  is_active: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface AgentsResponse {
+  agents: AgentType[];
+  total: number;
+}
+
+export interface CreateAgentRequest {
+  name: string;
+  description?: string;
+  avatar_url?: string;
+  model?: string;
+  system_prompt?: string;
+  capabilities?: Record<string, unknown>;
+  config?: Record<string, unknown>;
+}
+
+export interface AgentStats {
+  agent_id: string;
+  total_runs: number;
+  completed_runs: number;
+  failed_runs: number;
+  success_rate: number;
+  total_tokens: number;
+  total_cost_usd: number;
+  avg_duration_ms: number;
+  period_days: number;
+}
+
+// ── Task types ───────────────────────────────────────────────
+
+export interface TaskType {
+  id: string;
+  identifier: string;
+  title: string;
+  description: string | null;
+  status: "todo" | "in_progress" | "in_review" | "done" | "blocked" | "cancelled";
+  priority: "urgent" | "high" | "medium" | "low" | "none";
+  labels: string[];
+  assignee_type: "user" | "agent" | null;
+  assignee_user_id: string | null;
+  assignee_agent_id: string | null;
+  assignee_user: { id: string; name: string; email: string } | null;
+  assignee_agent: { id: string; name: string; slug: string; avatar_url: string | null; status: string } | null;
+  created_by_user_id: string | null;
+  parent_task_id: string | null;
+  function_id: string | null;
+  run_id: string | null;
+  sub_tasks_count: number;
+  comments_count: number;
+  metadata: Record<string, unknown>;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface TasksResponse {
+  tasks: TaskType[];
+  total: number;
+}
+
+export interface TaskBoardResponse {
+  columns: Record<string, TaskType[]>;
+  total: number;
+}
+
+export interface CreateTaskRequest {
+  title: string;
+  description?: string;
+  status?: string;
+  priority?: string;
+  labels?: string[];
+  assignee_user_id?: string;
+  assignee_agent_id?: string;
+  parent_task_id?: string;
+  function_id?: string;
+  metadata?: Record<string, unknown>;
+}
+
+// ── Comment types ────────────────────────────────────────────
+
+export interface CommentType {
+  id: string;
+  task_id: string | null;
+  run_id: string | null;
+  author_type: "user" | "agent" | "system";
+  author_user_id: string | null;
+  author_agent_id: string | null;
+  author: { id?: string; name: string; email?: string; avatar_url?: string | null; type: string } | null;
+  content: string;
+  comment_type: string;
+  mentions: unknown[];
+  reactions: Record<string, string[]>;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface CommentsResponse {
+  comments: CommentType[];
+  total: number;
+}
+
+export interface CreateCommentRequest {
+  task_id?: string;
+  run_id?: string;
+  content: string;
+  comment_type?: string;
+  author_user_id?: string;
+  author_agent_id?: string;
+  mentions?: Record<string, unknown>[];
+}
+
+// ── Notification types ───────────────────────────────────────
+
+export interface NotificationType {
+  id: string;
+  notification_type: string;
+  title: string;
+  body: string | null;
+  resource_type: string | null;
+  resource_id: string | null;
+  data: Record<string, unknown>;
+  is_read: boolean;
+  is_archived: boolean;
+  created_at: string | null;
+}
+
+export interface NotificationsResponse {
+  notifications: NotificationType[];
+  total: number;
+  unread_count: number;
+}
+
+// ── Skill types ──────────────────────────────────────────────
+
+export interface SkillType {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  category: string | null;
+  icon: string | null;
+  version: number;
+  function_config: Record<string, unknown>;
+  tools_config: Record<string, unknown>[];
+  usage_count: number;
+  is_builtin: boolean;
+  is_active: boolean;
+  tags: string[];
+  source: "local" | "skills_sh" | "github";
+  instructions: string | null;
+  source_metadata: {
+    repo?: string;
+    path?: string;
+    fetched_at?: string;
+    external_id?: string;
+    install_count?: number;
+    frontmatter?: Record<string, unknown>;
+  } | null;
+  created_by_user_id: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+// ── Marketplace types ────────────────────────────────────────
+
+export interface MarketplaceSearchResult {
+  external_id: string;
+  name: string;
+  description: string;
+  source: "skills_sh" | "github";
+  repo: string;
+  install_count: number;
+  preview_url: string | null;
+}
+
+export interface MarketplaceSearchResponse {
+  results: MarketplaceSearchResult[];
+  total: number;
+}
+
+export interface SkillPreview {
+  name: string;
+  description: string;
+  raw_content: string;
+  frontmatter: Record<string, unknown>;
+  body: string;
+  repo: string;
+  path: string;
+}
+
+export interface ImportSkillRequest {
+  repo: string;
+  path?: string;
+  source?: string;
+  external_id?: string;
+  name_override?: string;
+  category?: string;
+  tags?: string[];
+}
+
+export interface SkillsResponse {
+  skills: SkillType[];
+  total: number;
+}
+
+export interface CreateSkillRequest {
+  name: string;
+  description?: string;
+  category?: string;
+  icon?: string;
+  function_config?: Record<string, unknown>;
+  tools_config?: Record<string, unknown>[];
+  tags?: string[];
+}
+
+// ── Cost Dashboard types ─────────────────────────────────────
+
+export interface CostDashboardData {
+  summary: { summary: UsageSummary };
+  by_provider: { providers: UsageByProvider[] };
+  by_model: { models: UsageByModel[] };
+  daily: { daily: DailyUsage[] };
+}
+
 const emptyCredentialsResponse: CredentialsResponse = { credentials: [], total: 0 };
 const emptyRunsResponse: RunsResponse = { runs: [], total: 0, page: 1, page_size: 50 };
 const emptyFunctionsResponse: FunctionsResponse = { functions: [], total: 0 };
@@ -1223,6 +1465,375 @@ class FlowForgeAPI {
       return true;
     } catch {
       return false;
+    }
+  }
+
+  // ── Agents API ──────────────────────────────────────────────
+
+  async getAgents(params?: { status?: string; is_active?: boolean }): Promise<AgentsResponse> {
+    const searchParams = new URLSearchParams();
+    if (params?.status) searchParams.set("status", params.status);
+    if (params?.is_active !== undefined) searchParams.set("is_active", String(params.is_active));
+    const query = searchParams.toString();
+    try {
+      return await this.request<AgentsResponse>(`/agents${query ? `?${query}` : ""}`);
+    } catch {
+      return { agents: [], total: 0 };
+    }
+  }
+
+  async getAgent(agentId: string): Promise<AgentType | null> {
+    try {
+      return await this.request<AgentType>(`/agents/${agentId}`);
+    } catch {
+      return null;
+    }
+  }
+
+  async createAgent(data: CreateAgentRequest): Promise<AgentType | null> {
+    try {
+      return await this.request<AgentType>("/agents", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async updateAgent(agentId: string, data: Partial<CreateAgentRequest> & { status?: string; is_active?: boolean }): Promise<AgentType | null> {
+    try {
+      return await this.request<AgentType>(`/agents/${agentId}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async deleteAgent(agentId: string): Promise<boolean> {
+    try {
+      await this.request(`/agents/${agentId}`, { method: "DELETE" });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async getAgentStats(agentId: string, days: number = 30): Promise<AgentStats | null> {
+    try {
+      return await this.request<AgentStats>(`/agents/${agentId}/stats?days=${days}`);
+    } catch {
+      return null;
+    }
+  }
+
+  async setAgentSkills(agentId: string, skillIds: string[]): Promise<{ enabled_skills: string[] } | null> {
+    try {
+      return await this.request(`/agents/${agentId}/skills`, {
+        method: "PUT",
+        body: JSON.stringify(skillIds),
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async getAgentSkills(agentId: string): Promise<{ enabled_skills: string[] }> {
+    try {
+      return await this.request(`/agents/${agentId}/skills`);
+    } catch {
+      return { enabled_skills: [] };
+    }
+  }
+
+  // ── Function Skills API ─────────────────────────────────────
+
+  async setFunctionSkills(functionId: string, skillIds: string[]): Promise<{ enabled_skills: string[] } | null> {
+    try {
+      return await this.request(`/functions/${functionId}/skills`, {
+        method: "PUT",
+        body: JSON.stringify(skillIds),
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async getFunctionSkills(functionId: string): Promise<{ enabled_skills: string[] }> {
+    try {
+      return await this.request(`/functions/${functionId}/skills`);
+    } catch {
+      return { enabled_skills: [] };
+    }
+  }
+
+  // ── Tasks API ───────────────────────────────────────────────
+
+  async getTasks(params?: {
+    status?: string;
+    priority?: string;
+    assignee_user_id?: string;
+    assignee_agent_id?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<TasksResponse> {
+    const searchParams = new URLSearchParams();
+    if (params?.status) searchParams.set("status", params.status);
+    if (params?.priority) searchParams.set("priority", params.priority);
+    if (params?.assignee_user_id) searchParams.set("assignee_user_id", params.assignee_user_id);
+    if (params?.assignee_agent_id) searchParams.set("assignee_agent_id", params.assignee_agent_id);
+    if (params?.limit) searchParams.set("limit", String(params.limit));
+    if (params?.offset) searchParams.set("offset", String(params.offset));
+    const query = searchParams.toString();
+    try {
+      return await this.request<TasksResponse>(`/tasks${query ? `?${query}` : ""}`);
+    } catch {
+      return { tasks: [], total: 0 };
+    }
+  }
+
+  async getTaskBoard(params?: {
+    assignee_user_id?: string;
+    assignee_agent_id?: string;
+  }): Promise<TaskBoardResponse> {
+    const searchParams = new URLSearchParams();
+    if (params?.assignee_user_id) searchParams.set("assignee_user_id", params.assignee_user_id);
+    if (params?.assignee_agent_id) searchParams.set("assignee_agent_id", params.assignee_agent_id);
+    const query = searchParams.toString();
+    try {
+      return await this.request<TaskBoardResponse>(`/tasks/board${query ? `?${query}` : ""}`);
+    } catch {
+      return { columns: {}, total: 0 };
+    }
+  }
+
+  async createTask(data: CreateTaskRequest): Promise<TaskType | null> {
+    try {
+      return await this.request<TaskType>("/tasks", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async getTask(taskId: string): Promise<TaskType | null> {
+    try {
+      return await this.request<TaskType>(`/tasks/${taskId}`);
+    } catch {
+      return null;
+    }
+  }
+
+  async updateTask(taskId: string, data: Partial<CreateTaskRequest> & { run_id?: string }): Promise<TaskType | null> {
+    try {
+      return await this.request<TaskType>(`/tasks/${taskId}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async deleteTask(taskId: string): Promise<boolean> {
+    try {
+      await this.request(`/tasks/${taskId}`, { method: "DELETE" });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // ── Comments API ────────────────────────────────────────────
+
+  async getComments(params: { task_id?: string; run_id?: string }): Promise<CommentsResponse> {
+    const searchParams = new URLSearchParams();
+    if (params.task_id) searchParams.set("task_id", params.task_id);
+    if (params.run_id) searchParams.set("run_id", params.run_id);
+    const query = searchParams.toString();
+    try {
+      return await this.request<CommentsResponse>(`/comments${query ? `?${query}` : ""}`);
+    } catch {
+      return { comments: [], total: 0 };
+    }
+  }
+
+  async createComment(data: CreateCommentRequest): Promise<CommentType | null> {
+    try {
+      return await this.request<CommentType>("/comments", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async addReaction(commentId: string, emoji: string, userId: string): Promise<CommentType | null> {
+    try {
+      return await this.request<CommentType>(`/comments/${commentId}/reactions`, {
+        method: "POST",
+        body: JSON.stringify({ emoji, user_id: userId }),
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  // ── Notifications API ───────────────────────────────────────
+
+  async getNotifications(params?: {
+    is_read?: boolean;
+    is_archived?: boolean;
+    limit?: number;
+  }): Promise<NotificationsResponse> {
+    const searchParams = new URLSearchParams();
+    if (params?.is_read !== undefined) searchParams.set("is_read", String(params.is_read));
+    if (params?.is_archived !== undefined) searchParams.set("is_archived", String(params.is_archived));
+    if (params?.limit) searchParams.set("limit", String(params.limit));
+    const query = searchParams.toString();
+    try {
+      return await this.request<NotificationsResponse>(`/notifications${query ? `?${query}` : ""}`);
+    } catch {
+      return { notifications: [], total: 0, unread_count: 0 };
+    }
+  }
+
+  async markNotificationRead(notificationId: string): Promise<boolean> {
+    try {
+      await this.request(`/notifications/${notificationId}/read`, { method: "POST" });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async markAllNotificationsRead(): Promise<boolean> {
+    try {
+      await this.request("/notifications/read-all", { method: "POST" });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async archiveNotification(notificationId: string): Promise<boolean> {
+    try {
+      await this.request(`/notifications/${notificationId}/archive`, { method: "POST" });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // ── Skills API ──────────────────────────────────────────────
+
+  async getSkills(params?: { category?: string; search?: string }): Promise<SkillsResponse> {
+    const searchParams = new URLSearchParams();
+    if (params?.category) searchParams.set("category", params.category);
+    if (params?.search) searchParams.set("search", params.search);
+    const query = searchParams.toString();
+    try {
+      return await this.request<SkillsResponse>(`/skills${query ? `?${query}` : ""}`);
+    } catch {
+      return { skills: [], total: 0 };
+    }
+  }
+
+  async createSkill(data: CreateSkillRequest): Promise<SkillType | null> {
+    try {
+      return await this.request<SkillType>("/skills", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async useSkill(skillId: string): Promise<{ function_config: Record<string, unknown>; tools_config: Record<string, unknown>[]; instructions?: string; system_prompt_append?: string } | null> {
+    try {
+      return await this.request(`/skills/${skillId}/use`, { method: "POST" });
+    } catch {
+      return null;
+    }
+  }
+
+  // ── Skill Marketplace API ───────────────────────────────────
+
+  async searchMarketplace(params: { q: string; source?: string; limit?: number }): Promise<MarketplaceSearchResponse> {
+    const searchParams = new URLSearchParams();
+    searchParams.set("q", params.q);
+    if (params.source) searchParams.set("source", params.source);
+    if (params.limit) searchParams.set("limit", String(params.limit));
+    const query = searchParams.toString();
+    try {
+      return await this.request<MarketplaceSearchResponse>(`/skills/marketplace/search?${query}`);
+    } catch {
+      return { results: [], total: 0 };
+    }
+  }
+
+  async previewSkill(repo: string, path: string = "SKILL.md"): Promise<SkillPreview | null> {
+    const searchParams = new URLSearchParams();
+    searchParams.set("repo", repo);
+    searchParams.set("path", path);
+    try {
+      return await this.request<SkillPreview>(`/skills/marketplace/preview?${searchParams.toString()}`);
+    } catch {
+      return null;
+    }
+  }
+
+  async importSkill(data: ImportSkillRequest): Promise<SkillType | null> {
+    try {
+      return await this.request<SkillType>("/skills/marketplace/import", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async refreshSkill(skillId: string): Promise<SkillType | null> {
+    try {
+      return await this.request<SkillType>(`/skills/${skillId}/refresh`, {
+        method: "POST",
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  // ── Cost Dashboard API ──────────────────────────────────────
+
+  async getCostDashboard(days: number = 30): Promise<CostDashboardData> {
+    const emptySummary: UsageSummary = { total_requests: 0, total_tokens: 0, prompt_tokens: 0, completion_tokens: 0, total_cost_usd: 0, avg_latency_ms: 0, period_start: "", period_end: "" };
+    try {
+      const [summary, byProvider, byModel, daily] = await Promise.all([
+        this.getUsageSummary(days),
+        this.getUsageByProvider(days),
+        this.getUsageByModel(days),
+        this.getDailyUsage(days),
+      ]);
+      return {
+        summary: { summary: summary || emptySummary },
+        by_provider: { providers: byProvider || [] },
+        by_model: { models: byModel || [] },
+        daily: { daily: daily || [] },
+      };
+    } catch {
+      return {
+        summary: { summary: emptySummary },
+        by_provider: { providers: [] },
+        by_model: { models: [] },
+        daily: { daily: [] },
+      };
     }
   }
 }

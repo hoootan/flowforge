@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useCallback, useMemo } from "react"
+import { useRouter } from "next/navigation"
 import { useViewMode } from "@/hooks/use-view-mode"
 import Link from "next/link"
 import {
@@ -129,8 +130,17 @@ function FunctionCard({
   onSuccess: (message: string) => void
   onError: (message: string) => void
 }) {
+  const router = useRouter()
   return (
-    <Card className="group relative overflow-hidden transition-all hover:shadow-md hover:-translate-y-0.5 flex flex-col h-full">
+    <Card
+      className="group relative overflow-hidden transition-all hover:shadow-md hover:-translate-y-0.5 flex flex-col h-full cursor-pointer"
+      onClick={(e) => {
+        // Don't navigate if clicking on actions dropdown or its children
+        const target = e.target as HTMLElement
+        if (target.closest('[data-slot="dropdown-menu-trigger"]') || target.closest('[role="menu"]') || target.closest('[role="dialog"]')) return
+        router.push(`/functions/${encodeURIComponent(fn.function_id)}`)
+      }}
+    >
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-3">

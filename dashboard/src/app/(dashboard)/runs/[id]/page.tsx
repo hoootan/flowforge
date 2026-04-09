@@ -31,6 +31,7 @@ import { NotFoundState } from "@/components/empty-state";
 import { hasAgentSteps, extractAgentResult } from "@/lib/hooks/useAgent";
 import { AgentRunView } from "@/components/agent/AgentRunView";
 import { AgentTimeline } from "@/components/agent/AgentTimeline";
+import { LiveActivityPanel } from "@/components/agent/LiveActivityPanel";
 import { useRunStream } from "@/hooks/useRunStream";
 
 function getStepIcon(type: string) {
@@ -377,7 +378,7 @@ export default function RunDetailPage({
     }, 300);
   }, [fetchRun]);
 
-  const { isConnected } = useRunStream({
+  const streamResult = useRunStream({
     runId: id,
     enabled: isActive,
     onEvent: (event) => {
@@ -400,6 +401,8 @@ export default function RunDetailPage({
       }
     },
   });
+
+  const { isConnected } = streamResult;
 
   // Polling fallback for when SSE connection fails or events are missed
   useEffect(() => {
@@ -567,6 +570,17 @@ export default function RunDetailPage({
 
           {/* Sidebar */}
           <div className="space-y-4">
+            {/* Live Activity Panel (visible when run is active) */}
+            {isActive && (
+              <LiveActivityPanel
+                isConnected={isConnected}
+                isComplete={streamResult.isComplete}
+                thinkingContent={streamResult.thinkingContent}
+                toolCalls={streamResult.toolCalls}
+                events={streamResult.events}
+              />
+            )}
+
             {/* Agent Stats */}
             <AgentRunView agentResult={agentResult} />
 

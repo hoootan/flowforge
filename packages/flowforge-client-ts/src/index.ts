@@ -100,10 +100,13 @@ export {
 export { QueryBuilder, type OrderDirection, type QueryParams } from "./builder";
 
 // Resources (for advanced usage / extension)
+export { AgentsResource, type Agent, type CreateAgentInput, type AgentListResponse } from "./resources/agents";
 export { EventsResource } from "./resources/events";
 export { RunsResource } from "./resources/runs";
 export { FunctionsResource } from "./resources/functions";
 export { ToolsResource } from "./resources/tools";
+export { TasksResource, type Task, type CreateTaskInput, type TaskListResponse, type TaskBoardResponse } from "./resources/tasks";
+export { SkillsResource, type Skill, type CreateSkillInput, type SkillListResponse } from "./resources/skills";
 export { ApprovalsResource } from "./resources/approvals";
 export { HealthResource } from "./resources/health";
 export { UsersResource } from "./resources/users";

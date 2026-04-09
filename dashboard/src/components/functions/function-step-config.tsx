@@ -16,23 +16,34 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { Bot, Server, ChevronRight, Settings } from "lucide-react";
+import { Bot, Server, ChevronRight, Settings, Sparkles, Cpu } from "lucide-react";
 import { useState } from "react";
 import type { FunctionMode } from "./function-step-type";
 import { MODEL_OPTIONS } from "./constants";
 
+interface AgentOption {
+  id: string;
+  name: string;
+  slug: string;
+  model: string | null;
+  system_prompt: string | null;
+  enabled_skills?: string[];
+  skills_names?: string[];
+}
+
 interface FunctionStepConfigProps {
   mode: FunctionMode;
-  // AI Agent fields
   model: string;
   systemPrompt: string;
   onModelChange: (value: string) => void;
   onSystemPromptChange: (value: string) => void;
-  // Worker fields
   endpointUrl: string;
   onEndpointUrlChange: (value: string) => void;
   errors: Record<string, string>;
   disabled?: boolean;
+  agents?: AgentOption[];
+  selectedAgentId?: string | null;
+  onAgentChange?: (agentId: string | null) => void;
 }
 
 export function FunctionStepConfig({
@@ -45,8 +56,16 @@ export function FunctionStepConfig({
   onEndpointUrlChange,
   errors,
   disabled = false,
+  agents,
+  selectedAgentId,
+  onAgentChange,
 }: FunctionStepConfigProps) {
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [additionalInstructions, setAdditionalInstructions] = useState("");
+
+  const selectedAgent = selectedAgentId
+    ? agents?.find((a) => a.id === selectedAgentId)
+    : null;
 
   if (mode === "inline") {
     return (
@@ -63,45 +82,159 @@ export function FunctionStepConfig({
           </div>
         </div>
 
-        <FormField label="Model" required htmlFor="model-select">
-          <Select value={model} onValueChange={onModelChange} disabled={disabled}>
-            <SelectTrigger id="model-select" className="h-10">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {MODEL_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
+        {/* Agent selector */}
+        {agents && agents.length > 0 && onAgentChange && (
+          <FormField label="Run as" htmlFor="agent-select">
+            <Select
+              value={selectedAgentId ?? "__none__"}
+              onValueChange={(v) => {
+                const agent = agents.find((a) => a.id === v);
+                onAgentChange(v === "__none__" ? null : v);
+                if (agent) {
+                  if (agent.model) onModelChange(agent.model);
+                  if (agent.system_prompt) onSystemPromptChange(agent.system_prompt);
+                }
+              }}
+              disabled={disabled}
+            >
+              <SelectTrigger id="agent-select" className="h-10">
+                <SelectValue placeholder="Standalone function" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">
                   <div className="flex items-center gap-2">
-                    <span>{opt.label}</span>
-                    <span className="text-xs text-muted-foreground">- {opt.desc}</span>
+                    <Cpu className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span>Standalone function</span>
                   </div>
                 </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </FormField>
+                {agents.map((agent) => (
+                  <SelectItem key={agent.id} value={agent.id}>
+                    <div className="flex items-center gap-2">
+                      <Bot className="h-3.5 w-3.5 text-primary" />
+                      <span>{agent.name}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FormField>
+        )}
 
-        <FormField
-          label="Instructions"
-          required
-          description={
-            !errors.system_prompt
-              ? "Tell the AI what to do when triggered. Be specific about steps and tool usage."
-              : undefined
-          }
-          error={errors.system_prompt}
-          htmlFor="system-prompt"
-        >
-          <Textarea
-            id="system-prompt"
-            value={systemPrompt}
-            onChange={(e) => onSystemPromptChange(e.target.value)}
-            placeholder="You are an assistant that processes incoming data. When triggered, analyze the payload and take appropriate action using the available tools..."
-            rows={8}
-            className="resize-none text-sm leading-relaxed"
-            disabled={disabled}
-          />
-        </FormField>
+        {/* Agent selected — show agent identity card */}
+        {selectedAgent ? (
+          <>
+            <Card className="bg-muted/30 border-primary/10">
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                    <Bot className="h-5 w-5 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium">{selectedAgent.name}</p>
+                    <p className="text-xs text-muted-foreground">{selectedAgent.slug}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Model */}
+                  <div className="rounded-md bg-background/60 px-3 py-2">
+                    <p className="text-xs text-muted-foreground mb-0.5">Model</p>
+                    <p className="text-sm font-mono">{selectedAgent.model || "Not set"}</p>
+                  </div>
+
+                  {/* Skills */}
+                  <div className="rounded-md bg-background/60 px-3 py-2">
+                    <p className="text-xs text-muted-foreground mb-0.5">Skills</p>
+                    <div className="flex items-center gap-1.5">
+                      <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="text-sm">
+                        {selectedAgent.enabled_skills?.length || 0} enabled
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Agent's base instructions (read-only) */}
+                {selectedAgent.system_prompt && (
+                  <div className="rounded-md bg-background/60 px-3 py-2">
+                    <p className="text-xs text-muted-foreground mb-1">Agent instructions</p>
+                    <p className="text-xs leading-relaxed text-muted-foreground line-clamp-3">
+                      {selectedAgent.system_prompt}
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Function-specific override instructions */}
+            <FormField
+              label="Additional instructions"
+              description="Optional. Add function-specific instructions on top of the agent's base prompt."
+              htmlFor="additional-instructions"
+            >
+              <Textarea
+                id="additional-instructions"
+                value={additionalInstructions}
+                onChange={(e) => {
+                  setAdditionalInstructions(e.target.value);
+                  // Combine agent prompt + additional for the actual system prompt
+                  const base = selectedAgent.system_prompt || "";
+                  const combined = e.target.value
+                    ? `${base}\n\n--- Function-specific instructions ---\n${e.target.value}`
+                    : base;
+                  onSystemPromptChange(combined);
+                }}
+                placeholder="e.g., For this function specifically, also check for SQL injection patterns..."
+                rows={4}
+                className="resize-none text-sm leading-relaxed"
+                disabled={disabled}
+              />
+            </FormField>
+          </>
+        ) : (
+          <>
+            {/* Standalone mode — full manual config */}
+            <FormField label="Model" required htmlFor="model-select">
+              <Select value={model} onValueChange={onModelChange} disabled={disabled}>
+                <SelectTrigger id="model-select" className="h-10">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {MODEL_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      <div className="flex items-center gap-2">
+                        <span>{opt.label}</span>
+                        <span className="text-xs text-muted-foreground">- {opt.desc}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FormField>
+
+            <FormField
+              label="Instructions"
+              required
+              description={
+                !errors.system_prompt
+                  ? "Tell the AI what to do when triggered. Be specific about steps and tool usage."
+                  : undefined
+              }
+              error={errors.system_prompt}
+              htmlFor="system-prompt"
+            >
+              <Textarea
+                id="system-prompt"
+                value={systemPrompt}
+                onChange={(e) => onSystemPromptChange(e.target.value)}
+                placeholder="You are an assistant that processes incoming data. When triggered, analyze the payload and take appropriate action using the available tools..."
+                rows={8}
+                className="resize-none text-sm leading-relaxed"
+                disabled={disabled}
+              />
+            </FormField>
+          </>
+        )}
 
         {/* Advanced settings */}
         <Collapsible open={showAdvanced} onOpenChange={setShowAdvanced}>

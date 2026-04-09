@@ -20,6 +20,7 @@ import {
   BreadcrumbSeparator
 } from '../ui/breadcrumb';
 import { ModeToggle } from './ThemeToggle/theme-toggle';
+import { NotificationBell } from '../notifications/NotificationBell';
 import { Search, Command } from 'lucide-react';
 import { api } from '@/lib/api';
 
@@ -136,6 +137,7 @@ export default function Header() {
           </kbd>
         </button>
 
+        <NotificationBell />
         <ServerStatus />
         <ModeToggle />
       </div>

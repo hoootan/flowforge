@@ -41,6 +41,26 @@ import type {
   CredentialsResponse,
   CreateCredentialRequest,
   UpdateCredentialRequest,
+  AgentType,
+  AgentsResponse,
+  CreateAgentRequest,
+  AgentStats,
+  TaskType,
+  TasksResponse,
+  TaskBoardResponse,
+  CreateTaskRequest,
+  CommentType,
+  CommentsResponse,
+  CreateCommentRequest,
+  NotificationType,
+  NotificationsResponse,
+  SkillType,
+  SkillsResponse,
+  CreateSkillRequest,
+  ImportSkillRequest,
+  MarketplaceSearchResponse,
+  SkillPreview,
+  CostDashboardData,
 } from "./api";
 import type {
   User,
@@ -71,6 +91,12 @@ import {
   mockEffectiveModelPricing,
   mockDefaultModelPricing,
   mockKnownProviders,
+  mockAgents,
+  mockTasks,
+  mockComments,
+  mockNotifications,
+  mockSkills,
+  mockMarketplaceResults,
 } from "./mock-data";
 
 // Simulate network latency
@@ -91,6 +117,13 @@ let _aiProviders = clone(mockAIProviders);
 let _approvals = clone(mockApprovals);
 let _credentials = clone(mockCredentials);
 let _pricingConfigs = clone(mockModelPricingConfigs);
+let _agents = clone(mockAgents);
+let _tasks = clone(mockTasks);
+let _comments = clone(mockComments);
+let _notifications = clone(mockNotifications);
+let _skills = clone(mockSkills);
+
+let _taskSequence = _tasks.length;
 
 class MockFlowForgeAPI {
   // Auth setup methods (no-ops for mock)
@@ -701,6 +734,432 @@ class MockFlowForgeAPI {
     if (idx === -1) return false;
     _credentials.splice(idx, 1);
     return true;
+  }
+
+  // ── Agents ──────────────────────────────────────────────────────
+  async getAgents(params?: { status?: string; is_active?: boolean }): Promise<AgentsResponse> {
+    await delay();
+    let filtered = clone(_agents);
+    if (params?.status) {
+      filtered = filtered.filter((a: AgentType) => a.status === params.status);
+    }
+    if (params?.is_active !== undefined) {
+      filtered = filtered.filter((a: AgentType) => a.is_active === params.is_active);
+    }
+    return { agents: filtered, total: filtered.length };
+  }
+
+  async getAgent(agentId: string): Promise<AgentType | null> {
+    await delay();
+    const agent = _agents.find((a: AgentType) => a.id === agentId);
+    return agent ? clone(agent) : null;
+  }
+
+  async createAgent(data: CreateAgentRequest): Promise<AgentType | null> {
+    await delay();
+    const slug = data.name.toLowerCase().replace(/[^\w]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+    const agent: AgentType = {
+      id: `agent-${Date.now()}`,
+      name: data.name,
+      slug,
+      avatar_url: data.avatar_url ?? null,
+      description: data.description ?? null,
+      status: "idle",
+      model: data.model ?? null,
+      system_prompt: null,
+      capabilities: data.capabilities ?? {},
+      config: data.config ?? {},
+      stats: { total_runs: 0, completed_runs: 0, failed_runs: 0, success_rate: 0, total_tokens: 0, total_cost_usd: 0 },
+      enabled_skills: [],
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    _agents.push(agent);
+    return clone(agent);
+  }
+
+  async updateAgent(agentId: string, data: Partial<CreateAgentRequest> & { status?: string; is_active?: boolean }): Promise<AgentType | null> {
+    await delay();
+    const agent = _agents.find((a: AgentType) => a.id === agentId);
+    if (!agent) return null;
+    Object.assign(agent, data, { updated_at: new Date().toISOString() });
+    return clone(agent);
+  }
+
+  async deleteAgent(agentId: string): Promise<boolean> {
+    await delay();
+    const idx = _agents.findIndex((a: AgentType) => a.id === agentId);
+    if (idx === -1) return false;
+    _agents.splice(idx, 1);
+    return true;
+  }
+
+  async getAgentStats(agentId: string, days: number = 30): Promise<AgentStats | null> {
+    await delay();
+    const agent = _agents.find((a: AgentType) => a.id === agentId);
+    if (!agent) return null;
+    const stats = agent.stats as Record<string, number>;
+    return {
+      agent_id: agentId,
+      total_runs: stats.total_runs ?? 0,
+      completed_runs: stats.completed_runs ?? 0,
+      failed_runs: stats.failed_runs ?? 0,
+      success_rate: stats.success_rate ?? 0,
+      total_tokens: stats.total_tokens ?? 0,
+      total_cost_usd: stats.total_cost_usd ?? 0,
+      avg_duration_ms: 4500,
+      period_days: days,
+    };
+  }
+
+  async setAgentSkills(agentId: string, skillIds: string[]): Promise<{ enabled_skills: string[] } | null> {
+    await delay();
+    const agent = _agents.find((a: AgentType) => a.id === agentId);
+    if (!agent) return null;
+    agent.enabled_skills = skillIds;
+    return { enabled_skills: skillIds };
+  }
+
+  async getAgentSkills(agentId: string): Promise<{ enabled_skills: string[] }> {
+    await delay();
+    const agent = _agents.find((a: AgentType) => a.id === agentId);
+    return { enabled_skills: agent?.enabled_skills ?? [] };
+  }
+
+  async setFunctionSkills(functionId: string, skillIds: string[]): Promise<{ enabled_skills: string[] } | null> {
+    await delay();
+    return { enabled_skills: skillIds };
+  }
+
+  async getFunctionSkills(functionId: string): Promise<{ enabled_skills: string[] }> {
+    await delay();
+    return { enabled_skills: [] };
+  }
+
+  // ── Tasks ───────────────────────────────────────────────────────
+  async getTasks(params?: {
+    status?: string;
+    priority?: string;
+    assignee_user_id?: string;
+    assignee_agent_id?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<TasksResponse> {
+    await delay();
+    let filtered = clone(_tasks);
+    if (params?.status) {
+      filtered = filtered.filter((t: TaskType) => t.status === params.status);
+    }
+    if (params?.priority) {
+      filtered = filtered.filter((t: TaskType) => t.priority === params.priority);
+    }
+    if (params?.assignee_user_id) {
+      filtered = filtered.filter((t: TaskType) => t.assignee_user_id === params.assignee_user_id);
+    }
+    if (params?.assignee_agent_id) {
+      filtered = filtered.filter((t: TaskType) => t.assignee_agent_id === params.assignee_agent_id);
+    }
+    const offset = params?.offset ?? 0;
+    const limit = params?.limit ?? 50;
+    return { tasks: filtered.slice(offset, offset + limit), total: filtered.length };
+  }
+
+  async getTaskBoard(params?: {
+    assignee_user_id?: string;
+    assignee_agent_id?: string;
+  }): Promise<TaskBoardResponse> {
+    await delay();
+    let filtered = clone(_tasks);
+    if (params?.assignee_user_id) {
+      filtered = filtered.filter((t: TaskType) => t.assignee_user_id === params.assignee_user_id);
+    }
+    if (params?.assignee_agent_id) {
+      filtered = filtered.filter((t: TaskType) => t.assignee_agent_id === params.assignee_agent_id);
+    }
+    const columns: Record<string, TaskType[]> = {
+      todo: [], in_progress: [], in_review: [], done: [], blocked: [], cancelled: [],
+    };
+    for (const task of filtered) {
+      const col = task.status in columns ? task.status : "todo";
+      columns[col].push(task);
+    }
+    return { columns, total: filtered.length };
+  }
+
+  async createTask(data: CreateTaskRequest): Promise<TaskType | null> {
+    await delay();
+    _taskSequence++;
+    const task: TaskType = {
+      id: `task-${Date.now()}`,
+      identifier: `FF-${_taskSequence}`,
+      title: data.title,
+      description: data.description ?? null,
+      status: (data.status as TaskType["status"]) ?? "todo",
+      priority: (data.priority as TaskType["priority"]) ?? "none",
+      labels: data.labels ?? [],
+      assignee_type: data.assignee_agent_id ? "agent" : data.assignee_user_id ? "user" : null,
+      assignee_user_id: data.assignee_user_id ?? null,
+      assignee_agent_id: data.assignee_agent_id ?? null,
+      assignee_user: null,
+      assignee_agent: data.assignee_agent_id
+        ? (() => {
+            const a = _agents.find((a: AgentType) => a.id === data.assignee_agent_id);
+            return a ? { id: a.id, name: a.name, slug: a.slug, avatar_url: a.avatar_url, status: a.status } : null;
+          })()
+        : null,
+      created_by_user_id: null,
+      parent_task_id: data.parent_task_id ?? null,
+      function_id: data.function_id ?? null,
+      run_id: null,
+      sub_tasks_count: 0,
+      comments_count: 0,
+      metadata: data.metadata ?? {},
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    _tasks.unshift(task);
+    return clone(task);
+  }
+
+  async getTask(taskId: string): Promise<TaskType | null> {
+    await delay();
+    const task = _tasks.find((t: TaskType) => t.id === taskId);
+    return task ? clone(task) : null;
+  }
+
+  async updateTask(taskId: string, data: Partial<CreateTaskRequest> & { run_id?: string }): Promise<TaskType | null> {
+    await delay();
+    const task = _tasks.find((t: TaskType) => t.id === taskId);
+    if (!task) return null;
+    Object.assign(task, data, { updated_at: new Date().toISOString() });
+    return clone(task);
+  }
+
+  async deleteTask(taskId: string): Promise<boolean> {
+    await delay();
+    const idx = _tasks.findIndex((t: TaskType) => t.id === taskId);
+    if (idx === -1) return false;
+    _tasks.splice(idx, 1);
+    return true;
+  }
+
+  // ── Comments ────────────────────────────────────────────────────
+  async getComments(params: { task_id?: string; run_id?: string }): Promise<CommentsResponse> {
+    await delay();
+    let filtered = clone(_comments);
+    if (params.task_id) {
+      filtered = filtered.filter((c: CommentType) => c.task_id === params.task_id);
+    }
+    if (params.run_id) {
+      filtered = filtered.filter((c: CommentType) => c.run_id === params.run_id);
+    }
+    return { comments: filtered, total: filtered.length };
+  }
+
+  async createComment(data: CreateCommentRequest): Promise<CommentType | null> {
+    await delay();
+    const comment: CommentType = {
+      id: `cmt-${Date.now()}`,
+      task_id: data.task_id ?? null,
+      run_id: data.run_id ?? null,
+      author_type: data.author_agent_id ? "agent" : data.author_user_id ? "user" : "system",
+      author_user_id: data.author_user_id ?? null,
+      author_agent_id: data.author_agent_id ?? null,
+      author: { type: "user", name: "Alex Rivera", email: "admin@flowforge.dev" },
+      content: data.content,
+      comment_type: data.comment_type ?? "comment",
+      mentions: data.mentions ?? [],
+      reactions: {},
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    _comments.push(comment);
+    // Bump comment count on task if applicable
+    if (data.task_id) {
+      const task = _tasks.find((t: TaskType) => t.id === data.task_id);
+      if (task) task.comments_count++;
+    }
+    return clone(comment);
+  }
+
+  async addReaction(commentId: string, emoji: string, userId: string): Promise<CommentType | null> {
+    await delay();
+    const comment = _comments.find((c: CommentType) => c.id === commentId);
+    if (!comment) return null;
+    if (!comment.reactions[emoji]) comment.reactions[emoji] = [];
+    if (!comment.reactions[emoji].includes(userId)) comment.reactions[emoji].push(userId);
+    return clone(comment);
+  }
+
+  // ── Notifications ───────────────────────────────────────────────
+  async getNotifications(params?: {
+    is_read?: boolean;
+    is_archived?: boolean;
+    limit?: number;
+  }): Promise<NotificationsResponse> {
+    await delay();
+    let filtered = clone(_notifications);
+    if (params?.is_read !== undefined) {
+      filtered = filtered.filter((n: NotificationType) => n.is_read === params.is_read);
+    }
+    if (params?.is_archived !== undefined) {
+      filtered = filtered.filter((n: NotificationType) => n.is_archived === params.is_archived);
+    }
+    const unread = _notifications.filter((n: NotificationType) => !n.is_read && !n.is_archived).length;
+    const limit = params?.limit ?? 50;
+    return { notifications: filtered.slice(0, limit), total: filtered.length, unread_count: unread };
+  }
+
+  async markNotificationRead(notificationId: string): Promise<boolean> {
+    await delay();
+    const notif = _notifications.find((n: NotificationType) => n.id === notificationId);
+    if (!notif) return false;
+    notif.is_read = true;
+    return true;
+  }
+
+  async markAllNotificationsRead(): Promise<boolean> {
+    await delay();
+    for (const n of _notifications) n.is_read = true;
+    return true;
+  }
+
+  async archiveNotification(notificationId: string): Promise<boolean> {
+    await delay();
+    const notif = _notifications.find((n: NotificationType) => n.id === notificationId);
+    if (!notif) return false;
+    notif.is_archived = true;
+    notif.is_read = true;
+    return true;
+  }
+
+  // ── Skills ──────────────────────────────────────────────────────
+  async getSkills(params?: { category?: string; search?: string }): Promise<SkillsResponse> {
+    await delay();
+    let filtered = clone(_skills);
+    if (params?.category) {
+      filtered = filtered.filter((s: SkillType) => s.category === params.category);
+    }
+    if (params?.search) {
+      const q = params.search.toLowerCase();
+      filtered = filtered.filter((s: SkillType) =>
+        s.name.toLowerCase().includes(q) || (s.description ?? "").toLowerCase().includes(q)
+      );
+    }
+    return { skills: filtered, total: filtered.length };
+  }
+
+  async createSkill(data: CreateSkillRequest): Promise<SkillType | null> {
+    await delay();
+    const slug = data.name.toLowerCase().replace(/[^\w]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+    const skill: SkillType = {
+      id: `skill-${Date.now()}`,
+      name: data.name,
+      slug,
+      description: data.description ?? null,
+      category: data.category ?? null,
+      icon: data.icon ?? null,
+      version: 1,
+      function_config: data.function_config ?? {},
+      tools_config: data.tools_config ?? [],
+      usage_count: 0,
+      is_builtin: false,
+      is_active: true,
+      tags: data.tags ?? [],
+      source: "local",
+      instructions: null,
+      source_metadata: null,
+      created_by_user_id: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    _skills.push(skill);
+    return clone(skill);
+  }
+
+  async useSkill(skillId: string): Promise<{ function_config: Record<string, unknown>; tools_config: Record<string, unknown>[] } | null> {
+    await delay();
+    const skill = _skills.find((s: SkillType) => s.id === skillId);
+    if (!skill) return null;
+    skill.usage_count++;
+    return { function_config: clone(skill.function_config), tools_config: clone(skill.tools_config) as Record<string, unknown>[] };
+  }
+
+  // ── Skill Marketplace ────────────────────────────────────────────
+  async searchMarketplace(params: { q: string; source?: string; limit?: number }): Promise<MarketplaceSearchResponse> {
+    await delay(200);
+    const q = params.q.toLowerCase();
+    const filtered = clone(mockMarketplaceResults).filter(
+      (r: any) => r.name.toLowerCase().includes(q) || r.description.toLowerCase().includes(q) || r.repo.toLowerCase().includes(q)
+    );
+    return { results: filtered.slice(0, params.limit ?? 10), total: filtered.length };
+  }
+
+  async previewSkill(repo: string, _path: string = "SKILL.md"): Promise<SkillPreview | null> {
+    await delay(300);
+    // Return mock preview based on repo name
+    const repoName = repo.split("/").pop() || "unknown";
+    return {
+      name: repoName.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase()),
+      description: `A skill from ${repo}`,
+      raw_content: `---\nname: ${repoName}\ndescription: A skill from ${repo}\n---\n\n# ${repoName.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase())}\n\n## Instructions\n\nThis is a preview of the SKILL.md content from the repository.\n\n## Best Practices\n\n- Follow the patterns described in this skill\n- Apply these guidelines consistently\n- Adapt to your project's specific needs`,
+      frontmatter: { name: repoName, description: `A skill from ${repo}` },
+      body: `# ${repoName.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase())}\n\n## Instructions\n\nThis is a preview of the SKILL.md content from the repository.\n\n## Best Practices\n\n- Follow the patterns described in this skill\n- Apply these guidelines consistently\n- Adapt to your project's specific needs`,
+      repo,
+      path: "SKILL.md",
+    };
+  }
+
+  async importSkill(data: ImportSkillRequest): Promise<SkillType | null> {
+    await delay(400);
+    const repoName = data.repo.split("/").pop() || "imported-skill";
+    const name = data.name_override || repoName.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+    const slug = repoName.toLowerCase().replace(/[^\w]+/g, "-");
+    const skill: SkillType = {
+      id: `skill-${Date.now()}`,
+      name,
+      slug,
+      description: `Imported from ${data.repo}`,
+      category: data.category ?? null,
+      icon: null,
+      version: 1,
+      function_config: { system_prompt_append: true },
+      tools_config: [],
+      usage_count: 0,
+      is_builtin: false,
+      is_active: true,
+      tags: data.tags ?? [],
+      source: (data.source as "skills_sh" | "github") ?? "skills_sh",
+      instructions: `# ${name}\n\nImported skill instructions from ${data.repo}.\n\n## Guidelines\n\n- Follow the patterns in this skill\n- Adapt to your project needs`,
+      source_metadata: { repo: data.repo, path: data.path ?? "SKILL.md", fetched_at: new Date().toISOString(), external_id: data.external_id },
+      created_by_user_id: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    _skills.push(skill);
+    return clone(skill);
+  }
+
+  async refreshSkill(skillId: string): Promise<SkillType | null> {
+    await delay(300);
+    const skill = _skills.find((s: SkillType) => s.id === skillId);
+    if (!skill || skill.source === "local") return null;
+    skill.version++;
+    skill.updated_at = new Date().toISOString();
+    if (skill.source_metadata) (skill.source_metadata as any).fetched_at = new Date().toISOString();
+    return clone(skill);
+  }
+
+  // ── Cost Dashboard ──────────────────────────────────────────────
+  async getCostDashboard(days: number = 30): Promise<CostDashboardData> {
+    await delay();
+    return {
+      summary: { summary: clone(mockUsageSummary) },
+      by_provider: { providers: clone(mockUsageByProvider) },
+      by_model: { models: clone(mockUsageByModel) },
+      daily: { daily: clone(mockDailyUsage) },
+    };
   }
 }
 

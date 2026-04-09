@@ -3,6 +3,7 @@
  */
 
 import type { ClientOptions, Result, FlowForgeError } from "./types";
+import { AgentsResource } from "./resources/agents";
 import { EventsResource } from "./resources/events";
 import { RunsResource } from "./resources/runs";
 import { FunctionsResource } from "./resources/functions";
@@ -12,11 +13,15 @@ import { HealthResource } from "./resources/health";
 import { UsersResource } from "./resources/users";
 import { ApiKeysResource } from "./resources/api-keys";
 import { CredentialsResource } from "./resources/credentials";
+import { TasksResource } from "./resources/tasks";
+import { SkillsResource } from "./resources/skills";
 
 /**
  * FlowForge client instance with typed resource accessors.
  */
 export interface FlowForgeClient {
+  /** Agents resource - manage AI agent identities */
+  agents: AgentsResource;
   /** Events resource - send and query events */
   events: EventsResource;
   /** Runs resource - query and manage workflow runs */
@@ -25,6 +30,10 @@ export interface FlowForgeClient {
   functions: FunctionsResource;
   /** Tools resource - manage AI tools */
   tools: ToolsResource;
+  /** Tasks resource - Kanban task management */
+  tasks: TasksResource;
+  /** Skills resource - reusable function templates */
+  skills: SkillsResource;
   /** Approvals resource - human-in-the-loop approvals */
   approvals: ApprovalsResource;
   /** Health resource - server health and stats */
@@ -327,6 +336,7 @@ export function createClient(
   }
 
   return {
+    agents: new AgentsResource(request),
     events: new EventsResource(request),
     runs: new RunsResource(request, {
       baseUrl: normalizedBaseUrl,
@@ -335,6 +345,8 @@ export function createClient(
     }),
     functions: new FunctionsResource(request),
     tools: new ToolsResource(request),
+    tasks: new TasksResource(request),
+    skills: new SkillsResource(request),
     approvals: new ApprovalsResource(request),
     health: new HealthResource(request),
     users: new UsersResource(request),
