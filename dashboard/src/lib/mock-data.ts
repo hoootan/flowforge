@@ -26,10 +26,6 @@ import type {
 import type { User, UserWithPermissions } from "@/lib/auth/types";
 
 // ── Helpers ──────────────────────────────────────────────────────────
-function uuid(): string {
-  return crypto.randomUUID();
-}
-
 function daysAgo(n: number): string {
   const d = new Date();
   d.setDate(d.getDate() - n);

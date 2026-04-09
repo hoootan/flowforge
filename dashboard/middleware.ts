@@ -17,7 +17,7 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Skip auth entirely in mock mode (local dev without backend)
-  if (process.env.NEXT_PUBLIC_USE_MOCK === "true") {
+  if (process.env.NEXT_PUBLIC_USE_MOCK === "true" && process.env.NODE_ENV === "development") {
     return NextResponse.next();
   }
 
