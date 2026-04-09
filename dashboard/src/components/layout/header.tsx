@@ -51,7 +51,7 @@ function ServerStatus() {
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <div className='flex items-center gap-2 rounded-full border bg-card px-3 py-1.5 text-xs font-medium shadow-sm'>
+          <div className='flex items-center gap-2 rounded-full border bg-card px-3 py-1.5 text-xs font-medium'>
             <span className={`h-2 w-2 rounded-full ${config.color} ${status === 'connected' ? '' : 'animate-pulse'}`} />
             <span>{config.text}</span>
           </div>
@@ -119,7 +119,7 @@ function Breadcrumbs() {
 
 export default function Header() {
   return (
-    <header className='flex h-14 shrink-0 items-center justify-between gap-2 border-b bg-background/80 backdrop-blur-sm px-4 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12'>
+    <header className='flex h-14 shrink-0 items-center justify-between gap-2 border-b bg-background/60 backdrop-blur-xl px-4 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12'>
       <div className='flex items-center gap-2'>
         <SidebarTrigger className='-ml-1' />
         <Separator orientation='vertical' className='mr-2 h-4' />
@@ -128,7 +128,7 @@ export default function Header() {
 
       <div className='flex items-center gap-3'>
         {/* Search bar */}
-        <button className='relative hidden h-9 w-56 items-center justify-start rounded-lg border border-input bg-card px-3 text-sm text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring md:flex lg:w-72'>
+        <button className='relative hidden h-9 w-56 items-center justify-start rounded-lg border border-input bg-card px-3 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring md:flex lg:w-72'>
           <Search className='mr-2 h-4 w-4' />
           <span>Search...</span>
           <kbd className='pointer-events-none absolute right-2 top-1/2 hidden h-5 -translate-y-1/2 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium opacity-100 sm:flex'>

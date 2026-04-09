@@ -35,12 +35,12 @@ export function SubAgentCard({ toolCall }: SubAgentCardProps) {
   const task = (toolCall.arguments?.task as string) || "No task specified";
 
   return (
-    <Card className="border-dashed border-primary/30 bg-primary/5">
+    <Card className="border-dashed border-border bg-secondary">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full border border-primary/50 bg-primary/10">
-              <Bot className="h-4 w-4 text-primary" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-muted">
+              <Bot className="h-4 w-4 text-muted-foreground" />
             </div>
             <div>
               <CardTitle className="text-sm flex items-center gap-2">
@@ -108,7 +108,7 @@ export function SubAgentCard({ toolCall }: SubAgentCardProps) {
                   Sub-Agent Tool Calls ({subResult.tool_calls.length})
                 </span>
               </div>
-              <div className="space-y-2 pl-4 border-l-2 border-primary/20">
+              <div className="space-y-2 pl-4 border-l-2 border-border">
                 {subResult.tool_calls.map((tc, idx) => (
                   <div key={tc.id || idx} className="rounded border bg-background p-2">
                     <div className="flex items-center gap-2 mb-1">

@@ -1227,7 +1227,12 @@ class FlowForgeAPI {
   }
 }
 
-export const api = new FlowForgeAPI();
+const realApi = new FlowForgeAPI();
+
+// Use mock API when NEXT_PUBLIC_USE_MOCK=true (local dev without backend)
+import { mockApi } from "./mock-api";
+export const api =
+  process.env.NEXT_PUBLIC_USE_MOCK === "true" ? (mockApi as unknown as FlowForgeAPI) : realApi;
 export default api;
 
 // Re-export auth types for convenience

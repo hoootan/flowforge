@@ -7,8 +7,8 @@ import './globals.css';
 import './theme.css';
 
 const META_THEME_COLORS = {
-  light: '#f8fafc',
-  dark: '#0f172a'
+  light: '#f5f5f4',
+  dark: '#09090b'
 };
 
 export const metadata: Metadata = {
@@ -54,7 +54,7 @@ export default async function RootLayout({
       >
         <ThemeProvider
           attribute='class'
-          defaultTheme='system'
+          defaultTheme='dark'
           enableSystem
           disableTransitionOnChange
           enableColorScheme

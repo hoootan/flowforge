@@ -51,94 +51,94 @@
 }
 
 :root {
-  --radius: 0.5rem;
-  /* Surfaces */
-  --background: #f8fafc;
-  --foreground: #0f172a;
-  --card: #ffffff;
-  --card-foreground: #0f172a;
-  --popover: #ffffff;
-  --popover-foreground: #0f172a;
-  /* Brand — Electric Indigo */
-  --primary: #4f46e5;
+  --radius: 0.625rem;
+  /* Surfaces — warm neutral (macOS light) */
+  --background: #f5f5f4;
+  --foreground: #0c0a09;
+  --card: rgba(255, 255, 255, 0.7);
+  --card-foreground: #0c0a09;
+  --popover: rgba(255, 255, 255, 0.85);
+  --popover-foreground: #0c0a09;
+  /* Brand — system blue */
+  --primary: #2563eb;
   --primary-foreground: #ffffff;
-  --secondary: #0891b2;
-  --secondary-foreground: #ffffff;
+  --secondary: rgba(0, 0, 0, 0.04);
+  --secondary-foreground: #0c0a09;
   /* Neutral surfaces */
-  --muted: #f1f5f9;
-  --muted-foreground: #64748b;
-  --accent: #eef2ff;
-  --accent-foreground: #3730a3;
+  --muted: rgba(0, 0, 0, 0.03);
+  --muted-foreground: #78716c;
+  --accent: rgba(0, 0, 0, 0.04);
+  --accent-foreground: #0c0a09;
   /* Semantic */
-  --destructive: #ef4444;
-  --success: #34d399;
-  --warning: #fbbf24;
-  --info: #3b82f6;
+  --destructive: #dc2626;
+  --success: #16a34a;
+  --warning: #ca8a04;
+  --info: #2563eb;
   /* Borders & inputs */
-  --border: #e2e8f0;
-  --input: #e2e8f0;
-  --ring: #4f46e5;
-  /* Chart palette — 6 hue-diverse colors */
-  --chart-1: #4f46e5;
+  --border: rgba(0, 0, 0, 0.08);
+  --input: rgba(0, 0, 0, 0.08);
+  --ring: #2563eb;
+  /* Chart palette */
+  --chart-1: #2563eb;
   --chart-2: #0891b2;
-  --chart-3: #10b981;
-  --chart-4: #f59e0b;
-  --chart-5: #f43f5e;
-  --chart-6: #8b5cf6;
+  --chart-3: #16a34a;
+  --chart-4: #ca8a04;
+  --chart-5: #dc2626;
+  --chart-6: #7c3aed;
   /* Sidebar */
-  --sidebar: #f8fafc;
-  --sidebar-foreground: #0f172a;
-  --sidebar-primary: #4f46e5;
+  --sidebar: rgba(0, 0, 0, 0.02);
+  --sidebar-foreground: #0c0a09;
+  --sidebar-primary: #2563eb;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #eef2ff;
-  --sidebar-accent-foreground: #3730a3;
-  --sidebar-border: #e2e8f0;
-  --sidebar-ring: #4f46e5;
+  --sidebar-accent: rgba(0, 0, 0, 0.04);
+  --sidebar-accent-foreground: #0c0a09;
+  --sidebar-border: rgba(0, 0, 0, 0.06);
+  --sidebar-ring: #2563eb;
 }
 
 .dark {
-  /* Surfaces — deep slate */
-  --background: #0f172a;
-  --foreground: #f1f5f9;
-  --card: #1e293b;
-  --card-foreground: #f1f5f9;
-  --popover: #1e293b;
-  --popover-foreground: #f1f5f9;
-  /* Brand — lighter indigo for dark bg */
-  --primary: #818cf8;
-  --primary-foreground: #0f172a;
-  --secondary: #67e8f9;
-  --secondary-foreground: #0f172a;
+  /* Surfaces — near-black (macOS dark) */
+  --background: #09090b;
+  --foreground: #fafafa;
+  --card: rgba(255, 255, 255, 0.04);
+  --card-foreground: #fafafa;
+  --popover: rgba(30, 30, 30, 0.85);
+  --popover-foreground: #fafafa;
+  /* Brand — system blue */
+  --primary: #3b82f6;
+  --primary-foreground: #ffffff;
+  --secondary: rgba(255, 255, 255, 0.06);
+  --secondary-foreground: #fafafa;
   /* Neutral surfaces */
-  --muted: #1e293b;
-  --muted-foreground: #94a3b8;
-  --accent: rgba(79, 70, 229, 0.15);
-  --accent-foreground: #a5b4fc;
+  --muted: rgba(255, 255, 255, 0.04);
+  --muted-foreground: #a1a1aa;
+  --accent: rgba(255, 255, 255, 0.06);
+  --accent-foreground: #fafafa;
   /* Semantic */
-  --destructive: #f87171;
-  --success: #34d399;
-  --warning: #fbbf24;
-  --info: #60a5fa;
+  --destructive: #ef4444;
+  --success: #22c55e;
+  --warning: #eab308;
+  --info: #3b82f6;
   /* Borders & inputs */
-  --border: rgba(255, 255, 255, 0.1);
-  --input: rgba(255, 255, 255, 0.12);
-  --ring: #818cf8;
-  /* Chart palette — brighter for dark bg */
-  --chart-1: #818cf8;
-  --chart-2: #67e8f9;
-  --chart-3: #34d399;
-  --chart-4: #fbbf24;
-  --chart-5: #fb7185;
-  --chart-6: #a78bfa;
-  /* Sidebar — darker layer */
-  --sidebar: #0f172a;
-  --sidebar-foreground: #f1f5f9;
-  --sidebar-primary: #818cf8;
+  --border: rgba(255, 255, 255, 0.08);
+  --input: rgba(255, 255, 255, 0.08);
+  --ring: #3b82f6;
+  /* Chart palette */
+  --chart-1: #3b82f6;
+  --chart-2: #22c55e;
+  --chart-3: #a78bfa;
+  --chart-4: #f59e0b;
+  --chart-5: #ef4444;
+  --chart-6: #06b6d4;
+  /* Sidebar — translucent material */
+  --sidebar: rgba(255, 255, 255, 0.02);
+  --sidebar-foreground: #fafafa;
+  --sidebar-primary: #3b82f6;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: rgba(79, 70, 229, 0.15);
-  --sidebar-accent-foreground: #a5b4fc;
-  --sidebar-border: rgba(255, 255, 255, 0.08);
-  --sidebar-ring: #818cf8;
+  --sidebar-accent: rgba(255, 255, 255, 0.06);
+  --sidebar-accent-foreground: #fafafa;
+  --sidebar-border: rgba(255, 255, 255, 0.06);
+  --sidebar-ring: #3b82f6;
 }
 
 @layer base {
@@ -204,21 +204,20 @@
   .stagger-children > *:nth-child(6) { animation-delay: 250ms; }
   .stagger-children > *:nth-child(n+7) { animation-delay: 300ms; }
 
-  /* Micro-interactions */
+  /* Micro-interactions — macOS-style subtle bg changes */
   .hover-lift {
-    transition: transform var(--duration-fast) var(--ease-out),
-                box-shadow var(--duration-fast) var(--ease-out);
+    transition: background-color var(--duration-fast) var(--ease-out),
+                border-color var(--duration-fast) var(--ease-out);
   }
   .hover-lift:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px oklch(0 0 0 / 10%);
+    background-color: var(--accent);
   }
 
   .hover-scale {
     transition: transform var(--duration-fast) var(--ease-out);
   }
   .hover-scale:hover {
-    transform: scale(1.02);
+    transform: scale(1.01);
   }
 
   .press-scale {

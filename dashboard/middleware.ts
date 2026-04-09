@@ -16,6 +16,11 @@ const EXCLUDED_ROUTES = [
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Skip auth entirely in mock mode (local dev without backend)
+  if (process.env.NEXT_PUBLIC_USE_MOCK === "true") {
+    return NextResponse.next();
+  }
+
   // Skip middleware for excluded routes
   if (EXCLUDED_ROUTES.some((route) => pathname.startsWith(route))) {
     return NextResponse.next();

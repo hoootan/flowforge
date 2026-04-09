@@ -86,7 +86,7 @@ function KPICard({
   loading?: boolean;
 }) {
   return (
-    <Card className='transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md'>
+    <Card className='transition-colors duration-200 hover:bg-accent'>
       <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
         <CardTitle className='text-sm font-medium text-muted-foreground'>{title}</CardTitle>
         <Icon className='h-4 w-4 text-muted-foreground' />
@@ -167,8 +167,9 @@ function RunVolumeChart({ data, loading }: { data: DailyUsage[]; loading: boolea
               <XAxis dataKey='date' tickLine={false} axisLine={false} tickMargin={8} tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }} />
               <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }} width={40} />
               <Tooltip
+                cursor={{ fill: 'rgba(255, 255, 255, 0.06)' }}
                 contentStyle={{
-                  backgroundColor: 'var(--card)',
+                  backgroundColor: 'var(--popover)',
                   border: '1px solid var(--border)',
                   borderRadius: '8px',
                   fontSize: '12px',
@@ -224,8 +225,9 @@ function ErrorRateChart({ data, loading }: { data: DailyUsage[]; loading: boolea
               <XAxis dataKey='time' tickLine={false} axisLine={false} tickMargin={8} tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }} />
               <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }} width={30} />
               <Tooltip
+                cursor={{ fill: 'rgba(255, 255, 255, 0.06)' }}
                 contentStyle={{
-                  backgroundColor: 'var(--card)',
+                  backgroundColor: 'var(--popover)',
                   border: '1px solid var(--border)',
                   borderRadius: '8px',
                   fontSize: '12px',
