@@ -361,3 +361,61 @@ async def worker_heartbeat(
         "updated": updated_count,
         "timestamp": now.isoformat() + "Z",
     }
+
+
+@router.put("/{function_id}/skills")
+async def set_function_skills(
+    function_id: str,
+    skill_ids: list[str],
+    tenant: TenantWithDevFallback,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    """
+    Set the enabled skills for a function.
+
+    Skills are loaded at runtime and their instructions are injected
+    into the agent's system prompt. Pass an empty list to disable all skills.
+    """
+    result = await session.execute(
+        select(Function).where(
+            Function.tenant_id == tenant.id,
+            Function.function_id == function_id,
+        )
+    )
+    fn = result.scalar_one_or_none()
+
+    if not fn:
+        raise HTTPException(status_code=404, detail="Function not found")
+
+    fn.enabled_skills = skill_ids
+    await session.commit()
+
+    return {
+        "function_id": function_id,
+        "enabled_skills": skill_ids,
+        "message": f"Updated to {len(skill_ids)} enabled skill(s)",
+    }
+
+
+@router.get("/{function_id}/skills")
+async def get_function_skills(
+    function_id: str,
+    tenant: TenantWithDevFallback,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    """Get the enabled skills for a function."""
+    result = await session.execute(
+        select(Function).where(
+            Function.tenant_id == tenant.id,
+            Function.function_id == function_id,
+        )
+    )
+    fn = result.scalar_one_or_none()
+
+    if not fn:
+        raise HTTPException(status_code=404, detail="Function not found")
+
+    return {
+        "function_id": function_id,
+        "enabled_skills": fn.enabled_skills or [],
+    }

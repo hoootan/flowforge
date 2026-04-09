@@ -87,6 +87,10 @@ class Function(Base, TimestampMixin):
     # Agent configuration (model, max_iterations, max_tool_calls, etc.)
     agent_config: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 
+    # Enabled skill IDs — only these skills inject instructions at runtime
+    # List of SkillTemplate UUIDs (as strings). Empty = no skills. None = no skills.
+    enabled_skills: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
+
     # =========================================================================
 
     # Function configuration (retries, timeout, concurrency, etc.)

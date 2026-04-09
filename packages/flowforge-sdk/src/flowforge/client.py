@@ -528,6 +528,308 @@ class FlowForge:
                     elif line.startswith("data:"):
                         data_buf.append(line[len("data:"):].strip())
 
+    # ── Agent Management ──────────────────────────────────────────
+
+    async def list_agents(self) -> list[dict[str, Any]]:
+        """List all agents for the current tenant."""
+        client = await self._get_client()
+        headers: dict[str, str] = {}
+        if self.api_key:
+            headers["X-FlowForge-API-Key"] = self.api_key
+        response = await client.get("/api/v1/agents", headers=headers)
+        response.raise_for_status()
+        return response.json().get("agents", [])
+
+    async def create_agent(
+        self,
+        name: str,
+        *,
+        description: str | None = None,
+        model: str | None = None,
+        system_prompt: str | None = None,
+        capabilities: dict[str, Any] | None = None,
+        config: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """
+        Create a new agent.
+
+        Args:
+            name: Display name for the agent.
+            description: What the agent does.
+            model: Default AI model (e.g., "claude-sonnet-4-6").
+            system_prompt: Agent personality/instructions.
+            capabilities: Agent capabilities dict.
+            config: Agent configuration dict.
+
+        Returns:
+            Created agent details.
+        """
+        client = await self._get_client()
+        headers: dict[str, str] = {}
+        if self.api_key:
+            headers["X-FlowForge-API-Key"] = self.api_key
+        payload: dict[str, Any] = {"name": name}
+        if description:
+            payload["description"] = description
+        if model:
+            payload["model"] = model
+        if system_prompt:
+            payload["system_prompt"] = system_prompt
+        if capabilities:
+            payload["capabilities"] = capabilities
+        if config:
+            payload["config"] = config
+        response = await client.post("/api/v1/agents", json=payload, headers=headers)
+        response.raise_for_status()
+        return response.json()
+
+    async def update_agent(
+        self,
+        agent_id: str,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Update an agent's properties."""
+        client = await self._get_client()
+        headers: dict[str, str] = {}
+        if self.api_key:
+            headers["X-FlowForge-API-Key"] = self.api_key
+        response = await client.patch(
+            f"/api/v1/agents/{agent_id}",
+            json=kwargs,
+            headers=headers,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    # ── Task Management ───────────────────────────────────────────
+
+    async def list_tasks(
+        self,
+        *,
+        status: str | None = None,
+        assignee_agent_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """List tasks with optional filters."""
+        client = await self._get_client()
+        headers: dict[str, str] = {}
+        if self.api_key:
+            headers["X-FlowForge-API-Key"] = self.api_key
+        params: dict[str, str] = {}
+        if status:
+            params["status"] = status
+        if assignee_agent_id:
+            params["assignee_agent_id"] = assignee_agent_id
+        response = await client.get("/api/v1/tasks", params=params, headers=headers)
+        response.raise_for_status()
+        return response.json().get("tasks", [])
+
+    async def create_task(
+        self,
+        title: str,
+        *,
+        description: str | None = None,
+        priority: str = "none",
+        assignee_agent_id: str | None = None,
+        assignee_user_id: str | None = None,
+        function_id: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Create a new task.
+
+        Args:
+            title: Task title.
+            description: Task description (markdown).
+            priority: One of "urgent", "high", "medium", "low", "none".
+            assignee_agent_id: Assign to an agent.
+            assignee_user_id: Assign to a user.
+            function_id: Link to a FlowForge function.
+
+        Returns:
+            Created task with identifier (e.g., FF-1).
+        """
+        client = await self._get_client()
+        headers: dict[str, str] = {}
+        if self.api_key:
+            headers["X-FlowForge-API-Key"] = self.api_key
+        payload: dict[str, Any] = {"title": title, "priority": priority}
+        if description:
+            payload["description"] = description
+        if assignee_agent_id:
+            payload["assignee_agent_id"] = assignee_agent_id
+        if assignee_user_id:
+            payload["assignee_user_id"] = assignee_user_id
+        if function_id:
+            payload["function_id"] = function_id
+        response = await client.post("/api/v1/tasks", json=payload, headers=headers)
+        response.raise_for_status()
+        return response.json()
+
+    async def update_task(
+        self,
+        task_id: str,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Update a task (status, assignment, etc.)."""
+        client = await self._get_client()
+        headers: dict[str, str] = {}
+        if self.api_key:
+            headers["X-FlowForge-API-Key"] = self.api_key
+        response = await client.patch(
+            f"/api/v1/tasks/{task_id}",
+            json=kwargs,
+            headers=headers,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    # ── Comments / Collaboration ──────────────────────────────────
+
+    async def add_comment(
+        self,
+        *,
+        task_id: str | None = None,
+        run_id: str | None = None,
+        content: str,
+        author_agent_id: str | None = None,
+        author_user_id: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Add a comment to a task or run.
+
+        Args:
+            task_id: Comment on a task.
+            run_id: Comment on a run.
+            content: Comment text (markdown).
+            author_agent_id: Agent author.
+            author_user_id: User author.
+
+        Returns:
+            Created comment details.
+        """
+        client = await self._get_client()
+        headers: dict[str, str] = {}
+        if self.api_key:
+            headers["X-FlowForge-API-Key"] = self.api_key
+        payload: dict[str, Any] = {"content": content}
+        if task_id:
+            payload["task_id"] = task_id
+        if run_id:
+            payload["run_id"] = run_id
+        if author_agent_id:
+            payload["author_agent_id"] = author_agent_id
+        if author_user_id:
+            payload["author_user_id"] = author_user_id
+        response = await client.post("/api/v1/comments", json=payload, headers=headers)
+        response.raise_for_status()
+        return response.json()
+
+    # ── Skills ────────────────────────────────────────────────────
+
+    async def list_skills(
+        self,
+        *,
+        category: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """List available skill templates."""
+        client = await self._get_client()
+        headers: dict[str, str] = {}
+        if self.api_key:
+            headers["X-FlowForge-API-Key"] = self.api_key
+        params: dict[str, str] = {}
+        if category:
+            params["category"] = category
+        response = await client.get("/api/v1/skills", params=params, headers=headers)
+        response.raise_for_status()
+        return response.json().get("skills", [])
+
+    async def create_skill(
+        self,
+        name: str,
+        *,
+        description: str | None = None,
+        category: str | None = None,
+        function_config: dict[str, Any] | None = None,
+        tools_config: list[dict[str, Any]] | None = None,
+        tags: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Save a function+tools configuration as a reusable skill template."""
+        client = await self._get_client()
+        headers: dict[str, str] = {}
+        if self.api_key:
+            headers["X-FlowForge-API-Key"] = self.api_key
+        payload: dict[str, Any] = {"name": name}
+        if description:
+            payload["description"] = description
+        if category:
+            payload["category"] = category
+        if function_config:
+            payload["function_config"] = function_config
+        if tools_config:
+            payload["tools_config"] = tools_config
+        if tags:
+            payload["tags"] = tags
+        response = await client.post("/api/v1/skills", json=payload, headers=headers)
+        response.raise_for_status()
+        return response.json()
+
+    async def search_marketplace(
+        self,
+        query: str,
+        *,
+        source: str = "skills_sh",
+        limit: int = 10,
+    ) -> dict[str, Any]:
+        """Search the skills.sh marketplace for community-built agent skills."""
+        client = await self._get_client()
+        headers: dict[str, str] = {}
+        if self.api_key:
+            headers["X-FlowForge-API-Key"] = self.api_key
+        params = {"q": query, "source": source, "limit": str(limit)}
+        response = await client.get("/api/v1/skills/marketplace/search", params=params, headers=headers)
+        response.raise_for_status()
+        return response.json()
+
+    async def preview_marketplace_skill(
+        self,
+        repo: str,
+        path: str = "SKILL.md",
+    ) -> dict[str, Any]:
+        """Preview a SKILL.md from a GitHub repository before importing."""
+        client = await self._get_client()
+        headers: dict[str, str] = {}
+        if self.api_key:
+            headers["X-FlowForge-API-Key"] = self.api_key
+        params = {"repo": repo, "path": path}
+        response = await client.get("/api/v1/skills/marketplace/preview", params=params, headers=headers)
+        response.raise_for_status()
+        return response.json()
+
+    async def import_marketplace_skill(
+        self,
+        repo: str,
+        *,
+        path: str = "SKILL.md",
+        source: str = "skills_sh",
+        name: str | None = None,
+        category: str | None = None,
+        tags: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Import a skill from the marketplace into FlowForge."""
+        client = await self._get_client()
+        headers: dict[str, str] = {}
+        if self.api_key:
+            headers["X-FlowForge-API-Key"] = self.api_key
+        payload: dict[str, Any] = {"repo": repo, "path": path, "source": source}
+        if name:
+            payload["name_override"] = name
+        if category:
+            payload["category"] = category
+        if tags:
+            payload["tags"] = tags
+        response = await client.post("/api/v1/skills/marketplace/import", json=payload, headers=headers)
+        response.raise_for_status()
+        return response.json()
+
     async def close(self) -> None:
         """Close the HTTP client."""
         if self._http_client:

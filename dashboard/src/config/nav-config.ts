@@ -6,7 +6,7 @@ export interface NavGroup {
 }
 
 /**
- * FlowForge Navigation — grouped by purpose (matches Paper design)
+ * FlowForge Navigation — grouped by purpose
  */
 export const navGroups: NavGroup[] = [
   {
@@ -36,6 +36,14 @@ export const navGroups: NavGroup[] = [
         shortcut: ['e', 'e'],
         items: []
       },
+      {
+        title: 'Costs',
+        url: '/costs',
+        icon: 'dollarSign',
+        isActive: false,
+        shortcut: ['c', 'c'],
+        items: []
+      },
     ]
   },
   {
@@ -55,6 +63,35 @@ export const navGroups: NavGroup[] = [
         icon: 'wrench',
         isActive: false,
         shortcut: ['t', 't'],
+        items: []
+      },
+      {
+        title: 'Skills',
+        url: '/skills',
+        icon: 'sparkles',
+        isActive: false,
+        shortcut: ['s', 'k'],
+        items: []
+      },
+    ]
+  },
+  {
+    label: 'Team',
+    items: [
+      {
+        title: 'Tasks',
+        url: '/tasks',
+        icon: 'kanban',
+        isActive: false,
+        shortcut: ['b', 'b'],
+        items: []
+      },
+      {
+        title: 'Agents',
+        url: '/agents',
+        icon: 'bot',
+        isActive: false,
+        shortcut: ['a', 'g'],
         items: []
       },
     ]

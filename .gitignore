@@ -54,3 +54,4 @@ htmlcov/
 
 # Docker
 *.pid
+/.openclaude-profile.json

@@ -10,12 +10,15 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from flowforge_server.db.models.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
+    from flowforge_server.db.models.agent import Agent
     from flowforge_server.db.models.ai_provider import AIProvider
     from flowforge_server.db.models.api_key import ApiKey
     from flowforge_server.db.models.credential import Credential
     from flowforge_server.db.models.event import Event
     from flowforge_server.db.models.function import Function
     from flowforge_server.db.models.model_pricing import ModelPricing
+    from flowforge_server.db.models.skill_template import SkillTemplate
+    from flowforge_server.db.models.task import Task
     from flowforge_server.db.models.tool import Tool
     from flowforge_server.db.models.user import User
 
@@ -102,6 +105,24 @@ class Tenant(Base, TimestampMixin):
 
     credentials: Mapped[list["Credential"]] = relationship(
         "Credential",
+        back_populates="tenant",
+        lazy="selectin",
+    )
+
+    agents: Mapped[list["Agent"]] = relationship(
+        "Agent",
+        back_populates="tenant",
+        lazy="selectin",
+    )
+
+    tasks: Mapped[list["Task"]] = relationship(
+        "Task",
+        back_populates="tenant",
+        lazy="selectin",
+    )
+
+    skill_templates: Mapped[list["SkillTemplate"]] = relationship(
+        "SkillTemplate",
         back_populates="tenant",
         lazy="selectin",
     )

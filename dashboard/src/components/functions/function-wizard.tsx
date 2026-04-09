@@ -7,7 +7,7 @@ import { toast } from "sonner";
 
 import { useWizard, WizardContainer, WizardNavigation, WizardStep } from "@/components/wizard";
 import { TemplateDropdown, Template } from "@/components/templates";
-import { api, Tool, Function } from "@/lib/api";
+import { api, Tool, Function, AgentType } from "@/lib/api";
 
 import { FunctionStepType, FunctionMode } from "./function-step-type";
 import { FunctionStepIdentity, TriggerType } from "./function-step-identity";
@@ -103,7 +103,11 @@ export function FunctionWizard({ initialData }: FunctionWizardProps) {
   const [availableTools, setAvailableTools] = useState<Tool[]>([]);
   const [toolsLoading, setToolsLoading] = useState(true);
 
-  // Fetch tools on mount
+  // Available agents (for optional agent assignment)
+  const [availableAgents, setAvailableAgents] = useState<AgentType[]>([]);
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+
+  // Fetch tools and agents on mount
   useEffect(() => {
     const fetchTools = async () => {
       setToolsLoading(true);
@@ -111,7 +115,12 @@ export function FunctionWizard({ initialData }: FunctionWizardProps) {
       setAvailableTools(response.tools.filter((t) => t.is_active));
       setToolsLoading(false);
     };
+    const fetchAgents = async () => {
+      const response = await api.getAgents({ is_active: true });
+      setAvailableAgents(response.agents);
+    };
     fetchTools();
+    fetchAgents();
   }, []);
 
   // Initialize form with initial data when in edit mode
@@ -375,6 +384,16 @@ export function FunctionWizard({ initialData }: FunctionWizardProps) {
             onEndpointUrlChange={setEndpointUrl}
             errors={errors}
             disabled={loading}
+            agents={availableAgents.map(a => ({
+              id: a.id,
+              name: a.name,
+              slug: a.slug,
+              model: a.model,
+              system_prompt: a.system_prompt,
+              enabled_skills: a.enabled_skills,
+            }))}
+            selectedAgentId={selectedAgentId}
+            onAgentChange={setSelectedAgentId}
           />
         );
       case "tools":

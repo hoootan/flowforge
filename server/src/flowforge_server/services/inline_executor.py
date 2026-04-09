@@ -6,6 +6,7 @@ an external worker. It runs the agent loop directly within FlowForge.
 
 import asyncio
 import json
+import uuid
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -122,8 +123,18 @@ class InlineExecutor:
 
         # Build initial messages
         messages: list[dict[str, Any]] = []
-        if fn.system_prompt:
-            messages.append({"role": "system", "content": fn.system_prompt})
+        system_content = fn.system_prompt or ""
+
+        # Inject enabled skill instructions at runtime
+        if fn.enabled_skills:
+            skill_instructions = await self._load_skill_instructions(
+                session, fn.enabled_skills, tenant_id=run.tenant_id,
+            )
+            if skill_instructions:
+                system_content = (system_content + "\n\n" + skill_instructions).strip()
+
+        if system_content:
+            messages.append({"role": "system", "content": system_content})
 
         # Pass full event data as user message so the agent has all context
         # (brand_context, content_items, fields, etc.)
@@ -681,6 +692,47 @@ class InlineExecutor:
                 "is_sub_agent": True,
             })
         return tools
+
+    async def _load_skill_instructions(
+        self,
+        session: AsyncSession,
+        skill_ids: list[str],
+        tenant_id: Any = None,
+    ) -> str:
+        """Load instructions from enabled skills and assemble into a knowledge block."""
+        if not skill_ids:
+            return ""
+
+        from flowforge_server.db.models import SkillTemplate
+
+        parts: list[str] = []
+        for skill_id_str in skill_ids:
+            try:
+                skill_uuid = uuid.UUID(skill_id_str)
+            except ValueError:
+                continue
+
+            result = await session.execute(
+                select(SkillTemplate).where(
+                    SkillTemplate.id == skill_uuid,
+                    SkillTemplate.is_active == True,
+                    or_(
+                        SkillTemplate.tenant_id == tenant_id,
+                        SkillTemplate.is_builtin == True,
+                    ),
+                )
+            )
+            skill = result.scalar_one_or_none()
+
+            if skill and skill.instructions:
+                source = (skill.source_metadata or {}).get("repo", skill.name)
+                parts.append(
+                    f'<skill-knowledge name="{skill.name}" source="{source}">\n'
+                    f"{skill.instructions}\n"
+                    f"</skill-knowledge>"
+                )
+
+        return "\n\n".join(parts)
 
     async def _load_tools(
         self,
