@@ -67,7 +67,7 @@ class SkillTemplate(Base, TimestampMixin):
     # Contains: system_prompt, model, agent_config, trigger_type, etc.
 
     # Tools configuration snapshot
-    tools_config: Mapped[dict[str, Any]] = mapped_column(
+    tools_config: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB,
         nullable=False,
         default=list,
@@ -84,7 +84,7 @@ class SkillTemplate(Base, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # Tags for discovery
-    tags: Mapped[dict[str, Any]] = mapped_column(
+    tags: Mapped[list[str]] = mapped_column(
         JSONB,
         nullable=False,
         default=list,

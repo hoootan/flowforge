@@ -3,7 +3,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Brain, Wrench, CheckCircle, XCircle, Loader2, Bot, Eye } from 'lucide-react';
 import type { RunEvent, ToolCall } from '@/hooks/useRunStream';
 
@@ -133,7 +132,7 @@ export function LiveActivityPanel({
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        <ScrollArea className="h-[400px]" ref={scrollRef}>
+        <div className="h-[400px] overflow-y-auto" ref={scrollRef}>
           <div className="space-y-3 pr-3">
             {/* Active thinking */}
             {!isComplete && thinkingContent && (
@@ -170,7 +169,7 @@ export function LiveActivityPanel({
               </div>
             )}
           </div>
-        </ScrollArea>
+        </div>
       </CardContent>
     </Card>
   );

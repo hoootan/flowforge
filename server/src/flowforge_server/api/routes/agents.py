@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from flowforge_server.api.deps import TenantWithDevFallback
 from flowforge_server.db import get_session
-from flowforge_server.db.models import Agent, AgentStatus, Run, RunStatus, UsageRecord
+from flowforge_server.db.models import Agent, AgentStatus
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 

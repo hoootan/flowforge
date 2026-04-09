@@ -5,6 +5,7 @@ an external worker. It runs the agent loop directly within FlowForge.
 """
 
 import asyncio
+import html
 import json
 import uuid
 from datetime import datetime, timedelta
@@ -726,9 +727,12 @@ class InlineExecutor:
 
             if skill and skill.instructions:
                 source = (skill.source_metadata or {}).get("repo", skill.name)
+                safe_name = html.escape(skill.name, quote=True)
+                safe_source = html.escape(source, quote=True)
+                safe_instructions = skill.instructions.replace("</skill-knowledge>", "")
                 parts.append(
-                    f'<skill-knowledge name="{skill.name}" source="{source}">\n'
-                    f"{skill.instructions}\n"
+                    f'<skill-knowledge name="{safe_name}" source="{safe_source}">\n'
+                    f"{safe_instructions}\n"
                     f"</skill-knowledge>"
                 )
 

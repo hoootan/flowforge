@@ -95,7 +95,7 @@ class Task(Base, TimestampMixin):
     )
 
     # Labels / tags
-    labels: Mapped[dict[str, Any]] = mapped_column(
+    labels: Mapped[list[str]] = mapped_column(
         JSONB,
         nullable=False,
         default=list,
@@ -145,8 +145,9 @@ class Task(Base, TimestampMixin):
         nullable=True,
     )
 
-    # Metadata
-    metadata: Mapped[dict[str, Any]] = mapped_column(
+    # Metadata (attribute renamed to avoid conflict with SQLAlchemy's MetaData)
+    task_metadata: Mapped[dict[str, Any]] = mapped_column(
+        "metadata",
         JSONB,
         nullable=False,
         default=dict,
@@ -216,7 +217,7 @@ class Task(Base, TimestampMixin):
             "run_id": str(self.run_id) if self.run_id else None,
             "sub_tasks_count": len(self.sub_tasks) if self.sub_tasks else 0,
             "comments_count": len(self.comments) if self.comments else 0,
-            "metadata": self.metadata,
+            "metadata": self.task_metadata,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

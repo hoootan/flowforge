@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from flowforge_server.api.deps import TenantWithDevFallback
 from flowforge_server.db import get_session
-from flowforge_server.db.models import Comment, Task
+from flowforge_server.db.models import Comment, Run, Task
 
 router = APIRouter(prefix="/comments", tags=["collaboration"])
 
@@ -65,6 +65,45 @@ def _safe_uuid(value: str | None) -> uuid.UUID | None:
         raise HTTPException(status_code=400, detail=f"Invalid UUID: {value}")
 
 
+async def _verify_parent_tenant(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    task_id: uuid.UUID | None,
+    run_id: uuid.UUID | None,
+) -> None:
+    """Verify that the referenced task or run belongs to the tenant."""
+    if task_id:
+        result = await session.execute(
+            select(Task).where(Task.id == task_id, Task.tenant_id == tenant_id)
+        )
+        if not result.scalar_one_or_none():
+            raise HTTPException(status_code=404, detail="Task not found")
+    if run_id:
+        result = await session.execute(
+            select(Run).where(Run.id == run_id, Run.tenant_id == tenant_id)
+        )
+        if not result.scalar_one_or_none():
+            raise HTTPException(status_code=404, detail="Run not found")
+
+
+async def _get_comment_with_tenant_check(
+    session: AsyncSession,
+    comment_id: uuid.UUID | None,
+    tenant_id: uuid.UUID,
+) -> Comment:
+    """Fetch a comment and verify its parent belongs to the tenant."""
+    result = await session.execute(
+        select(Comment).where(Comment.id == comment_id)
+    )
+    comment = result.scalar_one_or_none()
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comment not found")
+
+    # Verify parent ownership
+    await _verify_parent_tenant(session, tenant_id, comment.task_id, comment.run_id)
+    return comment
+
+
 # --- Endpoints ---
 
 @router.get("", response_model=CommentsListResponse)
@@ -80,16 +119,15 @@ async def list_comments(
     query = select(Comment)
 
     if task_id:
-        # Verify task belongs to tenant
         task_uuid = _safe_uuid(task_id)
-        task_result = await session.execute(
-            select(Task).where(Task.id == task_uuid, Task.tenant_id == tenant.id)
-        )
-        if not task_result.scalar_one_or_none():
-            raise HTTPException(status_code=404, detail="Task not found")
+        # Verify task belongs to tenant
+        await _verify_parent_tenant(session, tenant.id, task_uuid, None)
         query = query.where(Comment.task_id == task_uuid)
     elif run_id:
-        query = query.where(Comment.run_id == _safe_uuid(run_id))
+        run_uuid = _safe_uuid(run_id)
+        # Verify run belongs to tenant
+        await _verify_parent_tenant(session, tenant.id, None, run_uuid)
+        query = query.where(Comment.run_id == run_uuid)
     else:
         raise HTTPException(status_code=400, detail="Provide task_id or run_id")
 
@@ -113,9 +151,15 @@ async def create_comment(
     if not data.task_id and not data.run_id:
         raise HTTPException(status_code=400, detail="Provide task_id or run_id")
 
+    task_uuid = _safe_uuid(data.task_id)
+    run_uuid = _safe_uuid(data.run_id)
+
+    # Verify parent belongs to tenant
+    await _verify_parent_tenant(session, tenant.id, task_uuid, run_uuid)
+
     comment = Comment(
-        task_id=_safe_uuid(data.task_id),
-        run_id=_safe_uuid(data.run_id),
+        task_id=task_uuid,
+        run_id=run_uuid,
         content=data.content,
         comment_type=data.comment_type,
         author_user_id=_safe_uuid(data.author_user_id),
@@ -138,14 +182,9 @@ async def update_comment(
     session: AsyncSession = Depends(get_session),
 ) -> CommentResponse:
     """Update a comment."""
-    comment_uuid = _safe_uuid(comment_id)
-    result = await session.execute(
-        select(Comment).where(Comment.id == comment_uuid)
+    comment = await _get_comment_with_tenant_check(
+        session, _safe_uuid(comment_id), tenant.id
     )
-    comment = result.scalar_one_or_none()
-
-    if not comment:
-        raise HTTPException(status_code=404, detail="Comment not found")
 
     if data.content is not None:
         comment.content = data.content
@@ -163,14 +202,9 @@ async def delete_comment(
     session: AsyncSession = Depends(get_session),
 ) -> None:
     """Delete a comment."""
-    comment_uuid = _safe_uuid(comment_id)
-    result = await session.execute(
-        select(Comment).where(Comment.id == comment_uuid)
+    comment = await _get_comment_with_tenant_check(
+        session, _safe_uuid(comment_id), tenant.id
     )
-    comment = result.scalar_one_or_none()
-
-    if not comment:
-        raise HTTPException(status_code=404, detail="Comment not found")
 
     await session.delete(comment)
     await session.commit()
@@ -184,14 +218,9 @@ async def add_reaction(
     session: AsyncSession = Depends(get_session),
 ) -> CommentResponse:
     """Add an emoji reaction to a comment."""
-    comment_uuid = _safe_uuid(comment_id)
-    result = await session.execute(
-        select(Comment).where(Comment.id == comment_uuid)
+    comment = await _get_comment_with_tenant_check(
+        session, _safe_uuid(comment_id), tenant.id
     )
-    comment = result.scalar_one_or_none()
-
-    if not comment:
-        raise HTTPException(status_code=404, detail="Comment not found")
 
     reactions = dict(comment.reactions or {})
     if data.emoji not in reactions:

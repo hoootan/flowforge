@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/dialog';
 import {
   Sparkles, Search, ArrowRight, Hash, Plus, Globe, Download,
-  RefreshCw, ExternalLink, BookOpen, Github,
+  RefreshCw, BookOpen, Github,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';

@@ -32,7 +32,8 @@ def parse_skill_md(content: str) -> dict[str, Any]:
     frontmatter: dict[str, Any] = {}
     body = content
 
-    # Check for YAML frontmatter (--- delimited)
+    # Normalize line endings and check for YAML frontmatter (--- delimited)
+    content = content.replace("\r\n", "\n")
     match = re.match(r"^---\s*\n(.*?)\n---\s*\n(.*)", content, re.DOTALL)
     if match:
         fm_text = match.group(1)

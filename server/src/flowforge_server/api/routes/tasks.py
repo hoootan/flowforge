@@ -80,11 +80,14 @@ class TasksBoardResponse(BaseModel):
 # --- Helpers ---
 
 async def _get_next_sequence(session: AsyncSession, tenant_id: uuid.UUID) -> int:
-    """Get next task sequence number for the tenant."""
+    """Get next task sequence number for the tenant.
+
+    Uses SELECT ... FOR UPDATE to serialize concurrent sequence allocation.
+    """
     result = await session.execute(
-        select(func.coalesce(func.max(Task.sequence), 0)).where(
-            Task.tenant_id == tenant_id
-        )
+        select(func.coalesce(func.max(Task.sequence), 0))
+        .where(Task.tenant_id == tenant_id)
+        .with_for_update()
     )
     return result.scalar() + 1
 
@@ -121,11 +124,11 @@ async def list_tasks(
     if priority:
         query = query.where(Task.priority == priority)
     if assignee_user_id:
-        query = query.where(Task.assignee_user_id == uuid.UUID(assignee_user_id))
+        query = query.where(Task.assignee_user_id == _safe_uuid(assignee_user_id))
     if assignee_agent_id:
-        query = query.where(Task.assignee_agent_id == uuid.UUID(assignee_agent_id))
+        query = query.where(Task.assignee_agent_id == _safe_uuid(assignee_agent_id))
     if parent_task_id:
-        query = query.where(Task.parent_task_id == uuid.UUID(parent_task_id))
+        query = query.where(Task.parent_task_id == _safe_uuid(parent_task_id))
     else:
         # By default, only show top-level tasks
         query = query.where(Task.parent_task_id.is_(None))
@@ -160,9 +163,9 @@ async def get_task_board(
     )
 
     if assignee_user_id:
-        query = query.where(Task.assignee_user_id == uuid.UUID(assignee_user_id))
+        query = query.where(Task.assignee_user_id == _safe_uuid(assignee_user_id))
     if assignee_agent_id:
-        query = query.where(Task.assignee_agent_id == uuid.UUID(assignee_agent_id))
+        query = query.where(Task.assignee_agent_id == _safe_uuid(assignee_agent_id))
 
     query = query.order_by(Task.created_at.desc())
     result = await session.execute(query)
@@ -187,6 +190,12 @@ async def create_task(
     session: AsyncSession = Depends(get_session),
 ) -> TaskResponse:
     """Create a new task."""
+    if data.assignee_user_id and data.assignee_agent_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot assign to both a user and an agent. Provide only one.",
+        )
+
     sequence = await _get_next_sequence(session, tenant.id)
     identifier = f"FF-{sequence}"
 
@@ -203,7 +212,7 @@ async def create_task(
         assignee_agent_id=_safe_uuid(data.assignee_agent_id),
         parent_task_id=_safe_uuid(data.parent_task_id),
         function_id=_safe_uuid(data.function_id),
-        metadata=data.metadata,
+        task_metadata=data.metadata,
     )
 
     session.add(task)

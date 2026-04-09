@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { api, type TaskType, type TaskBoardResponse } from '@/lib/api';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -25,7 +25,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, KanbanSquare, List, Bot, User, GripVertical, MessageSquare } from 'lucide-react';
+import { Plus, KanbanSquare, List, Bot, User, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
 
 const statusConfig: Record<string, { label: string; color: string }> = {
@@ -48,7 +48,7 @@ const priorityColors: Record<string, string> = {
 // Kanban columns to show (subset for board)
 const boardColumns = ['todo', 'in_progress', 'in_review', 'done'];
 
-function TaskCard({ task, onStatusChange }: { task: TaskType; onStatusChange: (taskId: string, newStatus: string) => void }) {
+function TaskCard({ task }: { task: TaskType }) {
   return (
     <div className="bg-background border rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow space-y-2">
       <div className="flex items-start justify-between gap-2">
@@ -126,13 +126,6 @@ export default function TasksPage() {
       fetchBoard();
     } else {
       toast.error('Failed to create task');
-    }
-  };
-
-  const handleStatusChange = async (taskId: string, newStatus: string) => {
-    const updated = await api.updateTask(taskId, { status: newStatus });
-    if (updated) {
-      fetchBoard();
     }
   };
 
@@ -240,7 +233,7 @@ export default function TasksPage() {
                     <TaskCard
                       key={task.id}
                       task={task}
-                      onStatusChange={handleStatusChange}
+
                     />
                   ))}
                   {tasks.length === 0 && (

@@ -73,7 +73,7 @@ class Comment(Base, TimestampMixin):
     # Types: "comment", "status_change", "assignment", "blocker", "system"
 
     # Mentions extracted from content (@user, @agent)
-    mentions: Mapped[dict[str, Any]] = mapped_column(
+    mentions: Mapped[list[dict[str, Any]]] = mapped_column(
         JSONB,
         nullable=False,
         default=list,
