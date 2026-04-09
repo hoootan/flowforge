@@ -1,7 +1,7 @@
 """Skill marketplace service — search skills.sh, fetch SKILL.md from GitHub."""
 
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -143,5 +143,5 @@ async def fetch_skill_md(
         "body": parsed["body"],
         "repo": repo,
         "path": path,
-        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "fetched_at": datetime.now(UTC).isoformat(),
     }

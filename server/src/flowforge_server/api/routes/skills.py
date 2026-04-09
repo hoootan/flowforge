@@ -2,7 +2,7 @@
 
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -398,7 +398,7 @@ async def marketplace_import(
     source_metadata = {
         "repo": data.repo,
         "path": data.path,
-        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "fetched_at": datetime.now(UTC).isoformat(),
         "external_id": data.external_id,
         "frontmatter": skill_data["frontmatter"],
     }
@@ -471,7 +471,7 @@ async def refresh_skill(
     skill.instructions = skill_data["body"]
     skill.description = skill_data["description"] or skill.description
     skill.version += 1
-    meta["fetched_at"] = datetime.now(timezone.utc).isoformat()
+    meta["fetched_at"] = datetime.now(UTC).isoformat()
     meta["frontmatter"] = skill_data["frontmatter"]
     skill.source_metadata = meta
 
