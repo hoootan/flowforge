@@ -189,7 +189,7 @@ function WaterfallTimeline({
   }));
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 overflow-hidden">
       {/* Time axis */}
       <div className="relative h-5 text-xs text-muted-foreground ml-[200px]">
         {ticks.map((tick) => (
@@ -218,6 +218,7 @@ function WaterfallTimeline({
           const offset = ((start - firstStart) / timelineSpan) * 100;
           const duration = stepDurations[i];
           const widthPct = Math.max((duration / timelineSpan) * 100, 2);
+          const clampedWidth = Math.min(widthPct, 100 - offset);
           const colors = stepTypeColors[step.step_type] || stepTypeColors.run;
 
           return (
@@ -228,13 +229,14 @@ function WaterfallTimeline({
               >
                 {shortenStepId(step.step_id)}
               </span>
-              <div className="relative flex-1 h-full">
+              <div className="relative flex-1 h-full overflow-hidden">
                 <div
                   className={`absolute top-0 h-full rounded ${colors.bg} ${step.status === "failed" ? "!bg-destructive" : ""} flex items-center px-2`}
                   style={{
                     left: `${Math.min(offset, 98)}%`,
-                    width: `${Math.min(widthPct, 100 - offset)}%`,
-                    minWidth: "48px",
+                    width: `${clampedWidth}%`,
+                    minWidth: "40px",
+                    maxWidth: `${100 - offset}%`,
                   }}
                 >
                   <span

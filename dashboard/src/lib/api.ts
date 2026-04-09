@@ -1227,7 +1227,17 @@ class FlowForgeAPI {
   }
 }
 
-export const api = new FlowForgeAPI();
+const realApi = new FlowForgeAPI();
+
+// Use mock API when NEXT_PUBLIC_USE_MOCK=true (local dev without backend).
+// Dynamic import so mock code is tree-shaken out of production builds.
+let _api: FlowForgeAPI = realApi;
+if (process.env.NEXT_PUBLIC_USE_MOCK === "true") {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { mockApi } = require("./mock-api") as { mockApi: unknown };
+  _api = mockApi as FlowForgeAPI;
+}
+export const api = _api;
 export default api;
 
 // Re-export auth types for convenience

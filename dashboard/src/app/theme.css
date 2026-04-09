@@ -28,12 +28,12 @@ body {
 
 .theme-default,
 .theme-default-scaled {
-  --primary: #4f46e5;
+  --primary: #2563eb;
   --primary-foreground: #ffffff;
 
   @variant dark {
-    --primary: #818cf8;
-    --primary-foreground: #0f172a;
+    --primary: #3b82f6;
+    --primary-foreground: #ffffff;
   }
 }
 
