@@ -107,6 +107,8 @@ export { FunctionsResource } from "./resources/functions";
 export { ToolsResource } from "./resources/tools";
 export { TasksResource, type Task, type CreateTaskInput, type TaskListResponse, type TaskBoardResponse } from "./resources/tasks";
 export { SkillsResource, type Skill, type CreateSkillInput, type SkillListResponse } from "./resources/skills";
+export { CommentsResource, type Comment, type CreateCommentInput, type CommentListResponse } from "./resources/comments";
+export { NotificationsResource, type Notification, type NotificationListResponse } from "./resources/notifications";
 export { ApprovalsResource } from "./resources/approvals";
 export { HealthResource } from "./resources/health";
 export { UsersResource } from "./resources/users";

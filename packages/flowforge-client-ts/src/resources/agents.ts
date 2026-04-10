@@ -63,4 +63,12 @@ export class AgentsResource {
   async delete(agentId: string): Promise<Result<{ success: boolean }>> {
     return this.request<{ success: boolean }>("DELETE", `/agents/${agentId}`);
   }
+
+  async setSkills(agentId: string, skillIds: string[]): Promise<Result<{ enabled_skills: string[] }>> {
+    return this.request<{ enabled_skills: string[] }>("PUT", `/agents/${agentId}/skills`, skillIds);
+  }
+
+  async getSkills(agentId: string): Promise<Result<{ enabled_skills: string[] }>> {
+    return this.request<{ enabled_skills: string[] }>("GET", `/agents/${agentId}/skills`);
+  }
 }

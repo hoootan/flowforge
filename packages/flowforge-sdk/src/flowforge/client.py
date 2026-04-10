@@ -830,6 +830,144 @@ class FlowForge:
         response.raise_for_status()
         return response.json()
 
+    async def refresh_skill(self, skill_id: str) -> dict[str, Any]:
+        """Re-fetch a skill's SKILL.md from its source repo and update instructions."""
+        client = await self._get_client()
+        headers: dict[str, str] = {}
+        if self.api_key:
+            headers["X-FlowForge-API-Key"] = self.api_key
+        response = await client.post(f"/api/v1/skills/{skill_id}/refresh", headers=headers)
+        response.raise_for_status()
+        return response.json()
+
+    # ── Agent detail operations ───────────────────────────────────
+
+    async def get_agent(self, agent_id: str) -> dict[str, Any]:
+        """Get details for a specific agent."""
+        client = await self._get_client()
+        headers: dict[str, str] = {}
+        if self.api_key:
+            headers["X-FlowForge-API-Key"] = self.api_key
+        response = await client.get(f"/api/v1/agents/{agent_id}", headers=headers)
+        response.raise_for_status()
+        return response.json()
+
+    async def delete_agent(self, agent_id: str) -> None:
+        """Delete an agent."""
+        client = await self._get_client()
+        headers: dict[str, str] = {}
+        if self.api_key:
+            headers["X-FlowForge-API-Key"] = self.api_key
+        response = await client.delete(f"/api/v1/agents/{agent_id}", headers=headers)
+        response.raise_for_status()
+
+    async def set_agent_skills(self, agent_id: str, skill_ids: list[str]) -> dict[str, Any]:
+        """Set which skills are enabled for an agent."""
+        client = await self._get_client()
+        headers: dict[str, str] = {}
+        if self.api_key:
+            headers["X-FlowForge-API-Key"] = self.api_key
+        response = await client.put(f"/api/v1/agents/{agent_id}/skills", json=skill_ids, headers=headers)
+        response.raise_for_status()
+        return response.json()
+
+    # ── Task detail operations ────────────────────────────────────
+
+    async def get_task(self, task_id: str) -> dict[str, Any]:
+        """Get details for a specific task."""
+        client = await self._get_client()
+        headers: dict[str, str] = {}
+        if self.api_key:
+            headers["X-FlowForge-API-Key"] = self.api_key
+        response = await client.get(f"/api/v1/tasks/{task_id}", headers=headers)
+        response.raise_for_status()
+        return response.json()
+
+    async def get_task_board(self) -> dict[str, Any]:
+        """Get the Kanban board view (tasks grouped by status columns)."""
+        client = await self._get_client()
+        headers: dict[str, str] = {}
+        if self.api_key:
+            headers["X-FlowForge-API-Key"] = self.api_key
+        response = await client.get("/api/v1/tasks/board", headers=headers)
+        response.raise_for_status()
+        return response.json()
+
+    async def delete_task(self, task_id: str) -> None:
+        """Delete a task."""
+        client = await self._get_client()
+        headers: dict[str, str] = {}
+        if self.api_key:
+            headers["X-FlowForge-API-Key"] = self.api_key
+        response = await client.delete(f"/api/v1/tasks/{task_id}", headers=headers)
+        response.raise_for_status()
+
+    # ── Comments ──────────────────────────────────────────────────
+
+    async def list_comments(
+        self,
+        *,
+        task_id: str | None = None,
+        run_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """List comments on a task or run."""
+        client = await self._get_client()
+        headers: dict[str, str] = {}
+        if self.api_key:
+            headers["X-FlowForge-API-Key"] = self.api_key
+        params: dict[str, str] = {}
+        if task_id:
+            params["task_id"] = task_id
+        if run_id:
+            params["run_id"] = run_id
+        response = await client.get("/api/v1/comments", params=params, headers=headers)
+        response.raise_for_status()
+        return response.json().get("comments", [])
+
+    # ── Notifications ─────────────────────────────────────────────
+
+    async def list_notifications(
+        self,
+        *,
+        is_read: bool | None = None,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        """List notifications for the current user."""
+        client = await self._get_client()
+        headers: dict[str, str] = {}
+        if self.api_key:
+            headers["X-FlowForge-API-Key"] = self.api_key
+        params: dict[str, str] = {"limit": str(limit)}
+        if is_read is not None:
+            params["is_read"] = str(is_read).lower()
+        response = await client.get("/api/v1/notifications", params=params, headers=headers)
+        response.raise_for_status()
+        return response.json()
+
+    async def mark_notifications_read(self, notification_id: str | None = None) -> None:
+        """Mark one notification or all notifications as read."""
+        client = await self._get_client()
+        headers: dict[str, str] = {}
+        if self.api_key:
+            headers["X-FlowForge-API-Key"] = self.api_key
+        if notification_id:
+            response = await client.post(f"/api/v1/notifications/{notification_id}/read", headers=headers)
+        else:
+            response = await client.post("/api/v1/notifications/read-all", headers=headers)
+        response.raise_for_status()
+
+    # ── Skill toggle ──────────────────────────────────────────────
+
+    async def set_function_skills(self, function_id: str, skill_ids: list[str]) -> dict[str, Any]:
+        """Set which skills are enabled for a function."""
+        client = await self._get_client()
+        headers: dict[str, str] = {}
+        if self.api_key:
+            headers["X-FlowForge-API-Key"] = self.api_key
+        response = await client.put(f"/api/v1/functions/{function_id}/skills", json=skill_ids, headers=headers)
+        response.raise_for_status()
+        return response.json()
+
     async def close(self) -> None:
         """Close the HTTP client."""
         if self._http_client:
