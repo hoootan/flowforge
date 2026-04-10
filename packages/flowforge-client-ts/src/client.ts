@@ -12,7 +12,9 @@ import { ApprovalsResource } from "./resources/approvals";
 import { HealthResource } from "./resources/health";
 import { UsersResource } from "./resources/users";
 import { ApiKeysResource } from "./resources/api-keys";
+import { CommentsResource } from "./resources/comments";
 import { CredentialsResource } from "./resources/credentials";
+import { NotificationsResource } from "./resources/notifications";
 import { TasksResource } from "./resources/tasks";
 import { SkillsResource } from "./resources/skills";
 
@@ -34,6 +36,10 @@ export interface FlowForgeClient {
   tasks: TasksResource;
   /** Skills resource - reusable function templates */
   skills: SkillsResource;
+  /** Comments resource - unified activity timeline */
+  comments: CommentsResource;
+  /** Notifications resource - inbox for approvals, mentions, alerts */
+  notifications: NotificationsResource;
   /** Approvals resource - human-in-the-loop approvals */
   approvals: ApprovalsResource;
   /** Health resource - server health and stats */
@@ -347,6 +353,8 @@ export function createClient(
     tools: new ToolsResource(request),
     tasks: new TasksResource(request),
     skills: new SkillsResource(request),
+    comments: new CommentsResource(request),
+    notifications: new NotificationsResource(request),
     approvals: new ApprovalsResource(request),
     health: new HealthResource(request),
     users: new UsersResource(request),

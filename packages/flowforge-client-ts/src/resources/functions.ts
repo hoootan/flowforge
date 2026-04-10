@@ -103,4 +103,12 @@ export class FunctionsResource {
       `/functions/${functionId}`
     );
   }
+
+  async setSkills(functionId: string, skillIds: string[]): Promise<Result<{ enabled_skills: string[] }>> {
+    return this.request<{ enabled_skills: string[] }>("PUT", `/functions/${functionId}/skills`, skillIds);
+  }
+
+  async getSkills(functionId: string): Promise<Result<{ enabled_skills: string[] }>> {
+    return this.request<{ enabled_skills: string[] }>("GET", `/functions/${functionId}/skills`);
+  }
 }
