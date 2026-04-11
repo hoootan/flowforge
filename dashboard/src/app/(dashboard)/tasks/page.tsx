@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { api, type TaskType, type TaskBoardResponse } from '@/lib/api';
+import { api, type TaskType, type TaskBoardResponse, type AgentType } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -101,7 +101,8 @@ export default function TasksPage() {
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'board' | 'list'>('board');
   const [showCreate, setShowCreate] = useState(false);
-  const [newTask, setNewTask] = useState({ title: '', description: '', priority: 'none' });
+  const [newTask, setNewTask] = useState({ title: '', description: '', priority: 'none', assignee_agent_id: '' });
+  const [agents, setAgents] = useState<AgentType[]>([]);
 
   const fetchBoard = useCallback(async () => {
     setLoading(true);
@@ -110,7 +111,10 @@ export default function TasksPage() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { fetchBoard(); }, [fetchBoard]);
+  useEffect(() => {
+    fetchBoard();
+    api.getAgents().then((data) => setAgents(data.agents));
+  }, [fetchBoard]);
 
   const handleCreate = async () => {
     if (!newTask.title.trim()) return;
@@ -118,11 +122,12 @@ export default function TasksPage() {
       title: newTask.title,
       description: newTask.description || undefined,
       priority: newTask.priority,
+      assignee_agent_id: newTask.assignee_agent_id || undefined,
     });
     if (task) {
       toast.success(`Task ${task.identifier} created`);
       setShowCreate(false);
-      setNewTask({ title: '', description: '', priority: 'none' });
+      setNewTask({ title: '', description: '', priority: 'none', assignee_agent_id: '' });
       fetchBoard();
     } else {
       toast.error('Failed to create task');
@@ -197,6 +202,30 @@ export default function TasksPage() {
                     </SelectContent>
                   </Select>
                 </div>
+                {agents.length > 0 && (
+                  <div className="space-y-2">
+                    <Label>Assign to Agent</Label>
+                    <Select
+                      value={newTask.assignee_agent_id}
+                      onValueChange={(v) => setNewTask({ ...newTask, assignee_agent_id: v === '_none' ? '' : v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Unassigned" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="_none">Unassigned</SelectItem>
+                        {agents.map((agent) => (
+                          <SelectItem key={agent.id} value={agent.id}>
+                            <span className="flex items-center gap-2">
+                              <Bot className="h-3 w-3" />
+                              {agent.name}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
