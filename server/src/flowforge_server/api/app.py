@@ -80,6 +80,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await services.initialize()
     app.state.services = services
 
+    # Security warnings
+    settings = get_settings()
+    if settings.is_development:
+        log.warning("development_mode_active", msg="Running in development mode")
+        if settings.dev_auth_bypass:
+            log.warning(
+                "dev_auth_bypass_enabled",
+                msg="Auth bypass is ON. Set FLOWFORGE_DEV_AUTH_BYPASS=false or FLOWFORGE_ENV=production to require auth.",
+            )
+    if "*" in settings.cors_origins:
+        log.warning("cors_wildcard_active", msg="CORS allows all origins. Only use for local development.")
+
     log.info("application_started")
 
     yield

@@ -5,13 +5,14 @@ Users can reference them by name in their inline functions.
 """
 
 import base64
-import ipaddress
 import os
 import uuid as uuid_mod
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
+
+from flowforge_server.services.network_utils import is_private_ip
 
 
 @dataclass
@@ -288,15 +289,6 @@ async def execute_generate_image(prompt: str, style: str = "professional", **kwa
     }
 
 
-def _is_private_ip(hostname: str) -> bool:
-    """Check if a hostname resolves to a private/reserved IP (SSRF protection)."""
-    try:
-        addr = ipaddress.ip_address(hostname)
-        return addr.is_private or addr.is_loopback or addr.is_reserved or addr.is_link_local
-    except ValueError:
-        # Not a raw IP — will be resolved by httpx; we check common names
-        return hostname in ("localhost", "0.0.0.0", "127.0.0.1", "::1")
-
 
 async def execute_http_request(
     url: str,
@@ -315,7 +307,7 @@ async def execute_http_request(
     # SSRF protection: block private IPs
     parsed = urlparse(url)
     hostname = parsed.hostname or ""
-    if _is_private_ip(hostname):
+    if is_private_ip(hostname):
         return {"error": f"Requests to private/reserved addresses are blocked: {hostname}"}
 
     method = method.upper()

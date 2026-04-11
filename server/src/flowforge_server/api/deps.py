@@ -301,8 +301,8 @@ async def get_tenant_with_dev_fallback(
         )
 
     # No credentials provided
-    if settings.is_development:
-        # In development, fall back to default tenant
+    if settings.is_development and settings.dev_auth_bypass:
+        # In development with auth bypass enabled, fall back to default tenant
         result = await session.execute(
             select(Tenant).where(Tenant.id == DEFAULT_TENANT_ID)
         )

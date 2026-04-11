@@ -8,6 +8,7 @@ import type {
   LoginResponse,
   UserWithPermissions,
 } from "@/lib/auth/types";
+import { setAuthCookie, clearAuthCookie } from "@/lib/auth-cookie";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
@@ -120,7 +121,7 @@ export const useAuthStore = create<AuthStore>()(
           const userData: UserWithPermissions = await userResponse.json();
 
           // Set cookie for middleware
-          document.cookie = `flowforge-auth-token=${loginData.access_token}; path=/; max-age=${loginData.expires_in}; SameSite=Lax`;
+          await setAuthCookie(loginData.access_token, loginData.expires_in);
 
           // Calculate token expiry timestamp
           const tokenExpiresAt = Math.floor(Date.now() / 1000) + loginData.expires_in;
@@ -190,7 +191,7 @@ export const useAuthStore = create<AuthStore>()(
           const userData: UserWithPermissions = await userResponse.json();
 
           // Set cookie for middleware
-          document.cookie = `flowforge-auth-token=${data.access_token}; path=/; max-age=${data.expires_in}; SameSite=Lax`;
+          await setAuthCookie(data.access_token, data.expires_in);
 
           // Calculate token expiry timestamp
           const tokenExpiresAt = Math.floor(Date.now() / 1000) + data.expires_in;
@@ -234,8 +235,7 @@ export const useAuthStore = create<AuthStore>()(
         }
 
         // Clear the auth cookie
-        document.cookie =
-          "flowforge-auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+        await clearAuthCookie();
 
         set({
           user: null,
@@ -266,8 +266,7 @@ export const useAuthStore = create<AuthStore>()(
 
           if (!response.ok) {
             // Token is invalid, clear auth state
-            document.cookie =
-              "flowforge-auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+            await clearAuthCookie();
             set({
               user: null,
               token: null,
@@ -332,8 +331,7 @@ export const useAuthStore = create<AuthStore>()(
 
           if (!response.ok) {
             // Refresh failed - clear auth state
-            document.cookie =
-              "flowforge-auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+            await clearAuthCookie();
             set({
               user: null,
               token: null,
@@ -348,7 +346,7 @@ export const useAuthStore = create<AuthStore>()(
           const data: LoginResponse = await response.json();
 
           // Update cookie
-          document.cookie = `flowforge-auth-token=${data.access_token}; path=/; max-age=${data.expires_in}; SameSite=Lax`;
+          await setAuthCookie(data.access_token, data.expires_in);
 
           // Calculate token expiry timestamp
           const tokenExpiresAt = Math.floor(Date.now() / 1000) + data.expires_in;

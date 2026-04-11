@@ -69,6 +69,14 @@ class Settings(BaseSettings):
         In production: Use explicitly configured origins only
         """
         if self.is_development:
+            if self.host == "0.0.0.0":
+                # Restrict CORS when externally accessible, even in dev
+                return [
+                    "http://localhost:3000",
+                    "http://localhost:8000",
+                    "http://127.0.0.1:3000",
+                    "http://127.0.0.1:8000",
+                ]
             return ["*"]
 
         if self.cors_allowed_origins:
@@ -114,6 +122,9 @@ class Settings(BaseSettings):
     # Encryption (for storing sensitive data like AI provider API keys)
     encryption_key: str | None = None  # Required for secure credential storage
     encryption_salt: str | None = None  # Unique salt per installation for key derivation
+
+    # Development security
+    dev_auth_bypass: bool = True  # Allow unauthenticated access in dev mode
 
     # Rate limiting and brute force protection
     login_rate_limit: int = 10  # Requests per minute per IP

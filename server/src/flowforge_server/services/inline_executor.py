@@ -29,6 +29,7 @@ from flowforge_server.db.models import (
 from flowforge_server.logging import Loggers
 from flowforge_server.services.ai import AIService, ToolCall
 from flowforge_server.services.builtin_tools import execute_builtin_tool, get_builtin_tool_names
+from flowforge_server.services.network_utils import validate_webhook_url
 from flowforge_server.services.credentials import (
     CredentialResolutionError,
     resolve_dict_placeholders,
@@ -828,6 +829,12 @@ class InlineExecutor:
             url = await resolve_placeholders(
                 tool_info["webhook_url"], tenant_id, session
             )
+
+            # SSRF protection: block private/internal URLs
+            try:
+                validate_webhook_url(url)
+            except ValueError as e:
+                return {"error": str(e)}
 
             # Resolve credential placeholders in headers
             raw_headers = tool_info.get("webhook_headers") or {}
