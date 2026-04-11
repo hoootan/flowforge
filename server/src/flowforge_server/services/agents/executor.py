@@ -11,6 +11,8 @@ import time
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, Any
 
+from flowforge_server.services.sandbox import SandboxError, SandboxTimeoutError, execute_sandboxed
+
 from .base import (
     AgentDefinition,
     AgentExecutionResult,
@@ -19,7 +21,6 @@ from .base import (
     ToolDefinition,
 )
 from .conversation import ConversationManager
-from flowforge_server.services.sandbox import execute_sandboxed, SandboxError, SandboxTimeoutError
 
 if TYPE_CHECKING:
     from flowforge_server.services.ai import AIService, ToolCall

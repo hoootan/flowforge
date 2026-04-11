@@ -3,10 +3,9 @@
 import hashlib
 import secrets
 import uuid
-
-import bcrypt
 from datetime import UTC, datetime, timedelta
 
+import bcrypt
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
