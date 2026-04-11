@@ -46,6 +46,23 @@ class SandboxSecurityError(SandboxError):
     pass
 
 
+def _safe_http_request(url, method="GET", headers=None, json=None, timeout=30):
+    """SSRF-safe HTTP request available to sandboxed tool code."""
+    from flowforge_server.services.network_utils import (
+        create_ssrf_safe_sync_client,
+        validate_webhook_url,
+    )
+    validate_webhook_url(url)
+    timeout = max(1, min(timeout, 60))
+    with create_ssrf_safe_sync_client(timeout=timeout) as client:
+        response = client.request(method, url, headers=headers or {}, json=json)
+        return {
+            "status_code": response.status_code,
+            "headers": dict(response.headers),
+            "text": response.text,
+        }
+
+
 # Whitelist of safe builtins for tool execution
 SAFE_BUILTINS = {
     **safe_builtins,
@@ -104,8 +121,8 @@ SAFE_BUILTINS = {
     "math": __import__("math"),
     # Allow re for pattern matching
     "re": __import__("re"),
-    # Allow httpx for HTTP requests
-    "httpx": __import__("httpx"),
+    # Allow SSRF-safe HTTP requests
+    "http_request": _safe_http_request,
 }
 
 # Modules that are explicitly blocked
@@ -116,7 +133,7 @@ BLOCKED_MODULES = {
     "codeop", "compileall", "dis", "inspect", "pdb",
     "trace", "traceback", "linecache", "gc", "atexit",
     "io", "pathlib", "tempfile", "glob", "fnmatch",
-    "requests", "urllib", "http", "aiohttp",
+    "requests", "urllib", "http", "aiohttp", "httpx",
     "sqlite3", "psycopg2", "pymongo", "redis", "sqlalchemy",
 }
 
@@ -151,8 +168,8 @@ def _guarded_import(
     if name in BLOCKED_MODULES:
         raise SandboxSecurityError(f"Import of module '{name}' is not allowed")
 
-    # Allow json, datetime, math, re, and httpx for HTTP access
-    allowed_imports = {"json", "datetime", "math", "re", "collections", "itertools", "functools", "httpx"}
+    # Allow json, datetime, math, re for sandbox use
+    allowed_imports = {"json", "datetime", "math", "re", "collections", "itertools", "functools"}
     if name not in allowed_imports:
         raise SandboxSecurityError(f"Import of module '{name}' is not allowed")
 

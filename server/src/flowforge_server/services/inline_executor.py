@@ -34,7 +34,7 @@ from flowforge_server.services.credentials import (
     resolve_dict_placeholders,
     resolve_placeholders,
 )
-from flowforge_server.services.network_utils import validate_webhook_url
+from flowforge_server.services.network_utils import create_ssrf_safe_client, validate_webhook_url
 from flowforge_server.services.sandbox import (
     DEFAULT_TIMEOUT_SECONDS,
     SandboxError,
@@ -67,7 +67,7 @@ class InlineExecutor:
 
     async def _get_http_client(self) -> httpx.AsyncClient:
         if self._http_client is None or self._http_client.is_closed:
-            self._http_client = httpx.AsyncClient(follow_redirects=True, timeout=30.0)
+            self._http_client = create_ssrf_safe_client(timeout=30.0)
         return self._http_client
 
     async def close(self) -> None:
