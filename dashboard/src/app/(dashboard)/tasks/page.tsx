@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { api, type TaskType, type TaskBoardResponse, type AgentType } from '@/lib/api';
+import { api, type TaskType, type TaskBoardResponse, type AgentType, type CommentType } from '@/lib/api';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -25,7 +26,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, KanbanSquare, List, Bot, User, MessageSquare } from 'lucide-react';
+import { Plus, KanbanSquare, List, Bot, User, MessageSquare, Send, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 const statusConfig: Record<string, { label: string; color: string }> = {
@@ -48,9 +49,9 @@ const priorityColors: Record<string, string> = {
 // Kanban columns to show (subset for board)
 const boardColumns = ['todo', 'in_progress', 'in_review', 'done'];
 
-function TaskCard({ task }: { task: TaskType }) {
+function TaskCard({ task, onClick }: { task: TaskType; onClick: () => void }) {
   return (
-    <div className="bg-background border rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow space-y-2">
+    <div onClick={onClick} className="cursor-pointer bg-background border rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow space-y-2">
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
@@ -103,6 +104,10 @@ export default function TasksPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [newTask, setNewTask] = useState({ title: '', description: '', priority: 'none', assignee_agent_id: '' });
   const [agents, setAgents] = useState<AgentType[]>([]);
+  const [selectedTask, setSelectedTask] = useState<TaskType | null>(null);
+  const [taskComments, setTaskComments] = useState<CommentType[]>([]);
+  const [newComment, setNewComment] = useState('');
+  const [functions, setFunctions] = useState<{ id: string; function_id: string }[]>([]);
 
   const fetchBoard = useCallback(async () => {
     setLoading(true);
@@ -114,7 +119,41 @@ export default function TasksPage() {
   useEffect(() => {
     fetchBoard();
     api.getAgents().then((data) => setAgents(data.agents));
+    api.getFunctions().then((data) => setFunctions(data.functions));
   }, [fetchBoard]);
+
+  const openTaskDetail = async (task: TaskType) => {
+    setSelectedTask(task);
+    const data = await api.getComments({ task_id: task.id });
+    setTaskComments(data.comments);
+  };
+
+  const handleUpdateTask = async (field: string, value: string) => {
+    if (!selectedTask) return;
+    const updated = await api.updateTask(selectedTask.id, { [field]: value || null });
+    if (updated) {
+      setSelectedTask(updated);
+      fetchBoard();
+    }
+  };
+
+  const handleAddComment = async () => {
+    if (!selectedTask || !newComment.trim()) return;
+    const comment = await api.createComment({ task_id: selectedTask.id, content: newComment });
+    if (comment) {
+      setTaskComments([...taskComments, comment]);
+      setNewComment('');
+    }
+  };
+
+  const handleDeleteTask = async () => {
+    if (!selectedTask) return;
+    if (await api.deleteTask(selectedTask.id)) {
+      setSelectedTask(null);
+      fetchBoard();
+      toast.success('Task deleted');
+    }
+  };
 
   const handleCreate = async () => {
     if (!newTask.title.trim()) return;
@@ -262,7 +301,7 @@ export default function TasksPage() {
                     <TaskCard
                       key={task.id}
                       task={task}
-
+                      onClick={() => openTaskDetail(task)}
                     />
                   ))}
                   {tasks.length === 0 && (
@@ -281,7 +320,7 @@ export default function TasksPage() {
             <div className="divide-y">
               {Object.entries(board?.columns || {}).flatMap(([status, tasks]) =>
                 (tasks as TaskType[]).map(task => (
-                  <div key={task.id} className="flex items-center gap-4 px-4 py-3 hover:bg-muted/50">
+                  <div key={task.id} className="flex items-center gap-4 px-4 py-3 hover:bg-muted/50 cursor-pointer" onClick={() => openTaskDetail(task)}>
                     <span className="text-xs font-mono text-muted-foreground w-16">{task.identifier}</span>
                     <Badge variant="outline" className="text-xs w-24 justify-center">
                       {statusConfig[task.status]?.label || task.status}
@@ -303,6 +342,141 @@ export default function TasksPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Task Detail Sheet */}
+      <Sheet open={!!selectedTask} onOpenChange={(open) => !open && setSelectedTask(null)}>
+        <SheetContent className="w-[500px] sm:w-[600px] overflow-y-auto">
+          {selectedTask && (
+            <>
+              <SheetHeader>
+                <div className="flex items-center justify-between">
+                  <SheetTitle className="flex items-center gap-2">
+                    <span className="text-muted-foreground font-mono">{selectedTask.identifier}</span>
+                  </SheetTitle>
+                  <Button variant="ghost" size="icon" onClick={handleDeleteTask}>
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
+              </SheetHeader>
+
+              <div className="space-y-6 mt-6">
+                {/* Title */}
+                <div>
+                  <h3 className="text-lg font-semibold">{selectedTask.title}</h3>
+                  {selectedTask.description && (
+                    <p className="text-sm text-muted-foreground mt-1">{selectedTask.description}</p>
+                  )}
+                </div>
+
+                {/* Status */}
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground uppercase">Status</Label>
+                  <Select value={selectedTask.status} onValueChange={(v) => handleUpdateTask('status', v)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(statusConfig).map(([value, { label }]) => (
+                        <SelectItem key={value} value={value}>{label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Priority */}
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground uppercase">Priority</Label>
+                  <Select value={selectedTask.priority} onValueChange={(v) => handleUpdateTask('priority', v)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="urgent">Urgent</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Assignee */}
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground uppercase">Assigned Agent</Label>
+                  <Select
+                    value={selectedTask.assignee_agent_id || '_none'}
+                    onValueChange={(v) => handleUpdateTask('assignee_agent_id', v === '_none' ? '' : v)}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none">Unassigned</SelectItem>
+                      {agents.map((agent) => (
+                        <SelectItem key={agent.id} value={agent.id}>
+                          <span className="flex items-center gap-2">
+                            <Bot className="h-3 w-3" /> {agent.name}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Linked Run */}
+                {selectedTask.run_id && (
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground uppercase">Linked Run</Label>
+                    <p className="text-sm font-mono">{selectedTask.run_id}</p>
+                  </div>
+                )}
+
+                {/* Comments */}
+                <div className="space-y-3">
+                  <Label className="text-xs text-muted-foreground uppercase">
+                    Comments ({taskComments.length})
+                  </Label>
+
+                  <div className="space-y-3 max-h-[300px] overflow-y-auto">
+                    {taskComments.map((comment) => (
+                      <div key={comment.id} className="bg-muted/50 rounded-lg p-3 space-y-1">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          {comment.author_type === 'agent' ? (
+                            <><Bot className="h-3 w-3" /><span>{comment.author?.name ?? 'Agent'}</span></>
+                          ) : comment.author_type === 'user' ? (
+                            <><User className="h-3 w-3" /><span>{comment.author?.name ?? 'User'}</span></>
+                          ) : (
+                            <span>System</span>
+                          )}
+                          {comment.created_at && (
+                            <span>{new Date(comment.created_at).toLocaleString()}</span>
+                          )}
+                        </div>
+                        <p className="text-sm whitespace-pre-wrap">{comment.content}</p>
+                      </div>
+                    ))}
+                    {taskComments.length === 0 && (
+                      <p className="text-sm text-muted-foreground">No comments yet</p>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Add a comment..."
+                      value={newComment}
+                      onChange={(e) => setNewComment(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleAddComment()}
+                    />
+                    <Button size="icon" onClick={handleAddComment} disabled={!newComment.trim()}>
+                      <Send className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Metadata */}
+                <div className="text-xs text-muted-foreground space-y-1">
+                  {selectedTask.created_at && <p>Created {new Date(selectedTask.created_at).toLocaleString()}</p>}
+                  {selectedTask.updated_at && <p>Updated {new Date(selectedTask.updated_at).toLocaleString()}</p>}
+                </div>
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
