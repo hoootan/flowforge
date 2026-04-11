@@ -13,6 +13,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 import httpx
+from sqlalchemy import select
 
 from flowforge_server.services.network_utils import create_ssrf_safe_client, validate_webhook_url
 
@@ -25,6 +26,17 @@ class BuiltinToolDefinition:
     parameters: dict[str, Any]
     requires_approval: bool = False
     approval_timeout: str | None = None
+
+
+@dataclass
+class ToolContext:
+    """Execution context for tools that need database access."""
+    session: Any  # AsyncSession
+    run: Any  # Run model
+    tenant_id: Any  # uuid.UUID
+
+
+CONTEXT_AWARE_BUILTINS = {"update_task", "comment_on_task"}
 
 
 # =============================================================================
@@ -138,6 +150,32 @@ BUILTIN_TOOLS: list[BuiltinToolDefinition] = [
         },
         requires_approval=True,
         approval_timeout="24h",  # Give users more time to respond to questions
+    ),
+
+    # Task Management Tools
+    BuiltinToolDefinition(
+        name="update_task",
+        description="Update the status or priority of a task. Use to report progress on your assigned task.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string", "description": "Task UUID. If omitted, updates the task linked to the current run."},
+                "status": {"type": "string", "enum": ["todo", "in_progress", "in_review", "done", "blocked", "cancelled"], "description": "New task status"},
+                "priority": {"type": "string", "enum": ["urgent", "high", "medium", "low", "none"], "description": "New task priority"},
+            },
+        },
+    ),
+    BuiltinToolDefinition(
+        name="comment_on_task",
+        description="Post a comment on a task. Use to report progress, findings, or ask questions.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string", "description": "Task UUID. If omitted, comments on the task linked to the current run."},
+                "content": {"type": "string", "description": "Comment text (markdown supported)"},
+            },
+            "required": ["content"],
+        },
     ),
 ]
 
@@ -396,3 +434,112 @@ def get_builtin_tool_definitions() -> list[BuiltinToolDefinition]:
 def get_builtin_tool_names() -> list[str]:
     """Get names of all built-in tools."""
     return list(TOOL_EXECUTORS.keys())
+
+
+# =============================================================================
+# CONTEXT-AWARE TOOL IMPLEMENTATIONS
+# =============================================================================
+
+async def execute_context_builtin_tool(
+    name: str,
+    arguments: dict[str, Any],
+    context: ToolContext,
+) -> dict[str, Any]:
+    """Execute a built-in tool that requires database/execution context."""
+    if name == "update_task":
+        return await _execute_update_task(arguments, context)
+    elif name == "comment_on_task":
+        return await _execute_comment_on_task(arguments, context)
+    return {"error": f"Unknown context-aware tool: {name}"}
+
+
+async def _execute_update_task(
+    arguments: dict[str, Any],
+    context: ToolContext,
+) -> dict[str, Any]:
+    """Update a task's status or priority."""
+    from flowforge_server.db.models.task import Task
+
+    session = context.session
+    task_id = arguments.get("task_id")
+
+    if not task_id:
+        # Find task linked to current run
+        result = await session.execute(
+            select(Task).where(Task.run_id == context.run.id)
+        )
+        task = result.scalar_one_or_none()
+        if not task:
+            return {"error": "No task linked to the current run. Provide task_id explicitly."}
+    else:
+        result = await session.execute(
+            select(Task).where(
+                Task.id == uuid_mod.UUID(task_id),
+                Task.tenant_id == context.tenant_id,
+            )
+        )
+        task = result.scalar_one_or_none()
+        if not task:
+            return {"error": f"Task {task_id} not found"}
+
+    updated_fields = []
+    if "status" in arguments:
+        task.status = arguments["status"]
+        updated_fields.append(f"status={arguments['status']}")
+    if "priority" in arguments:
+        task.priority = arguments["priority"]
+        updated_fields.append(f"priority={arguments['priority']}")
+
+    if not updated_fields:
+        return {"error": "No fields to update. Provide status or priority."}
+
+    await session.commit()
+    return {"success": True, "task_id": str(task.id), "identifier": task.identifier, "updated": updated_fields}
+
+
+async def _execute_comment_on_task(
+    arguments: dict[str, Any],
+    context: ToolContext,
+) -> dict[str, Any]:
+    """Post a comment on a task."""
+    from flowforge_server.db.models.comment import Comment
+    from flowforge_server.db.models.task import Task
+
+    session = context.session
+    task_id = arguments.get("task_id")
+    content = arguments.get("content", "")
+
+    if not content:
+        return {"error": "Comment content is required"}
+
+    if not task_id:
+        result = await session.execute(
+            select(Task).where(Task.run_id == context.run.id)
+        )
+        task = result.scalar_one_or_none()
+        if not task:
+            return {"error": "No task linked to the current run. Provide task_id explicitly."}
+        task_id = str(task.id)
+
+    # Determine agent_id from the run's function/agent context
+    agent_id = None
+    if hasattr(context.run, 'function') and context.run.function:
+        # Try to find the agent assigned to the task
+        result = await session.execute(
+            select(Task).where(Task.id == uuid_mod.UUID(task_id))
+        )
+        linked_task = result.scalar_one_or_none()
+        if linked_task and linked_task.assignee_agent_id:
+            agent_id = linked_task.assignee_agent_id
+
+    comment = Comment(
+        tenant_id=context.tenant_id,
+        task_id=uuid_mod.UUID(task_id) if isinstance(task_id, str) else task_id,
+        content=content,
+        comment_type="comment",
+        author_agent_id=agent_id,
+    )
+    session.add(comment)
+    await session.commit()
+
+    return {"success": True, "task_id": task_id, "comment_id": str(comment.id)}

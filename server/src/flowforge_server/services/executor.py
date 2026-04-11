@@ -29,6 +29,7 @@ from flowforge_server.stream.pubsub import RunEventType, publish_run_event
 
 if TYPE_CHECKING:
     from flowforge_server.services.inline_executor import InlineExecutor
+    from flowforge_server.stream import RedisEventStream
 
 
 class Executor:
@@ -67,6 +68,7 @@ class Executor:
         self._http_client: httpx.AsyncClient | None = None
         self._ai_service: AIService | None = None
         self._inline_executor: InlineExecutor | None = None
+        self._event_stream: RedisEventStream | None = None
 
     async def _get_http_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""
@@ -97,6 +99,12 @@ class Executor:
             from flowforge_server.services.inline_executor import InlineExecutor
             self._inline_executor = InlineExecutor(self._get_ai_service())
         return self._inline_executor
+
+    def _get_event_stream(self) -> "RedisEventStream":
+        if self._event_stream is None:
+            from flowforge_server.stream import RedisEventStream
+            self._event_stream = RedisEventStream()
+        return self._event_stream
 
     async def start(self) -> None:
         """Start the executor service."""
@@ -398,6 +406,9 @@ class Executor:
 
             print(f"[Executor] Run {run.id} completed")
 
+            # Sync linked task status
+            await self._sync_task_on_run_end(session, run, success=True)
+
         elif status == "step_complete":
             # Step completed, process and continue
             step_id = result.get("step_id")
@@ -488,9 +499,26 @@ class Executor:
 
                 print(f"[Executor] Run {run.id} permanently failed")
 
+                # Sync linked task status
+                await self._sync_task_on_run_end(session, run, success=False)
+
         else:
             print(f"[Executor] Unknown result status: {status}")
             await self.queue.complete(job.id)
+
+    async def _sync_task_on_run_end(
+        self, session: AsyncSession, run: Run, *, success: bool
+    ) -> None:
+        """Update linked task when run completes or fails."""
+        try:
+            from flowforge_server.services.task_service import TaskService
+            task_service = TaskService(event_stream=self._get_event_stream())
+            if success:
+                await task_service.on_run_completed(session, run)
+            else:
+                await task_service.on_run_failed(session, run)
+        except Exception as e:
+            print(f"[Executor] Task sync failed for run {run.id}: {e}")
 
     def _sanitize_output(self, value: Any) -> Any:
         """Recursively strip null bytes from strings so PostgreSQL JSONB accepts the value."""

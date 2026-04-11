@@ -14,6 +14,7 @@ from fastapi import Request
 if TYPE_CHECKING:
     from flowforge_server.queue import FairQueue
     from flowforge_server.services.ai import AIService
+    from flowforge_server.services.task_service import TaskService
     from flowforge_server.stream import RedisEventStream
     from flowforge_server.stream.pubsub import RunEventPubSub
 
@@ -36,6 +37,7 @@ class ServiceContainer:
     job_queue: FairQueue
     event_stream: RedisEventStream
     pubsub: RunEventPubSub
+    task_service: TaskService
 
     # Optional flag to track initialization
     _initialized: bool = field(default=False, repr=False)
@@ -88,17 +90,22 @@ def create_service_container() -> ServiceContainer:
     from flowforge_server.queue import FairQueue
     from flowforge_server.services.ai import AIService
     from flowforge_server.services.providers import get_provider_registry
+    from flowforge_server.services.task_service import TaskService
     from flowforge_server.stream import RedisEventStream
     from flowforge_server.stream.pubsub import RunEventPubSub
 
     ai_service = AIService()
     ai_service.provider_registry = get_provider_registry()
 
+    event_stream = RedisEventStream()
+    task_service = TaskService(event_stream=event_stream)
+
     return ServiceContainer(
         ai_service=ai_service,
         job_queue=FairQueue(),
-        event_stream=RedisEventStream(),
+        event_stream=event_stream,
         pubsub=RunEventPubSub(),
+        task_service=task_service,
     )
 
 
@@ -143,3 +150,8 @@ def get_event_stream(request: Request) -> RedisEventStream:
 def get_pubsub(request: Request) -> RunEventPubSub:
     """Get the pubsub from the request."""
     return get_services(request).pubsub
+
+
+def get_task_service(request: Request) -> TaskService:
+    """Get the task service from the request."""
+    return get_services(request).task_service
