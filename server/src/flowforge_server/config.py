@@ -124,7 +124,7 @@ class Settings(BaseSettings):
     encryption_salt: str | None = None  # Unique salt per installation for key derivation
 
     # Development security
-    dev_auth_bypass: bool = True  # Allow unauthenticated access in dev mode
+    dev_auth_bypass: bool = False  # Set FLOWFORGE_DEV_AUTH_BYPASS=true to allow unauthenticated access in dev
 
     # Rate limiting and brute force protection
     login_rate_limit: int = 10  # Requests per minute per IP

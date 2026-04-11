@@ -16,6 +16,6 @@ export async function POST(req: Request) {
 
 export async function DELETE() {
   const cookieStore = await cookies();
-  cookieStore.delete("flowforge-auth-token");
+  cookieStore.delete({ name: "flowforge-auth-token", path: "/" });
   return NextResponse.json({ ok: true });
 }

@@ -8,7 +8,7 @@ def is_private_ip(hostname: str) -> bool:
     """Check if a hostname is a private/reserved IP address."""
     try:
         addr = ipaddress.ip_address(hostname)
-        return addr.is_private or addr.is_loopback or addr.is_reserved or addr.is_link_local
+        return not addr.is_global
     except ValueError:
         return hostname in ("localhost", "0.0.0.0", "127.0.0.1", "::1")
 
