@@ -28,7 +28,13 @@ from flowforge_server.db.models import (
 )
 from flowforge_server.logging import Loggers
 from flowforge_server.services.ai import AIService, ToolCall
-from flowforge_server.services.builtin_tools import execute_builtin_tool, get_builtin_tool_names
+from flowforge_server.services.builtin_tools import (
+    CONTEXT_AWARE_BUILTINS,
+    ToolContext,
+    execute_builtin_tool,
+    execute_context_builtin_tool,
+    get_builtin_tool_names,
+)
 from flowforge_server.services.credentials import (
     CredentialResolutionError,
     resolve_dict_placeholders,
@@ -580,7 +586,7 @@ class InlineExecutor:
                     # Execute the tool with potentially modified arguments
                     try:
                         tool_result = await self._execute_tool(
-                            session, tool_info, tool_arguments
+                            session, tool_info, tool_arguments, run=run
                         )
                         result_str = str(tool_result)
                     except Exception as e:
@@ -797,8 +803,17 @@ class InlineExecutor:
         session: AsyncSession,
         tool_info: dict[str, Any],
         arguments: dict[str, Any],
+        *,
+        run: Any = None,
     ) -> Any:
         """Execute a tool with the given arguments."""
+        # Context-aware builtins need database access
+        if tool_info["is_builtin"] and tool_info["name"] in CONTEXT_AWARE_BUILTINS:
+            if run:
+                context = ToolContext(session=session, run=run, tenant_id=run.tenant_id)
+                return await execute_context_builtin_tool(tool_info["name"], arguments, context)
+            else:
+                return {"error": f"Tool '{tool_info['name']}' requires an execution context (run)"}
         if tool_info["is_builtin"]:
             return await execute_builtin_tool(tool_info["name"], arguments)
         elif tool_info.get("webhook_url"):

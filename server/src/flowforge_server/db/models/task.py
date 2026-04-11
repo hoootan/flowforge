@@ -156,13 +156,13 @@ class Task(Base, TimestampMixin):
     # Relationships
     tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="tasks")
     assignee_user: Mapped["User | None"] = relationship(
-        "User", foreign_keys=[assignee_user_id]
+        "User", foreign_keys=[assignee_user_id], lazy="selectin"
     )
     assignee_agent: Mapped["Agent | None"] = relationship(
-        "Agent", foreign_keys=[assignee_agent_id]
+        "Agent", foreign_keys=[assignee_agent_id], lazy="selectin"
     )
     created_by: Mapped["User | None"] = relationship(
-        "User", foreign_keys=[created_by_user_id]
+        "User", foreign_keys=[created_by_user_id], lazy="selectin"
     )
     parent_task: Mapped["Task | None"] = relationship(
         "Task", remote_side=[id], foreign_keys=[parent_task_id]

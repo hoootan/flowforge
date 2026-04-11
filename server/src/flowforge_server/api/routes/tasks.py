@@ -2,7 +2,7 @@
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from flowforge_server.api.deps import TenantWithDevFallback
 from flowforge_server.db import get_session
 from flowforge_server.db.models import Task, TaskPriority, TaskStatus
+from flowforge_server.services.container import get_task_service
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -185,6 +186,7 @@ async def get_task_board(
 
 @router.post("", response_model=TaskResponse, status_code=201)
 async def create_task(
+    request: Request,
     data: CreateTaskRequest,
     tenant: TenantWithDevFallback,
     session: AsyncSession = Depends(get_session),
@@ -219,6 +221,13 @@ async def create_task(
     await session.commit()
     await session.refresh(task)
 
+    # Task automation hooks
+    try:
+        task_service = get_task_service(request)
+        await task_service.on_task_created(session, task)
+    except Exception:
+        pass  # Automation errors should not block task creation
+
     return TaskResponse(**task.to_dict())
 
 
@@ -244,6 +253,7 @@ async def get_task(
 @router.patch("/{task_id}", response_model=TaskResponse)
 async def update_task(
     task_id: str,
+    request: Request,
     data: UpdateTaskRequest,
     tenant: TenantWithDevFallback,
     session: AsyncSession = Depends(get_session),
@@ -259,6 +269,7 @@ async def update_task(
         raise HTTPException(status_code=404, detail="Task not found")
 
     update_data = data.model_dump(exclude_unset=True)
+    previous_values = {k: getattr(task, k) for k in update_data}
 
     # Convert UUID strings to UUID objects
     for field in ("assignee_user_id", "assignee_agent_id", "function_id", "run_id"):
@@ -276,6 +287,13 @@ async def update_task(
 
     await session.commit()
     await session.refresh(task)
+
+    # Task automation hooks
+    try:
+        task_service = get_task_service(request)
+        await task_service.on_task_updated(session, task, update_data, previous_values)
+    except Exception:
+        pass  # Automation errors should not block task update
 
     return TaskResponse(**task.to_dict())
 
