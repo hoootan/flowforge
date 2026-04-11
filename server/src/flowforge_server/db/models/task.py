@@ -165,13 +165,13 @@ class Task(Base, TimestampMixin):
         "User", foreign_keys=[created_by_user_id], lazy="selectin"
     )
     parent_task: Mapped["Task | None"] = relationship(
-        "Task", remote_side=[id], foreign_keys=[parent_task_id]
+        "Task", remote_side=[id], foreign_keys=[parent_task_id], lazy="noload"
     )
     sub_tasks: Mapped[list["Task"]] = relationship(
-        "Task", foreign_keys=[parent_task_id], lazy="selectin"
+        "Task", foreign_keys=[parent_task_id], lazy="noload"
     )
     comments: Mapped[list["Comment"]] = relationship(
-        "Comment", back_populates="task", lazy="selectin"
+        "Comment", back_populates="task", lazy="noload"
     )
 
     def __repr__(self) -> str:
@@ -215,8 +215,8 @@ class Task(Base, TimestampMixin):
             "parent_task_id": str(self.parent_task_id) if self.parent_task_id else None,
             "function_id": str(self.function_id) if self.function_id else None,
             "run_id": str(self.run_id) if self.run_id else None,
-            "sub_tasks_count": len(self.sub_tasks) if self.sub_tasks else 0,
-            "comments_count": len(self.comments) if self.comments else 0,
+            "sub_tasks_count": len(self.sub_tasks) if "sub_tasks" in self.__dict__ and self.sub_tasks else 0,
+            "comments_count": len(self.comments) if "comments" in self.__dict__ and self.comments else 0,
             "metadata": self.task_metadata,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
