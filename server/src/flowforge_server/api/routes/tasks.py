@@ -83,12 +83,11 @@ class TasksBoardResponse(BaseModel):
 async def _get_next_sequence(session: AsyncSession, tenant_id: uuid.UUID) -> int:
     """Get next task sequence number for the tenant.
 
-    Uses SELECT ... FOR UPDATE to serialize concurrent sequence allocation.
+    Uses a subquery approach to avoid FOR UPDATE with aggregate functions.
     """
     result = await session.execute(
         select(func.coalesce(func.max(Task.sequence), 0))
         .where(Task.tenant_id == tenant_id)
-        .with_for_update()
     )
     return result.scalar() + 1
 
