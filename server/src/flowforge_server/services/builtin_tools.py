@@ -12,7 +12,9 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from flowforge_server.services.network_utils import is_private_ip
+import httpx
+
+from flowforge_server.services.network_utils import create_ssrf_safe_client, validate_webhook_url
 
 
 @dataclass
@@ -299,23 +301,21 @@ async def execute_http_request(
     **kwargs,
 ) -> dict[str, Any]:
     """Execute a general-purpose HTTP request with SSRF protection."""
-    import httpx
-
     # Clamp timeout
     timeout = max(1, min(timeout, 120))
 
-    # SSRF protection: block private IPs
-    parsed = urlparse(url)
-    hostname = parsed.hostname or ""
-    if is_private_ip(hostname):
-        return {"error": f"Requests to private/reserved addresses are blocked: {hostname}"}
+    # SSRF protection: validate URL (scheme, IP, DNS resolution)
+    try:
+        validate_webhook_url(url)
+    except ValueError as e:
+        return {"error": str(e)}
 
     method = method.upper()
     if method not in ("GET", "POST", "PUT", "PATCH", "DELETE"):
         return {"error": f"Unsupported HTTP method: {method}"}
 
     try:
-        async with httpx.AsyncClient(follow_redirects=True) as client:
+        async with create_ssrf_safe_client() as client:
             request_kwargs: dict[str, Any] = {
                 "method": method,
                 "url": url,

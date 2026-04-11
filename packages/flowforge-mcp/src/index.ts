@@ -12,6 +12,8 @@ function parseArgs(argv: string[]) {
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--help" || args[i] === "-h") {
       result.help = "true";
+    } else if (args[i] === "--allow-unauthenticated") {
+      result["allow-unauthenticated"] = "true";
     } else if (args[i].startsWith("--") && i + 1 < args.length) {
       const key = args[i].slice(2);
       result[key] = args[++i];
@@ -33,6 +35,7 @@ Options:
   --api-key <key>       FlowForge API key (env: FLOWFORGE_API_KEY)
   --transport <type>    Transport: stdio (default) or http
   --port <number>       HTTP server port (default: 3100)
+  --allow-unauthenticated   Allow HTTP transport without API key (not recommended)
   --help, -h            Show this help message
 
 Examples:
@@ -63,9 +66,9 @@ async function main() {
   const transport = args.transport || "stdio";
   const port = parseInt(args.port || "3100", 10);
 
-  if (!apiKey) {
+  if (!apiKey && transport === "stdio") {
     console.error(
-      "Warning: No API key provided. Set --api-key or FLOWFORGE_API_KEY. HTTP transport will be unauthenticated."
+      "Warning: No API key provided. Set --api-key or FLOWFORGE_API_KEY."
     );
   }
 
@@ -79,6 +82,12 @@ async function main() {
     // Log to stderr only — stdout is reserved for MCP JSON-RPC messages
     console.error("FlowForge MCP server running on stdio");
   } else if (transport === "http") {
+    if (!apiKey && args["allow-unauthenticated"] !== "true") {
+      console.error("Error: HTTP transport requires --api-key or FLOWFORGE_API_KEY.");
+      console.error("Pass --allow-unauthenticated to bypass (not recommended).");
+      process.exit(1);
+    }
+
     // Streamable HTTP transport — replaces deprecated SSE
     const app = express();
     app.use(express.json());
