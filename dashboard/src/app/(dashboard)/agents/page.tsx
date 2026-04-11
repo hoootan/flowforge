@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Bot, Plus, Circle, Trash2, Sparkles, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -41,6 +42,7 @@ export default function AgentsPage() {
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [newAgent, setNewAgent] = useState({ name: '', description: '', model: '' });
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [allSkills, setAllSkills] = useState<SkillType[]>([]);
   const [skillPickerAgent, setSkillPickerAgent] = useState<AgentType | null>(null);
   const [skillPickerOpen, setSkillPickerOpen] = useState(false);
@@ -58,7 +60,13 @@ export default function AgentsPage() {
     setAllSkills(data.skills);
   };
 
-  useEffect(() => { fetchAgents(); fetchSkills(); }, []);
+  const fetchModels = async () => {
+    const data = await api.getKnownProviders();
+    const models = data.providers.flatMap((p) => p.models);
+    setAvailableModels(models);
+  };
+
+  useEffect(() => { fetchAgents(); fetchSkills(); fetchModels(); }, []);
 
   const handleCreate = async () => {
     if (!newAgent.name.trim()) return;
@@ -154,12 +162,21 @@ export default function AgentsPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="model">Default Model</Label>
-                <Input
-                  id="model"
-                  placeholder="e.g., claude-sonnet-4-6"
+                <Select
                   value={newAgent.model}
-                  onChange={(e) => setNewAgent({ ...newAgent, model: e.target.value })}
-                />
+                  onValueChange={(value) => setNewAgent({ ...newAgent, model: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a model" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableModels.map((model) => (
+                      <SelectItem key={model} value={model}>
+                        {model}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <DialogFooter>
