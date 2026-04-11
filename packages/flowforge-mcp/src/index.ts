@@ -65,7 +65,7 @@ async function main() {
 
   if (!apiKey) {
     console.error(
-      "Warning: No API key provided. Set --api-key or FLOWFORGE_API_KEY for authenticated access."
+      "Warning: No API key provided. Set --api-key or FLOWFORGE_API_KEY. HTTP transport will be unauthenticated."
     );
   }
 
@@ -82,6 +82,20 @@ async function main() {
     // Streamable HTTP transport — replaces deprecated SSE
     const app = express();
     app.use(express.json());
+
+    // Auth middleware for MCP endpoint (not /health)
+    if (apiKey) {
+      app.use("/mcp", (req, res, next) => {
+        const provided = req.headers["x-flowforge-api-key"];
+        if (provided !== apiKey) {
+          res.status(401).json({ error: "Invalid or missing X-FlowForge-API-Key header" });
+          return;
+        }
+        next();
+      });
+    } else {
+      console.error("WARNING: HTTP transport running without API key. All MCP requests will be unauthenticated.");
+    }
 
     // Single transport instance — handles all HTTP methods on /mcp
     const httpTransport = new StreamableHTTPServerTransport({

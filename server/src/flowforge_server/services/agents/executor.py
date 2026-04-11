@@ -11,6 +11,8 @@ import time
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, Any
 
+from flowforge_server.services.sandbox import SandboxError, SandboxTimeoutError, execute_sandboxed
+
 from .base import (
     AgentDefinition,
     AgentExecutionResult,
@@ -458,22 +460,10 @@ class DefaultToolExecutor(ToolExecutorProtocol):
         code: str,
         arguments: dict[str, Any],
     ) -> Any:
-        """Execute a code-based tool."""
-        import asyncio
-
-        namespace: dict[str, Any] = {}
-
+        """Execute a code-based tool in a sandboxed environment."""
         try:
-            exec(code, namespace)
-            execute_fn = namespace.get("execute")
-
-            if not execute_fn:
-                return {"error": "Tool code must define an 'execute' function"}
-
-            if asyncio.iscoroutinefunction(execute_fn):
-                return await execute_fn(**arguments)
-            else:
-                return execute_fn(**arguments)
-
-        except Exception as e:
+            return await execute_sandboxed(code, arguments)
+        except SandboxTimeoutError:
+            return {"error": "Tool execution timed out"}
+        except SandboxError as e:
             return {"error": f"Tool execution failed: {str(e)}"}

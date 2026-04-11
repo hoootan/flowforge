@@ -1,3 +1,4 @@
+# Required: copy .env.example to .env and configure secrets before first run
 services:
   # PostgreSQL database for state persistence
   postgres:
@@ -49,8 +50,8 @@ services:
       - FLOWFORGE_DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-flowforge}:${POSTGRES_PASSWORD:-flowforge}@postgres:5432/${POSTGRES_DB:-flowforge}
       - FLOWFORGE_REDIS_URL=redis://redis:6379/0
       # Security: JWT and Encryption (required for production)
-      - FLOWFORGE_JWT_SECRET=${FLOWFORGE_JWT_SECRET:-flowforge-dev-jwt-secret-change-in-production}
-      - FLOWFORGE_ENCRYPTION_KEY=${FLOWFORGE_ENCRYPTION_KEY:-flowforge-dev-encryption-key-change-in-prod}
+      - FLOWFORGE_JWT_SECRET=${FLOWFORGE_JWT_SECRET:?Set FLOWFORGE_JWT_SECRET in .env - see .env.example}
+      - FLOWFORGE_ENCRYPTION_KEY=${FLOWFORGE_ENCRYPTION_KEY:?Set FLOWFORGE_ENCRYPTION_KEY in .env - see .env.example}
       - FLOWFORGE_ENCRYPTION_SALT=${FLOWFORGE_ENCRYPTION_SALT:-}
       # CORS: Configure for production
       - FLOWFORGE_CORS_ALLOWED_ORIGINS=${FLOWFORGE_CORS_ALLOWED_ORIGINS:-}
@@ -87,7 +88,7 @@ services:
       - FLOWFORGE_ENV=${FLOWFORGE_ENV:-development}
       - FLOWFORGE_DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-flowforge}:${POSTGRES_PASSWORD:-flowforge}@postgres:5432/${POSTGRES_DB:-flowforge}
       - FLOWFORGE_REDIS_URL=redis://redis:6379/0
-      - FLOWFORGE_ENCRYPTION_KEY=${FLOWFORGE_ENCRYPTION_KEY:-flowforge-dev-encryption-key-change-in-prod}
+      - FLOWFORGE_ENCRYPTION_KEY=${FLOWFORGE_ENCRYPTION_KEY:?Set FLOWFORGE_ENCRYPTION_KEY in .env - see .env.example}
       - FLOWFORGE_ENCRYPTION_SALT=${FLOWFORGE_ENCRYPTION_SALT:-}
     healthcheck:
       test: ["CMD", "python", "-c", "import os; os.kill(1, 0)"]
@@ -113,7 +114,7 @@ services:
       - FLOWFORGE_ENV=${FLOWFORGE_ENV:-development}
       - FLOWFORGE_DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-flowforge}:${POSTGRES_PASSWORD:-flowforge}@postgres:5432/${POSTGRES_DB:-flowforge}
       - FLOWFORGE_REDIS_URL=redis://redis:6379/0
-      - FLOWFORGE_ENCRYPTION_KEY=${FLOWFORGE_ENCRYPTION_KEY:-flowforge-dev-encryption-key-change-in-prod}
+      - FLOWFORGE_ENCRYPTION_KEY=${FLOWFORGE_ENCRYPTION_KEY:?Set FLOWFORGE_ENCRYPTION_KEY in .env - see .env.example}
       - FLOWFORGE_ENCRYPTION_SALT=${FLOWFORGE_ENCRYPTION_SALT:-}
       # AI Provider API Keys
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}

@@ -34,6 +34,7 @@ from flowforge_server.services.credentials import (
     resolve_dict_placeholders,
     resolve_placeholders,
 )
+from flowforge_server.services.network_utils import validate_webhook_url
 from flowforge_server.services.sandbox import (
     DEFAULT_TIMEOUT_SECONDS,
     SandboxError,
@@ -828,6 +829,12 @@ class InlineExecutor:
             url = await resolve_placeholders(
                 tool_info["webhook_url"], tenant_id, session
             )
+
+            # SSRF protection: block private/internal URLs
+            try:
+                validate_webhook_url(url)
+            except ValueError as e:
+                return {"error": str(e)}
 
             # Resolve credential placeholders in headers
             raw_headers = tool_info.get("webhook_headers") or {}

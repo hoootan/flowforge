@@ -5,6 +5,7 @@ import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
 
+import bcrypt
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,35 +14,19 @@ from flowforge_server.db.models.user import User, UserRole
 
 
 def hash_password(password: str) -> str:
-    """
-    Hash a password using bcrypt.
-
-    Falls back to SHA-256 if bcrypt is not available.
-    """
-    try:
-        import bcrypt
-        salt = bcrypt.gensalt()
-        return bcrypt.hashpw(password.encode(), salt).decode()
-    except ImportError:
-        # Fallback to SHA-256 with salt (less secure but works without bcrypt)
-        salt = secrets.token_hex(16)
-        hash_value = hashlib.sha256((salt + password).encode()).hexdigest()
-        return f"sha256${salt}${hash_value}"
+    """Hash a password using bcrypt."""
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(password.encode(), salt).decode()
 
 
 def verify_password(password: str, password_hash: str) -> bool:
     """Verify a password against its hash."""
     if password_hash.startswith("sha256$"):
-        # SHA-256 fallback
+        # Legacy SHA-256 hash — kept for backward compatibility
         _, salt, stored_hash = password_hash.split("$")
         computed_hash = hashlib.sha256((salt + password).encode()).hexdigest()
         return computed_hash == stored_hash
-
-    try:
-        import bcrypt
-        return bcrypt.checkpw(password.encode(), password_hash.encode())
-    except ImportError:
-        return False
+    return bcrypt.checkpw(password.encode(), password_hash.encode())
 
 
 def create_user_jwt(
