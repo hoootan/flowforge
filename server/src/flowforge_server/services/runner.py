@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from flowforge_server.config import get_settings
 from flowforge_server.db import get_session_context
-from flowforge_server.db.models import Function, Run, RunStatus
+from flowforge_server.db.models import Function, Run, RunStatus, Step, StepStatus
 from flowforge_server.queue import FairQueue, Job
 from flowforge_server.stream import RedisEventStream, StreamMessage
 
@@ -165,6 +165,14 @@ class Runner:
 
                         print(f"[Runner] Created run {run.id} for function {fn.function_id}")
 
+                # Resolve any waiting steps that match this event
+                await self._resolve_waiting_steps(
+                    session,
+                    message.event_name,
+                    message.event_data,
+                    message.tenant_id,
+                )
+
             # Acknowledge the message
             if message.stream_id:
                 await self.event_stream.acknowledge_for_group(
@@ -205,6 +213,115 @@ class Runner:
         """
         # TODO: Implement proper expression evaluation (CEL, JSONPath, etc.)
         return True
+
+    @staticmethod
+    def _evaluate_match_expression(
+        expression: str,
+        event_data: dict[str, Any],
+    ) -> bool:
+        """
+        Evaluate a wait_for_event match expression against event data.
+
+        Supports format: "data.field.path == 'value'" or "data.field == 123"
+        Uses safe dot-path traversal — no eval().
+        """
+        expression = expression.strip()
+        if "==" not in expression:
+            return False
+
+        left_raw, right_raw = expression.split("==", 1)
+        left_path = left_raw.strip()
+        right_literal = right_raw.strip()
+
+        # Strip surrounding quotes from the right-hand value
+        if (
+            (right_literal.startswith("'") and right_literal.endswith("'"))
+            or (right_literal.startswith('"') and right_literal.endswith('"'))
+        ):
+            right_value: Any = right_literal[1:-1]
+        else:
+            # Try numeric
+            try:
+                right_value = int(right_literal)
+            except ValueError:
+                try:
+                    right_value = float(right_literal)
+                except ValueError:
+                    right_value = right_literal
+
+        # Resolve dot-path against event data
+        # If path starts with "data.", strip that prefix since event_data IS the data
+        parts = left_path.split(".")
+        if parts and parts[0] == "data":
+            parts = parts[1:]
+
+        current: Any = event_data
+        for part in parts:
+            if isinstance(current, dict) and part in current:
+                current = current[part]
+            else:
+                return False
+
+        return str(current) == str(right_value)
+
+    async def _resolve_waiting_steps(
+        self,
+        session: AsyncSession,
+        event_name: str,
+        event_data: dict[str, Any],
+        tenant_id: str,
+    ) -> None:
+        """
+        Find waiting steps that match the incoming event and resume their runs.
+        """
+        # Query steps that are waiting for this event name
+        # Join with Run to filter by tenant and ensure run is paused
+        result = await session.execute(
+            select(Step)
+            .join(Run, Step.run_id == Run.id)
+            .where(
+                Step.status == StepStatus.WAITING,
+                Step.wait_event_name == event_name,
+                Run.tenant_id == uuid.UUID(tenant_id) if tenant_id else True,
+                Run.status == RunStatus.PAUSED,
+            )
+        )
+        waiting_steps = result.scalars().all()
+
+        now = datetime.utcnow()
+
+        for step in waiting_steps:
+            # Evaluate match expression if present
+            if step.wait_expression:
+                if not self._evaluate_match_expression(step.wait_expression, event_data):
+                    continue
+
+            # Mark step as completed with event data
+            step.status = StepStatus.COMPLETED
+            step.output = event_data
+            step.ended_at = now
+
+            # Resume the parent run
+            run_result = await session.execute(
+                select(Run).where(Run.id == step.run_id)
+            )
+            run = run_result.scalar_one_or_none()
+
+            if not run:
+                continue
+
+            run.status = RunStatus.RUNNING
+            run.resume_at = None
+
+            # Get the function to enqueue
+            fn_result = await session.execute(
+                select(Function).where(Function.id == run.function_id)
+            )
+            fn = fn_result.scalar_one_or_none()
+
+            if fn:
+                await self._enqueue_run(run, fn)
+                print(f"[Runner] Resolved wait step '{step.step_id}' on run {run.id} — resuming")
 
     async def _create_run(
         self,
