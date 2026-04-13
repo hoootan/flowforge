@@ -61,7 +61,11 @@ USER flowforge
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=10s --timeout=5s --start-period=10s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')" || exit 1
+# Healthchecks are intentionally defined per-service in docker-compose.yml,
+# not baked into the image. This image is reused for `server`, `runner`, and
+# `executor` services — only `server` exposes the HTTP /api/v1/health endpoint,
+# while workers run as background processes with no listener. Defining an
+# HTTP healthcheck here causes worker containers to be marked unhealthy
+# whenever a downstream compose file forgets to override it.
 
 CMD ["uvicorn", "flowforge_server.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
