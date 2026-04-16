@@ -273,25 +273,45 @@ class Runner:
     ) -> None:
         """
         Find waiting steps that match the incoming event and resume their runs.
+
+        Uses FOR UPDATE SKIP LOCKED to prevent duplicate resolution across
+        concurrent runner instances. Commits step/run updates before enqueuing
+        to avoid the executor seeing stale PAUSED status.
         """
         if not tenant_id:
             return
 
-        # Query steps that are waiting for this event name
-        # Join with Run to filter by tenant and ensure run is paused
+        try:
+            tenant_uuid = uuid.UUID(tenant_id)
+        except ValueError:
+            print(f"[Runner] Invalid tenant_id '{tenant_id}', skipping wait resolution")
+            return
+
+        now = datetime.now(UTC)
+
+        # Query steps waiting for this event, joined with Run + Function.
+        # FOR UPDATE SKIP LOCKED on Step to serialize concurrent resolution.
+        # Exclude steps whose timeout has already passed.
+        from sqlalchemy.orm import selectinload
+
         result = await session.execute(
             select(Step)
             .join(Run, Step.run_id == Run.id)
             .where(
                 Step.status == StepStatus.WAITING,
                 Step.wait_event_name == event_name,
-                Run.tenant_id == uuid.UUID(tenant_id),
+                Run.tenant_id == tenant_uuid,
                 Run.status == RunStatus.PAUSED,
+                (Step.wait_timeout_at.is_(None)) | (Step.wait_timeout_at > now),
             )
+            .options(
+                selectinload(Step.run).selectinload(Run.function),
+            )
+            .with_for_update(of=Step, skip_locked=True)
         )
         waiting_steps = result.scalars().all()
 
-        now = datetime.now(UTC)
+        runs_to_enqueue: list[tuple[Run, Function]] = []
 
         for step in waiting_steps:
             # Evaluate match expression if present
@@ -304,27 +324,25 @@ class Runner:
             step.output = event_data
             step.ended_at = now
 
-            # Resume the parent run
-            run_result = await session.execute(
-                select(Run).where(Run.id == step.run_id)
-            )
-            run = run_result.scalar_one_or_none()
-
+            run = step.run
             if not run:
                 continue
 
             run.status = RunStatus.RUNNING
             run.resume_at = None
 
-            # Get the function to enqueue
-            fn_result = await session.execute(
-                select(Function).where(Function.id == run.function_id)
-            )
-            fn = fn_result.scalar_one_or_none()
-
+            fn = run.function
             if fn:
-                await self._enqueue_run(run, fn)
-                print(f"[Runner] Resolved wait step '{step.step_id}' on run {run.id} — resuming")
+                runs_to_enqueue.append((run, fn))
+
+        # Commit step/run updates BEFORE enqueuing so the executor
+        # sees RUNNING status when it dequeues the job.
+        if runs_to_enqueue:
+            await session.commit()
+
+        for run, fn in runs_to_enqueue:
+            await self._enqueue_run(run, fn)
+            print(f"[Runner] Resolved wait step on run {run.id} — resuming")
 
     async def _create_run(
         self,
