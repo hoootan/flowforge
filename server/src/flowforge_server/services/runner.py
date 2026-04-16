@@ -3,7 +3,7 @@
 import asyncio
 import signal
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select
@@ -274,6 +274,9 @@ class Runner:
         """
         Find waiting steps that match the incoming event and resume their runs.
         """
+        if not tenant_id:
+            return
+
         # Query steps that are waiting for this event name
         # Join with Run to filter by tenant and ensure run is paused
         result = await session.execute(
@@ -282,13 +285,13 @@ class Runner:
             .where(
                 Step.status == StepStatus.WAITING,
                 Step.wait_event_name == event_name,
-                Run.tenant_id == uuid.UUID(tenant_id) if tenant_id else True,
+                Run.tenant_id == uuid.UUID(tenant_id),
                 Run.status == RunStatus.PAUSED,
             )
         )
         waiting_steps = result.scalars().all()
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
 
         for step in waiting_steps:
             # Evaluate match expression if present
@@ -378,7 +381,7 @@ class Runner:
             try:
                 async with get_session_context() as session:
                     # Find runs that are paused and due to resume
-                    now = datetime.utcnow()
+                    now = datetime.now(UTC)
                     result = await session.execute(
                         select(Run).where(
                             Run.status == RunStatus.PAUSED,
