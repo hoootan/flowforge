@@ -3,7 +3,7 @@
 import asyncio
 import signal
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select
@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from flowforge_server.config import get_settings
 from flowforge_server.db import get_session_context
-from flowforge_server.db.models import Function, Run, RunStatus
+from flowforge_server.db.models import Function, Run, RunStatus, Step, StepStatus
 from flowforge_server.queue import FairQueue, Job
 from flowforge_server.stream import RedisEventStream, StreamMessage
 
@@ -165,6 +165,14 @@ class Runner:
 
                         print(f"[Runner] Created run {run.id} for function {fn.function_id}")
 
+                # Resolve any waiting steps that match this event
+                await self._resolve_waiting_steps(
+                    session,
+                    message.event_name,
+                    message.event_data,
+                    message.tenant_id,
+                )
+
             # Acknowledge the message
             if message.stream_id:
                 await self.event_stream.acknowledge_for_group(
@@ -205,6 +213,136 @@ class Runner:
         """
         # TODO: Implement proper expression evaluation (CEL, JSONPath, etc.)
         return True
+
+    @staticmethod
+    def _evaluate_match_expression(
+        expression: str,
+        event_data: dict[str, Any],
+    ) -> bool:
+        """
+        Evaluate a wait_for_event match expression against event data.
+
+        Supports format: "data.field.path == 'value'" or "data.field == 123"
+        Uses safe dot-path traversal — no eval().
+        """
+        expression = expression.strip()
+        if "==" not in expression:
+            return False
+
+        left_raw, right_raw = expression.split("==", 1)
+        left_path = left_raw.strip()
+        right_literal = right_raw.strip()
+
+        # Strip surrounding quotes from the right-hand value
+        if (
+            (right_literal.startswith("'") and right_literal.endswith("'"))
+            or (right_literal.startswith('"') and right_literal.endswith('"'))
+        ):
+            right_value: Any = right_literal[1:-1]
+        else:
+            # Try numeric
+            try:
+                right_value = int(right_literal)
+            except ValueError:
+                try:
+                    right_value = float(right_literal)
+                except ValueError:
+                    right_value = right_literal
+
+        # Resolve dot-path against event data
+        # If path starts with "data.", strip that prefix since event_data IS the data
+        parts = left_path.split(".")
+        if parts and parts[0] == "data":
+            parts = parts[1:]
+
+        current: Any = event_data
+        for part in parts:
+            if isinstance(current, dict) and part in current:
+                current = current[part]
+            else:
+                return False
+
+        return str(current) == str(right_value)
+
+    async def _resolve_waiting_steps(
+        self,
+        session: AsyncSession,
+        event_name: str,
+        event_data: dict[str, Any],
+        tenant_id: str,
+    ) -> None:
+        """
+        Find waiting steps that match the incoming event and resume their runs.
+
+        Uses FOR UPDATE SKIP LOCKED to prevent duplicate resolution across
+        concurrent runner instances. Commits step/run updates before enqueuing
+        to avoid the executor seeing stale PAUSED status.
+        """
+        if not tenant_id:
+            return
+
+        try:
+            tenant_uuid = uuid.UUID(tenant_id)
+        except ValueError:
+            print(f"[Runner] Invalid tenant_id '{tenant_id}', skipping wait resolution")
+            return
+
+        now = datetime.now(UTC)
+
+        # Query steps waiting for this event, joined with Run + Function.
+        # FOR UPDATE SKIP LOCKED on Step to serialize concurrent resolution.
+        # Exclude steps whose timeout has already passed.
+        from sqlalchemy.orm import selectinload
+
+        result = await session.execute(
+            select(Step)
+            .join(Run, Step.run_id == Run.id)
+            .where(
+                Step.status == StepStatus.WAITING,
+                Step.wait_event_name == event_name,
+                Run.tenant_id == tenant_uuid,
+                Run.status == RunStatus.PAUSED,
+                (Step.wait_timeout_at.is_(None)) | (Step.wait_timeout_at > now),
+            )
+            .options(
+                selectinload(Step.run).selectinload(Run.function),
+            )
+            .with_for_update(of=Step, skip_locked=True)
+        )
+        waiting_steps = result.scalars().all()
+
+        runs_to_enqueue: list[tuple[Run, Function]] = []
+
+        for step in waiting_steps:
+            # Evaluate match expression if present
+            if step.wait_expression:
+                if not self._evaluate_match_expression(step.wait_expression, event_data):
+                    continue
+
+            # Mark step as completed with event data
+            step.status = StepStatus.COMPLETED
+            step.output = event_data
+            step.ended_at = now
+
+            run = step.run
+            if not run:
+                continue
+
+            run.status = RunStatus.RUNNING
+            run.resume_at = None
+
+            fn = run.function
+            if fn:
+                runs_to_enqueue.append((run, fn))
+
+        # Commit step/run updates BEFORE enqueuing so the executor
+        # sees RUNNING status when it dequeues the job.
+        if runs_to_enqueue:
+            await session.commit()
+
+        for run, fn in runs_to_enqueue:
+            await self._enqueue_run(run, fn)
+            print(f"[Runner] Resolved wait step on run {run.id} — resuming")
 
     async def _create_run(
         self,
@@ -261,7 +399,7 @@ class Runner:
             try:
                 async with get_session_context() as session:
                     # Find runs that are paused and due to resume
-                    now = datetime.utcnow()
+                    now = datetime.now(UTC)
                     result = await session.execute(
                         select(Run).where(
                             Run.status == RunStatus.PAUSED,

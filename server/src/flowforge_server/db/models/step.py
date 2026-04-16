@@ -5,7 +5,7 @@ from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -50,6 +50,7 @@ class Step(Base, TimestampMixin):
 
     __table_args__ = (
         UniqueConstraint("run_id", "step_hash", name="uq_step_run_step_hash"),
+        Index("ix_step_status_wait_event", "status", "wait_event_name"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
