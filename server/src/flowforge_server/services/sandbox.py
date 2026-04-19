@@ -7,6 +7,7 @@ timeout enforcement.
 
 import asyncio
 import functools
+import operator
 import threading
 from typing import Any
 
@@ -126,19 +127,21 @@ SAFE_BUILTINS = {
 }
 
 
+# Use operator.i* so mutable types (list/set/etc.) hit their __iadd__ and mutate
+# in place — matches Python's real += semantics. Immutables fall back to __add__.
 _INPLACE_OPS = {
-    "+=": lambda a, b: a + b,
-    "-=": lambda a, b: a - b,
-    "*=": lambda a, b: a * b,
-    "/=": lambda a, b: a / b,
-    "//=": lambda a, b: a // b,
-    "%=": lambda a, b: a % b,
-    "**=": lambda a, b: a ** b,
-    "<<=": lambda a, b: a << b,
-    ">>=": lambda a, b: a >> b,
-    "&=": lambda a, b: a & b,
-    "|=": lambda a, b: a | b,
-    "^=": lambda a, b: a ^ b,
+    "+=": operator.iadd,
+    "-=": operator.isub,
+    "*=": operator.imul,
+    "/=": operator.itruediv,
+    "//=": operator.ifloordiv,
+    "%=": operator.imod,
+    "**=": operator.ipow,
+    "<<=": operator.ilshift,
+    ">>=": operator.irshift,
+    "&=": operator.iand,
+    "|=": operator.ior,
+    "^=": operator.ixor,
 }
 
 
@@ -321,7 +324,9 @@ def execute_sandboxed_sync(
         err = result_holder["error"]
         if isinstance(err, SandboxError):
             raise err
-        raise SandboxExecutionError(f"Tool execution failed: {err}")
+        # `from err` chains __cause__ so the original traceback survives the
+        # thread boundary in logs, while the caller still sees SandboxExecutionError.
+        raise SandboxExecutionError(f"Tool execution failed: {err}") from err
 
     return result_holder.get("value")
 
