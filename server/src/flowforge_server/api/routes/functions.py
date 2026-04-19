@@ -150,7 +150,8 @@ async def create_inline_function(
                 or_(
                     (Tool.tenant_id == tenant.id) & (Tool.name == tool_name),
                     (Tool.is_builtin == True) & (Tool.name == tool_name),
-                )
+                ),
+                Tool.deleted_at.is_(None),
             )
         )
         if not tool_result.scalar_one_or_none():
@@ -300,7 +301,8 @@ async def update_function(
                         or_(
                             (Tool.tenant_id == tenant.id) & (Tool.name == tool_name),
                             (Tool.is_builtin == True) & (Tool.name == tool_name),
-                        )
+                        ),
+                        Tool.deleted_at.is_(None),
                     )
                 )
                 if not tool_result.scalar_one_or_none():

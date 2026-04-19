@@ -1,5 +1,6 @@
 """Tool management endpoints."""
 
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, or_, select
@@ -51,14 +52,16 @@ async def create_tool(
     Tools can be referenced by functions and used by agents.
     Built-in tools cannot be created via this endpoint.
     """
-    # Check for existing tool with same name
+    # Check for existing tool with same name. A soft-deleted row holds the
+    # unique-constraint slot, so we restore it instead of hitting IntegrityError.
     existing = await session.execute(
         select(Tool).where(
             Tool.tenant_id == tenant.id,
             Tool.name == tool_data.name,
         )
     )
-    if existing.scalar_one_or_none():
+    existing_tool = existing.scalar_one_or_none()
+    if existing_tool and existing_tool.deleted_at is None:
         raise HTTPException(
             status_code=409,
             detail=f"Tool with name '{tool_data.name}' already exists"
@@ -77,23 +80,38 @@ async def create_tool(
             detail=f"Cannot create tool '{tool_data.name}' - a built-in tool with this name exists"
         )
 
-    tool = Tool(
-        tenant_id=tenant.id,
-        name=tool_data.name,
-        description=tool_data.description,
-        parameters=tool_data.parameters,
-        tool_type=tool_data.tool_type,
-        code=tool_data.code,
-        webhook_url=tool_data.webhook_url,
-        webhook_method=tool_data.webhook_method,
-        webhook_headers=tool_data.webhook_headers,
-        is_builtin=False,
-        requires_approval=tool_data.requires_approval,
-        approval_timeout=tool_data.approval_timeout,
-        is_active=True,
-    )
+    if existing_tool and existing_tool.deleted_at is not None:
+        # Restore the soft-deleted row rather than creating a new UUID.
+        existing_tool.deleted_at = None
+        existing_tool.description = tool_data.description
+        existing_tool.parameters = tool_data.parameters
+        existing_tool.tool_type = tool_data.tool_type
+        existing_tool.code = tool_data.code
+        existing_tool.webhook_url = tool_data.webhook_url
+        existing_tool.webhook_method = tool_data.webhook_method
+        existing_tool.webhook_headers = tool_data.webhook_headers
+        existing_tool.requires_approval = tool_data.requires_approval
+        existing_tool.approval_timeout = tool_data.approval_timeout
+        existing_tool.is_active = True
+        tool = existing_tool
+    else:
+        tool = Tool(
+            tenant_id=tenant.id,
+            name=tool_data.name,
+            description=tool_data.description,
+            parameters=tool_data.parameters,
+            tool_type=tool_data.tool_type,
+            code=tool_data.code,
+            webhook_url=tool_data.webhook_url,
+            webhook_method=tool_data.webhook_method,
+            webhook_headers=tool_data.webhook_headers,
+            is_builtin=False,
+            requires_approval=tool_data.requires_approval,
+            approval_timeout=tool_data.approval_timeout,
+            is_active=True,
+        )
+        session.add(tool)
 
-    session.add(tool)
     await session.commit()
     await session.refresh(tool)
 
@@ -119,10 +137,14 @@ async def list_tools(
             or_(
                 Tool.tenant_id == tenant.id,
                 Tool.is_builtin == True,
-            )
+            ),
+            Tool.deleted_at.is_(None),
         )
     else:
-        query = select(Tool).where(Tool.tenant_id == tenant.id)
+        query = select(Tool).where(
+            Tool.tenant_id == tenant.id,
+            Tool.deleted_at.is_(None),
+        )
 
     if is_active is not None:
         query = query.where(Tool.is_active == is_active)
@@ -151,13 +173,15 @@ async def get_tool(
     session: AsyncSession = Depends(get_session),
 ) -> ToolResponse:
     """Get a specific tool by name."""
-    # Look for tenant tool first, then built-in
+    # Look for tenant tool first, then built-in. Exclude soft-deleted tenant
+    # rows; built-ins have no deleted_at so the filter is a no-op for them.
     result = await session.execute(
         select(Tool).where(
             or_(
                 (Tool.tenant_id == tenant.id) & (Tool.name == tool_name),
                 (Tool.is_builtin == True) & (Tool.name == tool_name),
-            )
+            ),
+            Tool.deleted_at.is_(None),
         ).order_by(Tool.is_builtin)  # Prefer tenant tools over built-in
     )
     tool = result.scalars().first()
@@ -180,6 +204,7 @@ async def update_tool(
         select(Tool).where(
             Tool.tenant_id == tenant.id,
             Tool.name == tool_name,
+            Tool.deleted_at.is_(None),
         )
     )
     tool = result.scalar_one_or_none()
@@ -232,11 +257,19 @@ async def delete_tool(
     tenant: TenantWithDevFallback,
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-    """Delete a tool (soft delete by setting inactive). Built-in tools cannot be deleted."""
+    """
+    Soft-delete a tool.
+
+    The row is retained so in-flight runs that already loaded the tool can
+    finish, but it is hidden from all user-facing list/get/update queries and
+    from the executor (via is_active=False). Built-in tools cannot be deleted.
+    Re-creating a tool with the same name restores the row.
+    """
     result = await session.execute(
         select(Tool).where(
             Tool.tenant_id == tenant.id,
             Tool.name == tool_name,
+            Tool.deleted_at.is_(None),
         )
     )
     tool = result.scalar_one_or_none()
@@ -256,6 +289,8 @@ async def delete_tool(
             )
         raise HTTPException(status_code=404, detail="Tool not found")
 
+    # tz-aware UTC to match the DateTime(timezone=True) column on Tool.
+    tool.deleted_at = datetime.now(UTC)
     tool.is_active = False
     await session.commit()
 

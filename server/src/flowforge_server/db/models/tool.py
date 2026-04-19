@@ -1,9 +1,10 @@
 """Tool model for reusable AI tools."""
 
 import uuid
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import Boolean, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -89,6 +90,13 @@ class Tool(Base, TimestampMixin):
 
     # Whether the tool is active
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    # Soft-delete marker. NULL = visible; timestamp = hidden from user-facing
+    # endpoints. Runs already executing keep loading the tool via its is_active
+    # filter; deleting also sets is_active=False so new runs stop loading it.
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
 
     # Relationships
     tenant: Mapped["Tenant | None"] = relationship("Tenant", back_populates="tools")
