@@ -71,6 +71,10 @@ class Function(Base, TimestampMixin):
     # Last heartbeat from worker (for worker health tracking)
     worker_last_seen: Mapped[datetime | None] = mapped_column(nullable=True)
 
+    # Soft-delete marker. NULL = active; timestamp = hidden from users.
+    # Runs and versions remain intact so history pages still resolve.
+    deleted_at: Mapped[datetime | None] = mapped_column(nullable=True, index=True)
+
     # =========================================================================
     # Serverless/Inline Execution Fields
     # =========================================================================

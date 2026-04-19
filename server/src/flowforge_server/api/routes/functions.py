@@ -75,7 +75,8 @@ async def register_function(
     existing_fn = existing.scalar_one_or_none()
 
     if existing_fn:
-        # Update existing function
+        # Re-registering an id restores a soft-deleted row.
+        existing_fn.deleted_at = None
         existing_fn.name = function_data.name
         existing_fn.trigger_type = function_data.trigger.type
         existing_fn.trigger_value = function_data.trigger.value
@@ -126,14 +127,16 @@ async def create_inline_function(
     - A list of tools the agent can use
     - Configuration for the AI model and execution limits
     """
-    # Check for existing function with same ID
+    # Check for existing function with same ID. A soft-deleted row holds the
+    # unique-constraint slot, so we restore it instead of hitting IntegrityError.
     existing = await session.execute(
         select(Function).where(
             Function.tenant_id == tenant.id,
             Function.function_id == function_data.id,
         )
     )
-    if existing.scalar_one_or_none():
+    existing_fn = existing.scalar_one_or_none()
+    if existing_fn and existing_fn.deleted_at is None:
         raise HTTPException(
             status_code=409,
             detail=f"Function with ID '{function_data.id}' already exists"
@@ -155,25 +158,41 @@ async def create_inline_function(
                 detail=f"Tool '{tool_name}' not found. Create it first via POST /tools"
             )
 
-    # Create inline function
-    fn = Function(
-        tenant_id=tenant.id,
-        function_id=function_data.id,
-        name=function_data.name,
-        slug=slugify(function_data.name),
-        trigger_type=function_data.trigger.type,
-        trigger_value=function_data.trigger.value,
-        trigger_expression=function_data.trigger.expression,
-        endpoint_url=None,  # No endpoint for inline functions
-        is_inline=True,
-        system_prompt=function_data.system_prompt,
-        tools_config=function_data.tools,
-        agent_config=function_data.agent_config.model_dump(),
-        config=function_data.config,
-        is_active=True,
-    )
+    if existing_fn and existing_fn.deleted_at is not None:
+        # Restore and overwrite the soft-deleted row.
+        existing_fn.deleted_at = None
+        existing_fn.name = function_data.name
+        existing_fn.slug = slugify(function_data.name)
+        existing_fn.trigger_type = function_data.trigger.type
+        existing_fn.trigger_value = function_data.trigger.value
+        existing_fn.trigger_expression = function_data.trigger.expression
+        existing_fn.endpoint_url = None
+        existing_fn.is_inline = True
+        existing_fn.system_prompt = function_data.system_prompt
+        existing_fn.tools_config = function_data.tools
+        existing_fn.agent_config = function_data.agent_config.model_dump()
+        existing_fn.config = function_data.config
+        existing_fn.is_active = True
+        fn = existing_fn
+    else:
+        fn = Function(
+            tenant_id=tenant.id,
+            function_id=function_data.id,
+            name=function_data.name,
+            slug=slugify(function_data.name),
+            trigger_type=function_data.trigger.type,
+            trigger_value=function_data.trigger.value,
+            trigger_expression=function_data.trigger.expression,
+            endpoint_url=None,  # No endpoint for inline functions
+            is_inline=True,
+            system_prompt=function_data.system_prompt,
+            tools_config=function_data.tools,
+            agent_config=function_data.agent_config.model_dump(),
+            config=function_data.config,
+            is_active=True,
+        )
+        session.add(fn)
 
-    session.add(fn)
     await session.commit()
     await session.refresh(fn)
 
@@ -189,7 +208,10 @@ async def list_functions(
     session: AsyncSession = Depends(get_session),
 ) -> FunctionsResponse:
     """List all registered functions."""
-    query = select(Function).where(Function.tenant_id == tenant.id)
+    query = select(Function).where(
+        Function.tenant_id == tenant.id,
+        Function.deleted_at.is_(None),
+    )
 
     if trigger_type:
         query = query.where(Function.trigger_type == trigger_type)
@@ -224,6 +246,7 @@ async def get_function(
         select(Function).where(
             Function.tenant_id == tenant.id,
             Function.function_id == function_id,
+            Function.deleted_at.is_(None),
         )
     )
     fn = result.scalar_one_or_none()
@@ -246,6 +269,7 @@ async def update_function(
         select(Function).where(
             Function.tenant_id == tenant.id,
             Function.function_id == function_id,
+            Function.deleted_at.is_(None),
         )
     )
     fn = result.scalar_one_or_none()
@@ -302,11 +326,19 @@ async def delete_function(
     tenant: TenantWithDevFallback,
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-    """Delete a function."""
+    """
+    Soft-delete a function.
+
+    The row is retained so existing runs and versions stay linked and the
+    run history UI can still resolve the function name. It is excluded from
+    all user-facing list/get queries and from event matching (via is_active).
+    Re-registering the same function_id restores the row.
+    """
     result = await session.execute(
         select(Function).where(
             Function.tenant_id == tenant.id,
             Function.function_id == function_id,
+            Function.deleted_at.is_(None),
         )
     )
     fn = result.scalar_one_or_none()
@@ -314,7 +346,8 @@ async def delete_function(
     if not fn:
         raise HTTPException(status_code=404, detail="Function not found")
 
-    await session.delete(fn)
+    fn.deleted_at = datetime.utcnow()
+    fn.is_active = False  # Stop matching new events immediately
     await session.commit()
 
     return {"success": True, "message": f"Function '{function_id}' deleted"}
@@ -380,6 +413,7 @@ async def set_function_skills(
         select(Function).where(
             Function.tenant_id == tenant.id,
             Function.function_id == function_id,
+            Function.deleted_at.is_(None),
         )
     )
     fn = result.scalar_one_or_none()
@@ -408,6 +442,7 @@ async def get_function_skills(
         select(Function).where(
             Function.tenant_id == tenant.id,
             Function.function_id == function_id,
+            Function.deleted_at.is_(None),
         )
     )
     fn = result.scalar_one_or_none()
