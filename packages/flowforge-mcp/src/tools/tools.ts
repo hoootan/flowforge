@@ -5,14 +5,20 @@ import { type McpContext, directFetch } from "../server.js";
 export function registerToolTools(server: McpServer, ctx: McpContext): void {
   server.tool(
     "flowforge_list_tools",
-    "List all AI tools registered in FlowForge.",
+    "List all AI tools registered in FlowForge, ordered by name. Tools are reusable capabilities that inline functions and agents can call — either Python sandboxes ('custom'), HTTP endpoints ('webhook'), or platform primitives ('builtin'). Use flowforge_get_tool for the full definition of a single tool.",
     {
-      type: z.string().optional().describe("Filter by tool type"),
-      is_active: z.boolean().optional().describe("Filter by active status"),
+      type: z
+        .string()
+        .optional()
+        .describe("Filter by tool type: 'custom', 'webhook', or 'builtin'."),
+      is_active: z
+        .boolean()
+        .optional()
+        .describe("Filter by active status. Inactive tools still exist but can't be called."),
       limit: z
         .number()
         .default(20)
-        .describe("Maximum number of tools to return"),
+        .describe("Maximum number of tools to return. Server caps at 100."),
     },
     async (args) => {
       const query = ctx.client.tools.select();
@@ -38,9 +44,11 @@ export function registerToolTools(server: McpServer, ctx: McpContext): void {
 
   server.tool(
     "flowforge_get_tool",
-    "Get details of a specific AI tool by its name.",
+    "Get the full definition of a specific AI tool by name: its parameter schema, Python code or webhook config, approval settings, and active state. Use after flowforge_list_tools to inspect a candidate before wiring it into a function.",
     {
-      tool_name: z.string().describe("The tool name"),
+      tool_name: z
+        .string()
+        .describe("The tool name from flowforge_list_tools (e.g. 'keyword_enrichment')."),
     },
     async (args) => {
       const { data, error } = await ctx.client.tools.get(args.tool_name);
@@ -62,47 +70,51 @@ export function registerToolTools(server: McpServer, ctx: McpContext): void {
 
   server.tool(
     "flowforge_create_tool",
-    "Create a new AI tool in FlowForge. Supports three tool types: 'custom' (Python code executed in sandbox), 'webhook' (HTTP endpoint with credential placeholders like {{credential:name}}), and 'builtin'.",
+    "Create a new AI tool. Three tool types: 'custom' (Python code executed in a sandbox — must define execute(**kwargs)), 'webhook' (HTTP endpoint with {{credential:name}} and {{env:VAR}} placeholders), or 'builtin' (reference a FlowForge-provided tool by name). After creation, wire the tool into an inline function via flowforge_create_inline_function or flowforge_update_function.",
     {
-      name: z.string().describe("Tool name (unique identifier)"),
-      description: z.string().describe("Human-readable description of what the tool does"),
+      name: z
+        .string()
+        .describe("Unique tool name used by functions/agents to invoke it (e.g. 'summarize_text')."),
+      description: z
+        .string()
+        .describe("Human- and LLM-readable description of what the tool does. Shown to the agent when it chooses tools."),
       parameters: z
         .record(z.unknown())
-        .describe("JSON Schema describing the tool's parameters"),
+        .describe("JSON Schema describing the tool's parameters (the shape passed to execute())."),
       tool_type: z
         .enum(["custom", "webhook", "builtin"])
         .optional()
         .default("custom")
-        .describe("Tool type: 'custom' (code), 'webhook' (HTTP config), or 'builtin'"),
+        .describe("Tool type: 'custom' (Python code), 'webhook' (HTTP), or 'builtin' (platform-provided)."),
       code: z
         .string()
         .optional()
-        .describe("Python code for custom tools. Must define an execute() function."),
+        .describe("Python source for custom tools. Must define an execute() function taking kwargs. Ignored for webhook/builtin types."),
       webhook_url: z
         .string()
         .optional()
-        .describe("URL for webhook tools. Supports {{credential:name}} and {{env:VAR}} placeholders."),
+        .describe("URL for webhook tools. Supports {{credential:name}} and {{env:VAR}} placeholders. Ignored for custom/builtin types."),
       webhook_method: z
         .enum(["GET", "POST", "PUT", "PATCH", "DELETE"])
         .optional()
         .default("POST")
-        .describe("HTTP method for webhook tools"),
+        .describe("HTTP method for webhook tools. Default POST."),
       webhook_headers: z
         .record(z.string())
         .optional()
-        .describe("HTTP headers for webhook tools. Supports {{credential:name}} placeholders."),
+        .describe("HTTP headers for webhook tools. Values support {{credential:name}} placeholders (e.g. 'Authorization: Bearer {{credential:openai_key}}')."),
       requires_approval: z
         .boolean()
         .optional()
-        .describe("Whether this tool requires human approval before execution"),
+        .describe("If true, each call pauses until a human approves or rejects via flowforge_approve_tool_call / flowforge_reject_tool_call."),
       approval_timeout: z
         .string()
         .optional()
-        .describe("Timeout for approval (e.g., '1h', '30m')"),
+        .describe("How long to wait for approval before auto-rejecting. Duration string like '1h', '30m', '2d'."),
       type: z
         .string()
         .optional()
-        .describe("Deprecated: use tool_type instead"),
+        .describe("Deprecated alias for tool_type. Pass tool_type instead for new calls."),
     },
     async (args) => {
       const { type: _type, ...createArgs } = args;
@@ -130,32 +142,55 @@ export function registerToolTools(server: McpServer, ctx: McpContext): void {
 
   server.tool(
     "flowforge_update_tool",
-    "Update an existing AI tool.",
+    "Update fields on an existing AI tool — code, webhook config, approval settings, or active flag. Only provided fields are changed; omitted fields keep their current value. For creating a brand-new tool, use flowforge_create_tool; to retire a tool, set is_active=false here or call flowforge_delete_tool.",
     {
-      tool_name: z.string().describe("The tool name to update"),
-      description: z.string().optional().describe("New description"),
+      tool_name: z
+        .string()
+        .describe("The tool name to update (from flowforge_list_tools)."),
+      description: z
+        .string()
+        .optional()
+        .describe("New human-readable description."),
       parameters: z
         .record(z.unknown())
         .optional()
-        .describe("Updated parameter schema"),
+        .describe("Replacement JSON Schema for the tool's parameters. Replaces wholesale — no deep merge."),
       tool_type: z
         .enum(["custom", "webhook", "builtin"])
         .optional()
-        .describe("Updated tool type"),
-      code: z.string().optional().describe("Updated Python code"),
-      webhook_url: z.string().optional().describe("Updated webhook URL"),
+        .describe("Change the tool type: 'custom', 'webhook', or 'builtin'."),
+      code: z
+        .string()
+        .optional()
+        .describe("Replacement Python code for custom tools."),
+      webhook_url: z
+        .string()
+        .optional()
+        .describe("New webhook URL for webhook tools."),
       webhook_method: z
         .enum(["GET", "POST", "PUT", "PATCH", "DELETE"])
         .optional()
-        .describe("Updated webhook HTTP method"),
+        .describe("New HTTP method for webhook tools."),
       webhook_headers: z
         .record(z.string())
         .optional()
-        .describe("Updated webhook headers"),
-      requires_approval: z.boolean().optional().describe("Updated approval requirement"),
-      approval_timeout: z.string().optional().describe("Updated approval timeout"),
-      is_active: z.boolean().optional().describe("Set active status"),
-      type: z.string().optional().describe("Deprecated: use tool_type instead"),
+        .describe("Replacement HTTP headers for webhook tools. Replaces wholesale."),
+      requires_approval: z
+        .boolean()
+        .optional()
+        .describe("Toggle whether each call needs human approval."),
+      approval_timeout: z
+        .string()
+        .optional()
+        .describe("New approval timeout duration (e.g. '1h')."),
+      is_active: z
+        .boolean()
+        .optional()
+        .describe("Set active/inactive. Inactive tools still exist but can't be called."),
+      type: z
+        .string()
+        .optional()
+        .describe("Deprecated alias for tool_type. Pass tool_type instead for new calls."),
     },
     async (args) => {
       const { tool_name, type: _type, ...updates } = args;
@@ -182,9 +217,11 @@ export function registerToolTools(server: McpServer, ctx: McpContext): void {
 
   server.tool(
     "flowforge_delete_tool",
-    "Delete an AI tool by its name.",
+    "Delete an AI tool by name. Irreversible — the tool is removed from the registry. Any function still referencing this tool will fail on its next invocation, so remove the reference first (via flowforge_update_function) or disable the tool with flowforge_update_tool { is_active: false } if you want to preserve the row.",
     {
-      tool_name: z.string().describe("The tool name to delete"),
+      tool_name: z
+        .string()
+        .describe("The tool name to delete (from flowforge_list_tools)."),
     },
     async (args) => {
       const { data, error } = await ctx.client.tools.delete(args.tool_name);

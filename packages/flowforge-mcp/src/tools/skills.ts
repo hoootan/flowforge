@@ -6,11 +6,20 @@ import { directFetch } from "../server.js";
 export function registerSkillTools(server: McpServer, ctx: McpContext): void {
   server.tool(
     "flowforge_list_skills",
-    "List skill templates — reusable function+tool configs and imported knowledge from marketplaces.",
+    "List installed skill templates, ordered by import date (newest first). Skills are reusable knowledge packets injected into an agent's system prompt at runtime — either authored locally or imported from a marketplace. To browse skills that aren't installed yet, use flowforge_search_marketplace.",
     {
-      category: z.string().optional().describe("Filter by category (e.g., 'development', 'devops')"),
-      source: z.enum(["local", "skills_sh", "github", "external"]).optional().describe("Filter by source"),
-      search: z.string().optional().describe("Search by name"),
+      category: z
+        .string()
+        .optional()
+        .describe("Filter by category string (e.g. 'development', 'devops', 'content')."),
+      source: z
+        .enum(["local", "skills_sh", "github", "external"])
+        .optional()
+        .describe("Filter by origin: 'local' (authored here), 'skills_sh' (from skills.sh), 'github', or 'external'."),
+      search: z
+        .string()
+        .optional()
+        .describe("Substring search against skill names and descriptions."),
     },
     async (args) => {
       try {
@@ -31,10 +40,15 @@ export function registerSkillTools(server: McpServer, ctx: McpContext): void {
 
   server.tool(
     "flowforge_search_marketplace",
-    "Search the skills.sh marketplace for community-built agent skills. Returns results with install counts and preview URLs.",
+    "Search the skills.sh community marketplace for skills you can install. Returns match results with install counts and preview URLs, ordered by relevance. Use flowforge_preview_skill to inspect a specific result before installing, then flowforge_import_skill to install.",
     {
-      query: z.string().describe("Search query (e.g., 'react', 'docker', 'python patterns')"),
-      limit: z.number().default(10).describe("Max results"),
+      query: z
+        .string()
+        .describe("Search query for the marketplace (e.g. 'react', 'docker', 'python patterns')."),
+      limit: z
+        .number()
+        .default(10)
+        .describe("Maximum number of marketplace results to return."),
     },
     async (args) => {
       try {
@@ -48,10 +62,15 @@ export function registerSkillTools(server: McpServer, ctx: McpContext): void {
 
   server.tool(
     "flowforge_preview_skill",
-    "Preview a SKILL.md file from a GitHub repository before importing. Shows parsed frontmatter and markdown body.",
+    "Fetch and parse a remote SKILL.md file from a GitHub repo without installing it. Shows the frontmatter (name, description, tags) and markdown body so you can confirm it's the right skill. Use flowforge_import_skill next to actually install it.",
     {
-      repo: z.string().describe("GitHub owner/repo (e.g., 'vercel-labs/skills')"),
-      path: z.string().default("SKILL.md").describe("Path to SKILL.md within the repo"),
+      repo: z
+        .string()
+        .describe("GitHub owner/repo path (e.g. 'vercel-labs/skills')."),
+      path: z
+        .string()
+        .default("SKILL.md")
+        .describe("Path to the SKILL.md within the repo. Default 'SKILL.md'."),
     },
     async (args) => {
       try {
@@ -65,14 +84,31 @@ export function registerSkillTools(server: McpServer, ctx: McpContext): void {
 
   server.tool(
     "flowforge_import_skill",
-    "Import a skill from the marketplace into FlowForge. Downloads the SKILL.md and creates a local skill template.",
+    "Install a skill from the marketplace into FlowForge by downloading its SKILL.md and creating a local skill template. After installing, wire it into a function or agent via flowforge_set_function_skills or flowforge_set_agent_skills. Preview first with flowforge_preview_skill if you're unsure.",
     {
-      repo: z.string().describe("GitHub owner/repo to import from"),
-      path: z.string().default("SKILL.md").describe("Path to SKILL.md"),
-      source: z.enum(["skills_sh", "github"]).default("skills_sh").describe("Import source"),
-      name_override: z.string().optional().describe("Override the skill name"),
-      category: z.string().optional().describe("Category for the imported skill"),
-      tags: z.array(z.string()).optional().describe("Tags for discovery"),
+      repo: z
+        .string()
+        .describe("GitHub owner/repo path to import from (e.g. 'vercel-labs/skills')."),
+      path: z
+        .string()
+        .default("SKILL.md")
+        .describe("Path to the SKILL.md within the repo. Default 'SKILL.md'."),
+      source: z
+        .enum(["skills_sh", "github"])
+        .default("skills_sh")
+        .describe("Source tag for bookkeeping: 'skills_sh' (default) or 'github'."),
+      name_override: z
+        .string()
+        .optional()
+        .describe("Override the skill name from the SKILL.md frontmatter. Useful to avoid collisions."),
+      category: z
+        .string()
+        .optional()
+        .describe("Category label applied locally (e.g. 'devops'). Shown in flowforge_list_skills filters."),
+      tags: z
+        .array(z.string())
+        .optional()
+        .describe("Free-form tags for local discovery."),
     },
     async (args) => {
       try {
@@ -86,10 +122,14 @@ export function registerSkillTools(server: McpServer, ctx: McpContext): void {
 
   server.tool(
     "flowforge_set_function_skills",
-    "Set which skills are enabled for a function. Enabled skills inject knowledge into the agent's system prompt at runtime.",
+    "Set the complete list of skills enabled for a function. Enabled skills have their SKILL.md content injected into the agent's system prompt at each run. Replaces wholesale — pass an empty array to disable all skills. The agent-side equivalent is flowforge_set_agent_skills.",
     {
-      function_id: z.string().describe("The function ID (user-defined, e.g., 'process-order')"),
-      skill_ids: z.array(z.string()).describe("List of skill template UUIDs to enable. Pass empty array to disable all."),
+      function_id: z
+        .string()
+        .describe("The user-defined function_id (e.g. 'process-order') or its UUID."),
+      skill_ids: z
+        .array(z.string())
+        .describe("List of skill template UUIDs to enable (from flowforge_list_skills). Empty array disables all skills."),
     },
     async (args) => {
       try {

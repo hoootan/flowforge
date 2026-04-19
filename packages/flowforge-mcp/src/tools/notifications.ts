@@ -6,10 +6,16 @@ import { directFetch } from "../server.js";
 export function registerNotificationTools(server: McpServer, ctx: McpContext): void {
   server.tool(
     "flowforge_list_notifications",
-    "List notifications for the current user — approvals, task assignments, mentions, agent blockers, run failures.",
+    "List notifications for the current user, ordered by creation time (most recent first). Notifications cover approvals (pending tool calls), task assignments, @mentions, agent blockers, and run failures — the inbox that tells you what needs attention. Response includes unread_count. Mark items read with flowforge_mark_notifications_read.",
     {
-      is_read: z.boolean().optional().describe("Filter by read/unread"),
-      limit: z.number().default(20).describe("Max results"),
+      is_read: z
+        .boolean()
+        .optional()
+        .describe("Filter by read/unread. Pass false to see only unread notifications (the typical triage view)."),
+      limit: z
+        .number()
+        .default(20)
+        .describe("Maximum number of notifications to return. Server caps at 100."),
     },
     async (args) => {
       try {
@@ -29,9 +35,12 @@ export function registerNotificationTools(server: McpServer, ctx: McpContext): v
 
   server.tool(
     "flowforge_mark_notifications_read",
-    "Mark notifications as read — either a single notification or all at once.",
+    "Mark notifications as read — either one specific notification (pass notification_id) or every currently-unread notification (omit notification_id). Use after triaging flowforge_list_notifications so unread_count reflects what's still outstanding.",
     {
-      notification_id: z.string().optional().describe("Mark this specific notification as read. Omit to mark ALL as read."),
+      notification_id: z
+        .string()
+        .optional()
+        .describe("UUID of a single notification to mark read (from flowforge_list_notifications). Omit to mark ALL unread as read."),
     },
     async (args) => {
       try {
