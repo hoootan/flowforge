@@ -2,7 +2,6 @@
 
 from sqlalchemy import text
 
-
 MIGRATION_ID = "add_function_soft_delete"
 MIGRATION_DATE = "2026-04-19"
 DESCRIPTION = "Add deleted_at timestamp to functions for soft-delete"

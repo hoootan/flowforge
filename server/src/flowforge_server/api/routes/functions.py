@@ -1,7 +1,7 @@
 """Function registration and management endpoints."""
 
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -348,7 +348,7 @@ async def delete_function(
         raise HTTPException(status_code=404, detail="Function not found")
 
     # tz-aware UTC to match the DateTime(timezone=True) column on Function.
-    fn.deleted_at = datetime.now(timezone.utc)
+    fn.deleted_at = datetime.now(UTC)
     fn.is_active = False  # Stop matching new events immediately
     await session.commit()
 
