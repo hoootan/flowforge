@@ -173,8 +173,9 @@ async def get_tool(
     session: AsyncSession = Depends(get_session),
 ) -> ToolResponse:
     """Get a specific tool by name."""
-    # Look for tenant tool first, then built-in. Exclude soft-deleted tenant
-    # rows; built-ins have no deleted_at so the filter is a no-op for them.
+    # Look for tenant tool first, then built-in. Exclude soft-deleted rows;
+    # built-ins should always have deleted_at=NULL in practice, so the filter
+    # applies uniformly to both.
     result = await session.execute(
         select(Tool).where(
             or_(
