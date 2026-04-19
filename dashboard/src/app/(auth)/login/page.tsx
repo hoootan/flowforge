@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Layers, Loader2, AlertCircle, Shield } from "lucide-react";
+import { Loader2, AlertCircle, Shield } from "lucide-react";
+import { FlowForgeLogo } from "@/components/flowforge-logo";
 import { useAuthStore, useHasHydrated } from "@/stores/auth-store";
 import { cn } from "@/lib/utils";
 
@@ -92,9 +93,9 @@ export default function LoginPage() {
         <div className="absolute inset-0 bg-zinc-900" />
 
         {/* Logo */}
-        <div className="relative z-20 flex items-center text-lg font-medium">
-          <div className="mr-2 flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-            <Layers className="h-4 w-4 text-primary-foreground" />
+        <div className="relative z-20 flex items-center font-sans text-lg font-bold tracking-tight">
+          <div className="mr-2 flex h-8 w-8 items-center justify-center rounded-lg bg-white text-zinc-900">
+            <FlowForgeLogo className="h-4 w-4" />
           </div>
           FlowForge
         </div>
@@ -151,10 +152,10 @@ export default function LoginPage() {
         <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
           {/* Mobile logo */}
           <div className="flex flex-col space-y-2 text-center lg:hidden">
-            <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
-              <Layers className="h-6 w-6 text-primary-foreground" />
+            <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-lg bg-foreground text-background">
+              <FlowForgeLogo className="h-6 w-6" />
             </div>
-            <h1 className="text-2xl font-semibold tracking-tight">FlowForge</h1>
+            <h1 className="font-sans text-2xl font-bold tracking-tight">FlowForge</h1>
           </div>
 
           {/* Form header */}

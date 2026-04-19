@@ -38,13 +38,13 @@ import { useAuthStore } from '@/stores/auth-store';
 import {
   ChevronRight,
   ChevronsUpDown,
-  Layers,
   LogOut,
   Settings,
   User,
   Shield,
   Eye
 } from 'lucide-react';
+import { FlowForgeLogo } from '@/components/flowforge-logo';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import * as React from 'react';
@@ -137,12 +137,12 @@ export default function AppSidebar() {
               className='data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground'
             >
               <Link href='/'>
-                <div className='flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground'>
-                  <Layers className='size-4' />
+                <div className='flex aspect-square size-8 items-center justify-center rounded-lg bg-foreground text-background'>
+                  <FlowForgeLogo className='size-4' />
                 </div>
-                <div className='grid flex-1 text-left text-sm leading-tight'>
-                  <span className='truncate font-semibold'>FlowForge</span>
-                  <span className='truncate text-xs text-muted-foreground'>
+                <div className='grid flex-1 text-left leading-tight'>
+                  <span className='truncate font-sans text-sm font-bold tracking-tight'>FlowForge</span>
+                  <span className='truncate font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground'>
                     Workflow Platform
                   </span>
                 </div>
