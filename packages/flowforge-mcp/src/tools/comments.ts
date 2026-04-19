@@ -6,11 +6,20 @@ import { directFetch } from "../server.js";
 export function registerCommentTools(server: McpServer, ctx: McpContext): void {
   server.tool(
     "flowforge_list_comments",
-    "List comments on a task or run. Shows the unified activity timeline with user and agent authors.",
+    "List comments on a task or run, ordered by post time (oldest first). Comments form a unified activity timeline mixing human and agent authors, with @mentions and emoji reactions. Supply exactly one of task_id or run_id. To add a comment, use flowforge_add_comment.",
     {
-      task_id: z.string().optional().describe("List comments for this task UUID"),
-      run_id: z.string().optional().describe("List comments for this run UUID"),
-      limit: z.number().default(50).describe("Max results"),
+      task_id: z
+        .string()
+        .optional()
+        .describe("Task UUID to list comments on. Mutually exclusive with run_id."),
+      run_id: z
+        .string()
+        .optional()
+        .describe("Run UUID to list comments on. Mutually exclusive with task_id."),
+      limit: z
+        .number()
+        .default(50)
+        .describe("Maximum number of comments to return. Server caps at 200."),
     },
     async (args) => {
       try {
@@ -34,13 +43,27 @@ export function registerCommentTools(server: McpServer, ctx: McpContext): void {
 
   server.tool(
     "flowforge_add_comment",
-    "Add a comment to a task or run. Supports agent authors for the unified activity timeline.",
+    "Post a new comment to a task or run. Supports both human and agent authors, markdown content, and @mentions. Supply exactly one of task_id or run_id, and exactly one of author_agent_id or author_user_id. For reading existing comments, use flowforge_list_comments.",
     {
-      task_id: z.string().optional().describe("Comment on this task UUID"),
-      run_id: z.string().optional().describe("Comment on this run UUID"),
-      content: z.string().describe("Comment text (markdown supported)"),
-      author_agent_id: z.string().optional().describe("Agent UUID if commenting as an agent"),
-      author_user_id: z.string().optional().describe("User UUID if commenting as a user"),
+      task_id: z
+        .string()
+        .optional()
+        .describe("Task UUID to comment on. Mutually exclusive with run_id."),
+      run_id: z
+        .string()
+        .optional()
+        .describe("Run UUID to comment on. Mutually exclusive with task_id."),
+      content: z
+        .string()
+        .describe("Comment body. Markdown supported. @mentions of agents and users are parsed and notified."),
+      author_agent_id: z
+        .string()
+        .optional()
+        .describe("Agent UUID if posting as an agent. Mutually exclusive with author_user_id."),
+      author_user_id: z
+        .string()
+        .optional()
+        .describe("User UUID if posting as a human. Mutually exclusive with author_agent_id."),
     },
     async (args) => {
       try {
