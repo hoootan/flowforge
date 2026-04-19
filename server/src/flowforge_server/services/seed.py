@@ -3,12 +3,13 @@
 Seeds the database with built-in tools and default data on startup.
 """
 
+import os
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from flowforge_server.db import get_session_context
-from flowforge_server.db.models import DEFAULT_SCOPES, ApiKey, ApiKeyType, Tenant, Tool
+from flowforge_server.db.models import DEFAULT_SCOPES, AIProvider, ApiKey, ApiKeyType, Tenant, Tool
 from flowforge_server.services.auth import hash_api_key
 from flowforge_server.services.builtin_tools import get_builtin_tool_definitions
 
@@ -171,9 +172,58 @@ async def seed_default_api_key() -> None:
         print("[Seed] WARNING: This key is for development only!")
 
 
+_LLM_ENV_VARS: dict[str, str] = {
+    "openai": "OPENAI_API_KEY",
+    "anthropic": "ANTHROPIC_API_KEY",
+    "google": "GOOGLE_API_KEY",
+    "mistral": "MISTRAL_API_KEY",
+    "cohere": "COHERE_API_KEY",
+}
+
+
+async def warn_if_no_llm_providers() -> None:
+    """Log a loud warning when the default tenant has no AI providers.
+
+    Also call out any legacy ``*_API_KEY`` env vars that were the old
+    configuration surface — those are no longer consulted at runtime.
+    """
+    default_tenant_id = uuid.UUID("00000000-0000-0000-0000-000000000001")
+
+    async with get_session_context() as session:
+        count = (
+            await session.execute(
+                select(func.count())
+                .select_from(AIProvider)
+                .where(
+                    AIProvider.tenant_id == default_tenant_id,
+                    AIProvider.is_active == True,  # noqa: E712
+                )
+            )
+        ).scalar_one()
+
+    ignored_env_vars = [
+        env for env in _LLM_ENV_VARS.values() if os.environ.get(env)
+    ]
+
+    if count == 0:
+        print(
+            "[Seed] WARNING: No LLM providers configured. AI steps will fail "
+            "until one is added at /settings?tab=ai-providers."
+        )
+
+    if ignored_env_vars:
+        joined = ", ".join(sorted(ignored_env_vars))
+        print(
+            "[Seed] WARNING: Ignoring legacy LLM env vars at runtime "
+            f"({joined}). Configure providers at "
+            "/settings?tab=ai-providers instead."
+        )
+
+
 async def run_all_seeds() -> None:
     """Run all database seeds."""
     await seed_default_tenant()
     await seed_default_api_key()
     await seed_builtin_tools()
+    await warn_if_no_llm_providers()
     print("[Seed] Database seeding complete")

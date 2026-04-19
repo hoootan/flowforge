@@ -494,8 +494,8 @@ export const mockApiKeys: ApiKey[] = [
 
 // ── AI Providers ─────────────────────────────────────────────────────
 export const mockAIProviders: AIProvider[] = [
-  { id: "prov-001", provider_name: "openai", display_name: "OpenAI", api_key_prefix: "sk-...abc", auth_type: "api_key", base_url: null, is_active: true, is_default: true, config: {}, created_at: daysAgo(50), updated_at: daysAgo(5) },
-  { id: "prov-002", provider_name: "anthropic", display_name: "Anthropic", api_key_prefix: "sk-ant...xyz", auth_type: "api_key", base_url: null, is_active: true, is_default: false, config: {}, created_at: daysAgo(40), updated_at: daysAgo(10) },
+  { id: "prov-001", provider_name: "openai", display_name: "OpenAI", api_key_prefix: "sk-...abc", auth_type: "api_key", base_url: null, is_active: true, is_default: true, config: {}, last_used_at: daysAgo(1), created_at: daysAgo(50), updated_at: daysAgo(5) },
+  { id: "prov-002", provider_name: "anthropic", display_name: "Anthropic", api_key_prefix: "sk-ant...xyz", auth_type: "api_key", base_url: null, is_active: true, is_default: false, config: {}, last_used_at: daysAgo(3), created_at: daysAgo(40), updated_at: daysAgo(10) },
 ];
 
 // ── Stats ────────────────────────────────────────────────────────────

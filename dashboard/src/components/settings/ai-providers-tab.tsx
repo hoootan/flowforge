@@ -45,6 +45,22 @@ const providerStyles: Record<string, { color: string; bgColor: string }> = {
   custom: { color: "text-slate-600", bgColor: "bg-slate-500/10" },
 };
 
+function formatRelativeTime(iso: string | null): string {
+  if (!iso) return "Never used";
+  const diffMs = Date.now() - new Date(iso).getTime();
+  if (diffMs < 0) return "Just now";
+  const minutes = Math.floor(diffMs / 60_000);
+  if (minutes < 1) return "Just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months}mo ago`;
+  return `${Math.floor(months / 12)}y ago`;
+}
+
 interface ProviderCardProps {
   provider: AIProvider;
   onTest: (id: string) => Promise<void>;
@@ -94,6 +110,9 @@ function ProviderCard({
             {provider.base_url && (
               <span className="text-xs">({new URL(provider.base_url).host})</span>
             )}
+          </div>
+          <div className="mt-0.5 text-xs text-muted-foreground">
+            {formatRelativeTime(provider.last_used_at)}
           </div>
         </div>
       </div>
@@ -249,7 +268,9 @@ export function AIProvidersTab() {
       <Alert>
         <AlertCircle className="h-4 w-4" />
         <AlertDescription>
-          API keys are encrypted at rest using Fernet encryption. They are never displayed after creation.
+          Keys configured here are the only source used by AI runs. Environment
+          variables like <code>ANTHROPIC_API_KEY</code> are ignored at runtime.
+          Keys are encrypted at rest and never displayed after creation.
         </AlertDescription>
       </Alert>
 
