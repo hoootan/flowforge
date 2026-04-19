@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -70,6 +70,13 @@ class Function(Base, TimestampMixin):
 
     # Last heartbeat from worker (for worker health tracking)
     worker_last_seen: Mapped[datetime | None] = mapped_column(nullable=True)
+
+    # Soft-delete marker. NULL = active; timestamp = hidden from users.
+    # Runs and versions remain intact so history pages still resolve.
+    # timezone=True to match TimestampMixin's created_at / updated_at.
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
 
     # =========================================================================
     # Serverless/Inline Execution Fields
