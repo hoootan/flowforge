@@ -1,7 +1,7 @@
 """Function registration and management endpoints."""
 
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -78,6 +78,7 @@ async def register_function(
         # Re-registering an id restores a soft-deleted row.
         existing_fn.deleted_at = None
         existing_fn.name = function_data.name
+        existing_fn.slug = slugify(function_data.name)
         existing_fn.trigger_type = function_data.trigger.type
         existing_fn.trigger_value = function_data.trigger.value
         existing_fn.trigger_expression = function_data.trigger.expression
@@ -346,7 +347,8 @@ async def delete_function(
     if not fn:
         raise HTTPException(status_code=404, detail="Function not found")
 
-    fn.deleted_at = datetime.utcnow()
+    # tz-aware UTC to match the DateTime(timezone=True) column on Function.
+    fn.deleted_at = datetime.now(timezone.utc)
     fn.is_active = False  # Stop matching new events immediately
     await session.commit()
 
