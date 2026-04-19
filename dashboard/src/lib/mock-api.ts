@@ -542,6 +542,7 @@ class MockFlowForgeAPI {
       is_active: true,
       is_default: data.is_default ?? false,
       config: data.config ?? {},
+      last_used_at: null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };

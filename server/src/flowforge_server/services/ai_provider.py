@@ -90,8 +90,9 @@ class AIProviderService:
     Multiple providers of the same type are allowed per tenant.
     """
 
-    # In-memory cache for decrypted keys (tenant_id:provider_name -> (key, auth_type, expiry))
-    _key_cache: dict[str, tuple[str, str, datetime]] = {}
+    # In-memory cache for decrypted keys
+    # (tenant_id:provider_name -> (key, auth_type, provider_id, expiry))
+    _key_cache: dict[str, tuple[str, str, uuid.UUID, datetime]] = {}
     _cache_ttl = timedelta(minutes=5)
 
     async def create_provider(
@@ -152,6 +153,11 @@ class AIProviderService:
         )
 
         session.add(provider)
+        # A stale resolution may be cached for this tenant+provider — e.g.
+        # the previous default was another row, or a prior lookup returned
+        # None because nothing was configured. Drop it so the new row is
+        # picked up on the next call.
+        self._clear_key_cache(tenant_id, provider_name)
         return provider
 
     async def get_provider_by_name(
@@ -365,9 +371,9 @@ class AIProviderService:
         session: AsyncSession,
         tenant_id: uuid.UUID,
         provider_name: str,
-    ) -> tuple[str, str] | None:
+    ) -> tuple[str, str, uuid.UUID] | None:
         """
-        Get the decrypted credential and auth type for a provider.
+        Get the decrypted credential, auth type, and source provider ID.
 
         Resolves the best provider of this type (default first, then earliest).
         Uses in-memory caching to avoid repeated decryption.
@@ -378,16 +384,16 @@ class AIProviderService:
             provider_name: Provider identifier
 
         Returns:
-            Tuple of (credential, auth_type) or None if not found.
+            Tuple of (credential, auth_type, provider_id) or None if not found.
             auth_type is "api_key" or "oauth_token".
         """
         cache_key = f"{tenant_id}:{provider_name.lower()}"
 
         # Check cache
         if cache_key in self._key_cache:
-            key, auth_type, expiry = self._key_cache[cache_key]
+            key, auth_type, provider_id, expiry = self._key_cache[cache_key]
             if datetime.utcnow() < expiry:
-                return (key, auth_type)
+                return (key, auth_type, provider_id)
             else:
                 del self._key_cache[cache_key]
 
@@ -402,9 +408,13 @@ class AIProviderService:
         try:
             decrypted = decrypt_value(provider.api_key_encrypted)
             auth_type = provider.auth_type or "api_key"
-            # Cache the decrypted key and auth type
-            self._key_cache[cache_key] = (decrypted, auth_type, datetime.utcnow() + self._cache_ttl)
-            return (decrypted, auth_type)
+            self._key_cache[cache_key] = (
+                decrypted,
+                auth_type,
+                provider.id,
+                datetime.utcnow() + self._cache_ttl,
+            )
+            return (decrypted, auth_type, provider.id)
         except EncryptionError:
             return None
 
@@ -521,6 +531,23 @@ class AIProviderService:
                     "status": "error",
                     "message": f"Connection test failed: {str(e)[:100]}",
                 }
+
+    async def update_last_used(
+        self,
+        session: AsyncSession,
+        provider_id: uuid.UUID,
+        when: datetime | None = None,
+    ) -> None:
+        """Stamp ``last_used_at`` on a provider row.
+
+        Best-effort — the caller typically invokes this in a background task
+        with its own session. Caller is responsible for committing.
+        """
+        await session.execute(
+            update(AIProvider)
+            .where(AIProvider.id == provider_id)
+            .values(last_used_at=when or datetime.utcnow())
+        )
 
     async def rotate_key(
         self,

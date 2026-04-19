@@ -394,19 +394,15 @@ class AIService:
         if model.startswith("claude") and not model.startswith("anthropic/"):
             litellm_model = f"anthropic/{model}"
 
-        # Set up tenant-specific credential if provided
+        # Resolve tenant credential from the dashboard. No env fallback.
         credential_override: str | None = None
-        credential_auth_type: str = "api_key"
+        credential_provider_id: uuid.UUID | None = None
         if tenant_id and session and self._provider_registry:
-            try:
-                result = await self._provider_registry.get_api_key_for_tenant(
-                    session, tenant_id, provider
-                )
-                if result:
-                    credential_override, credential_auth_type = result
-            except Exception:
-                # Fall back to default behavior if lookup fails
-                pass
+            resolved = await self._provider_registry.get_api_key_for_tenant(
+                session, tenant_id, provider
+            )
+            credential_override = resolved.credential
+            credential_provider_id = resolved.provider_id
 
         # Retry loop
         last_error = None
@@ -505,6 +501,9 @@ class AIService:
                 # Cache successful response
                 if use_cache and cache_key:
                     await self._set_cached(cache_key, result, cache_ttl)
+
+                if credential_provider_id:
+                    self._record_provider_use(credential_provider_id)
 
                 return result
 
@@ -617,17 +616,15 @@ class AIService:
             **kwargs,
         }
 
-        # Set up tenant-specific credential if provided
+        # Resolve tenant credential from the dashboard. No env fallback.
         credential_override: str | None = None
+        credential_provider_id: uuid.UUID | None = None
         if tenant_id and session and self._provider_registry:
-            try:
-                result = await self._provider_registry.get_api_key_for_tenant(
-                    session, tenant_id, provider
-                )
-                if result:
-                    credential_override, _ = result
-            except Exception:
-                pass
+            resolved = await self._provider_registry.get_api_key_for_tenant(
+                session, tenant_id, provider
+            )
+            credential_override = resolved.credential
+            credential_provider_id = resolved.provider_id
 
         if credential_override:
             completion_params["api_key"] = credential_override
@@ -732,6 +729,9 @@ class AIService:
                     latency_ms=latency_ms,
                 )
 
+                if credential_provider_id:
+                    self._record_provider_use(credential_provider_id)
+
                 yield {
                     "type": "done",
                     "content": accumulated_content,
@@ -740,6 +740,32 @@ class AIService:
                     "tool_calls": tool_calls_list,
                 }
                 break
+
+    def _record_provider_use(self, provider_id: uuid.UUID) -> None:
+        """Fire a background task to stamp ``last_used_at`` on a provider row.
+
+        Uses a fresh DB session so the write is decoupled from the caller's
+        transaction lifecycle. Failures are swallowed — this is telemetry,
+        not load-bearing.
+        """
+
+        async def _write() -> None:
+            from flowforge_server.db.session import get_session_context
+            from flowforge_server.services.ai_provider import get_ai_provider_service
+
+            try:
+                async with get_session_context() as write_session:
+                    await get_ai_provider_service().update_last_used(
+                        write_session, provider_id
+                    )
+                    await write_session.commit()
+            except Exception:
+                pass
+
+        try:
+            asyncio.create_task(_write())
+        except RuntimeError:
+            pass
 
     async def get_usage_stats(
         self,

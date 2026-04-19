@@ -41,6 +41,7 @@ def ai_provider_to_response(provider: AIProvider) -> AIProviderResponse:
         is_active=provider.is_active,
         is_default=provider.is_default,
         config=provider.config,
+        last_used_at=provider.last_used_at,
         created_at=provider.created_at,
         updated_at=provider.updated_at,
     )

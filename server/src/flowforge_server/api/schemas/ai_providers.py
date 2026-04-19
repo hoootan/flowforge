@@ -116,6 +116,10 @@ class AIProviderResponse(BaseModel):
     is_active: bool = Field(..., description="Whether the provider is enabled")
     is_default: bool = Field(..., description="Whether this is the default provider")
     config: dict[str, Any] = Field(default_factory=dict, description="Configuration")
+    last_used_at: datetime | None = Field(
+        None,
+        description="Most recent successful use by the AI service",
+    )
     created_at: datetime = Field(..., description="Creation time")
     updated_at: datetime = Field(..., description="Last update time")
 

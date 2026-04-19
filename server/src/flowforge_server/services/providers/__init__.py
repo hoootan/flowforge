@@ -6,8 +6,8 @@ including configuration, health checking, and fallback chains.
 
 from __future__ import annotations
 
-import os
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -34,7 +34,33 @@ __all__ = [
     "ModelConfig",
     "FallbackConfig",
     "ProviderRegistryConfig",
+    "ResolvedCredential",
+    "ProviderNotConfiguredError",
 ]
+
+
+@dataclass(frozen=True)
+class ResolvedCredential:
+    """Credential resolved from the dashboard-stored AIProvider row."""
+
+    credential: str
+    auth_type: str
+    provider_id: uuid.UUID
+
+
+class ProviderNotConfiguredError(Exception):
+    """Raised when no active AIProvider row exists for the requested provider.
+
+    Carries the provider name so callers can surface an actionable error
+    message directing users to the dashboard.
+    """
+
+    def __init__(self, provider: str) -> None:
+        self.provider = provider
+        super().__init__(
+            f"No '{provider}' provider is configured for this tenant. "
+            "Add one at /settings/ai-providers in the dashboard."
+        )
 
 
 class ProviderRegistry:
@@ -64,31 +90,19 @@ class ProviderRegistry:
         self._health_checker: HealthChecker | None = None
 
     def _load_config(self, path: str | None) -> ProviderRegistryConfig:
-        """Load config from file, falling back to env vars and defaults."""
+        """Load non-credential configuration from file.
+
+        API keys are NOT loaded here. Per-tenant credentials live exclusively
+        in the ``ai_providers`` table and are resolved at request time via
+        :meth:`get_api_key_for_tenant`.
+        """
         config = ProviderRegistryConfig()
 
-        # Try to load from file
         if path and Path(path).exists():
             with open(path) as f:
                 data = yaml.safe_load(f)
                 if data:
                     config = ProviderRegistryConfig.model_validate(data)
-
-        # Load API keys from environment variables
-        env_keys = {
-            "openai": "OPENAI_API_KEY",
-            "anthropic": "ANTHROPIC_API_KEY",
-            "google": "GOOGLE_API_KEY",
-            "mistral": "MISTRAL_API_KEY",
-            "cohere": "COHERE_API_KEY",
-        }
-
-        for provider, env_var in env_keys.items():
-            api_key = os.environ.get(env_var)
-            if api_key:
-                if provider not in config.providers:
-                    config.providers[provider] = ProviderSettings()
-                config.providers[provider].api_key = api_key
 
         return config
 
@@ -384,85 +398,38 @@ class ProviderRegistry:
         session: AsyncSession,
         tenant_id: uuid.UUID,
         provider: str,
-    ) -> tuple[str, str] | None:
-        """
-        Get the credential and auth type for a provider, checking tenant-specific first.
+    ) -> ResolvedCredential:
+        """Resolve the credential for a provider from the tenant's dashboard configuration.
 
-        Priority:
-        1. Tenant-specific provider from database (encrypted)
-        2. Environment variable (global fallback, always "api_key" auth type)
-        3. Config file (if loaded, always "api_key" auth type)
+        The dashboard (``ai_providers`` table) is the single source of truth. There is no
+        environment-variable fallback; missing credentials raise
+        :class:`ProviderNotConfiguredError` so callers can surface an actionable message.
 
         Args:
-            session: Database session for querying tenant providers
-            tenant_id: Tenant ID to check for specific provider
-            provider: Provider name (openai, anthropic, etc.)
+            session: Database session for querying tenant providers.
+            tenant_id: Tenant ID to look up.
+            provider: Provider name (openai, anthropic, etc.).
 
         Returns:
-            Tuple of (credential, auth_type) or None if not found.
-            auth_type is "api_key" or "oauth_token".
+            :class:`ResolvedCredential` with the decrypted credential, its auth type,
+            and the source provider row's ID.
+
+        Raises:
+            ProviderNotConfiguredError: If no active row exists for this tenant+provider.
         """
-        # 1. Check tenant-specific providers first
         from flowforge_server.services.ai_provider import get_ai_provider_service
 
-        try:
-            service = get_ai_provider_service()
-            result = await service.get_decrypted_key(session, tenant_id, provider)
-            if result:
-                return result  # Already a (credential, auth_type) tuple
-        except Exception:
-            # If service unavailable or decryption fails, fall back to env vars
-            pass
+        service = get_ai_provider_service()
+        result = await service.get_decrypted_key(session, tenant_id, provider)
+        if not result:
+            raise ProviderNotConfiguredError(provider)
 
-        # 2. Check environment variables (always api_key auth type)
-        env_keys = {
-            "openai": "OPENAI_API_KEY",
-            "anthropic": "ANTHROPIC_API_KEY",
-            "google": "GOOGLE_API_KEY",
-            "mistral": "MISTRAL_API_KEY",
-            "cohere": "COHERE_API_KEY",
-        }
-
-        env_var = env_keys.get(provider.lower())
-        if env_var:
-            api_key = os.environ.get(env_var)
-            if api_key:
-                return (api_key, "api_key")
-
-        # 3. Check loaded config (always api_key auth type)
-        provider_settings = self.get_provider_settings(provider)
-        if provider_settings.api_key:
-            return (provider_settings.api_key, "api_key")
-
-        return None
-
-    def get_api_key_from_env(self, provider: str) -> str | None:
-        """
-        Get API key from environment variables only.
-
-        This is the synchronous version for cases where we don't have a session.
-
-        Args:
-            provider: Provider name
-
-        Returns:
-            API key or None
-        """
-        env_keys = {
-            "openai": "OPENAI_API_KEY",
-            "anthropic": "ANTHROPIC_API_KEY",
-            "google": "GOOGLE_API_KEY",
-            "mistral": "MISTRAL_API_KEY",
-            "cohere": "COHERE_API_KEY",
-        }
-
-        env_var = env_keys.get(provider.lower())
-        if env_var:
-            return os.environ.get(env_var)
-
-        # Check loaded config
-        provider_settings = self.get_provider_settings(provider)
-        return provider_settings.api_key
+        credential, auth_type, provider_id = result
+        return ResolvedCredential(
+            credential=credential,
+            auth_type=auth_type,
+            provider_id=provider_id,
+        )
 
 
 # Global registry instance

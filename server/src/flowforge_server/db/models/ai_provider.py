@@ -1,9 +1,10 @@
 """AI Provider model for secure multi-tenant API key management."""
 
 import uuid
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import Boolean, ForeignKey, Index, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -96,7 +97,13 @@ class AIProvider(Base, TimestampMixin):
         Boolean,
         nullable=False,
         default=False,
-    )  # Default provider for this tenant
+    )  # Default provider within this provider_name for the tenant (only disambiguates between multiple keys of the same provider type; does not route across providers).
+
+    # Usage tracking
+    last_used_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )  # Most recent successful use by the AI service
 
     # Additional configuration
     config: Mapped[dict[str, Any]] = mapped_column(
@@ -146,6 +153,7 @@ class AIProvider(Base, TimestampMixin):
             "is_active": self.is_active,
             "is_default": self.is_default,
             "config": self.config,
+            "last_used_at": self.last_used_at.isoformat() if self.last_used_at else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

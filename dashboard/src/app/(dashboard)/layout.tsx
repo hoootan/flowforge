@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import KBar from '@/components/kbar';
 import AppSidebar from '@/components/layout/app-sidebar';
 import Header from '@/components/layout/header';
+import NoProvidersBanner from '@/components/layout/no-providers-banner';
 import PageContainer from '@/components/layout/page-container';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 
@@ -23,6 +24,7 @@ export default async function DashboardLayout({
           <AppSidebar />
           <SidebarInset>
             <Header />
+            <NoProvidersBanner />
             <PageContainer scrollable>
               {children}
             </PageContainer>
