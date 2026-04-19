@@ -7,7 +7,7 @@ timeout enforcement.
 
 import asyncio
 import functools
-from concurrent.futures import ThreadPoolExecutor
+import threading
 from typing import Any
 
 from RestrictedPython import compile_restricted, safe_builtins
@@ -125,6 +125,30 @@ SAFE_BUILTINS = {
     "http_request": _safe_http_request,
 }
 
+
+_INPLACE_OPS = {
+    "+=": lambda a, b: a + b,
+    "-=": lambda a, b: a - b,
+    "*=": lambda a, b: a * b,
+    "/=": lambda a, b: a / b,
+    "//=": lambda a, b: a // b,
+    "%=": lambda a, b: a % b,
+    "**=": lambda a, b: a ** b,
+    "<<=": lambda a, b: a << b,
+    ">>=": lambda a, b: a >> b,
+    "&=": lambda a, b: a & b,
+    "|=": lambda a, b: a | b,
+    "^=": lambda a, b: a ^ b,
+}
+
+
+def _inplace_var(op: str, x: Any, y: Any) -> Any:
+    """Shim for RestrictedPython's augmented-assignment rewrite (e.g. 'n += 1')."""
+    fn = _INPLACE_OPS.get(op)
+    if fn is None:
+        raise SandboxSecurityError(f"Unsupported inplace operator: {op}")
+    return fn(x, y)
+
 # Modules that are explicitly blocked
 BLOCKED_MODULES = {
     "os", "sys", "subprocess", "shutil", "socket", "signal",
@@ -191,8 +215,13 @@ def _create_restricted_globals() -> dict[str, Any]:
     class _SafeOs:
         environ = _SAFE_ENVIRON
 
+    # __import__ must live inside __builtins__ — Python's import machinery
+    # looks it up there, not in module globals. RestrictedPython 8.x surfaces
+    # this: putting the hook in globals alone raises ImportError at runtime.
+    builtins_with_import = {**SAFE_BUILTINS, "__import__": _guarded_import}
+
     return {
-        "__builtins__": SAFE_BUILTINS,
+        "__builtins__": builtins_with_import,
         "__name__": "__sandbox__",
         "__doc__": None,
         # RestrictedPython guards
@@ -200,9 +229,9 @@ def _create_restricted_globals() -> dict[str, Any]:
         "_getitem_": default_guarded_getitem,
         "_getiter_": default_guarded_getiter,
         "_iter_unpack_sequence_": guarded_iter_unpack_sequence,
+        "_inplacevar_": _inplace_var,
         "_write_": _write_guard,
         "_print_": lambda *args, **kwargs: None,  # Disable print
-        "__import__": _guarded_import,
         # Safe os proxy for reading environment variables
         "os": _SafeOs(),
     }
@@ -212,23 +241,21 @@ def compile_sandboxed(code: str, filename: str = "<sandbox>") -> Any:
     """
     Compile Python code using RestrictedPython.
 
-    Args:
-        code: Python source code to compile
-        filename: Filename for error messages
-
-    Returns:
-        Compiled code object
-
-    Raises:
-        SandboxCompilationError: If compilation fails
+    Handles RestrictedPython 7.x (returns CompileResult with .errors/.code)
+    and 8.x (returns a raw code object; raises SyntaxError on bad syntax).
     """
-    result = compile_restricted(code, filename, "exec")
+    try:
+        result = compile_restricted(code, filename, "exec")
+    except SyntaxError as e:
+        raise SandboxCompilationError(f"Compilation failed: {e}") from e
 
-    if result.errors:
-        error_msgs = "\n".join(result.errors)
-        raise SandboxCompilationError(f"Compilation failed:\n{error_msgs}")
+    if hasattr(result, "errors"):
+        if result.errors:
+            error_msgs = "\n".join(result.errors)
+            raise SandboxCompilationError(f"Compilation failed:\n{error_msgs}")
+        return result.code
 
-    return result.code
+    return result
 
 
 def execute_sandboxed_sync(
@@ -267,21 +294,36 @@ def execute_sandboxed_sync(
     if not callable(execute_fn):
         raise SandboxExecutionError("'execute' must be a callable function")
 
-    # Execute with timeout
-    def run_with_result() -> Any:
-        return execute_fn(**arguments)
+    # Run on a daemon thread so a runaway tool (infinite loop) doesn't block
+    # process exit — Python cannot kill threads, but daemons die with the
+    # process. A leaked daemon here is a pre-existing design limitation;
+    # the hard guarantee is only the timeout surfaces to the caller.
+    result_holder: dict[str, Any] = {}
 
-    # Use a thread pool to run with timeout
-    with ThreadPoolExecutor(max_workers=1) as executor:
-        future = executor.submit(run_with_result)
+    def run_with_result() -> None:
         try:
-            return future.result(timeout=timeout_seconds)
-        except TimeoutError:
-            raise SandboxTimeoutError(
-                f"Tool execution timed out after {timeout_seconds} seconds"
-            )
-        except Exception as e:
-            raise SandboxExecutionError(f"Tool execution failed: {str(e)}")
+            result_holder["value"] = execute_fn(**arguments)
+        except BaseException as exc:  # noqa: BLE001 — capture anything the tool raises
+            result_holder["error"] = exc
+
+    worker = threading.Thread(
+        target=run_with_result, name="ff-sandbox", daemon=True
+    )
+    worker.start()
+    worker.join(timeout=timeout_seconds)
+
+    if worker.is_alive():
+        raise SandboxTimeoutError(
+            f"Tool execution timed out after {timeout_seconds} seconds"
+        )
+
+    if "error" in result_holder:
+        err = result_holder["error"]
+        if isinstance(err, SandboxError):
+            raise err
+        raise SandboxExecutionError(f"Tool execution failed: {err}")
+
+    return result_holder.get("value")
 
 
 async def execute_sandboxed(
