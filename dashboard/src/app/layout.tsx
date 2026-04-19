@@ -12,8 +12,22 @@ const META_THEME_COLORS = {
 };
 
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_SITE_URL ?? 'https://flowforge.hiolo.dev'
+  ),
   title: 'FlowForge Dashboard',
-  description: 'Monitor and manage your AI workflows'
+  description: 'Monitor and manage your durable AI workflows — every run, every step, in real time.',
+  openGraph: {
+    title: 'FlowForge Dashboard',
+    description: 'Monitor and manage your durable AI workflows — every run, every step, in real time.',
+    type: 'website',
+    siteName: 'FlowForge'
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'FlowForge Dashboard',
+    description: 'Monitor and manage your durable AI workflows — every run, every step, in real time.'
+  }
 };
 
 export const viewport: Viewport = {
