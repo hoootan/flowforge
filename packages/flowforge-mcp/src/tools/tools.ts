@@ -217,7 +217,7 @@ export function registerToolTools(server: McpServer, ctx: McpContext): void {
 
   server.tool(
     "flowforge_delete_tool",
-    "Delete an AI tool by name. Irreversible — the tool is removed from the registry. Any function still referencing this tool will fail on its next invocation, so remove the reference first (via flowforge_update_function) or disable the tool with flowforge_update_tool { is_active: false } if you want to preserve the row.",
+    "Soft-delete an AI tool by name. The row is retained so in-flight runs that already loaded the tool can finish, but it is hidden from all user-facing queries and the executor stops loading it for new runs (is_active=False is set alongside). History is preserved. Calling flowforge_create_tool with the same name restores the row. Built-in tools cannot be deleted.",
     {
       tool_name: z
         .string()
