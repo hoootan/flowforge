@@ -3,8 +3,19 @@
 .env.*
 !.env.example
 
-# Claude Code
+# Claude Code — ignore local state (plans, sessions, caches) everywhere.
 .claude/
+# …but at the repo root, commit just the in-repo FlowForge skill so every
+# contributor gets the same domain expertise. Any other .claude/ content
+# (including other user-installed skills under .claude/skills/) stays
+# ignored, and nested .claude/ dirs (e.g. dashboard/.claude/) stay fully
+# ignored.
+!/.claude/
+/.claude/*
+!/.claude/skills/
+/.claude/skills/*
+!/.claude/skills/flowforge/
+!/.claude/skills/flowforge/**
 
 # Python
 __pycache__/
