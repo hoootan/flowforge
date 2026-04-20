@@ -138,11 +138,70 @@ survive the caller's crash.
 
 - Talks to the configured LLM provider via LiteLLM, so model strings like
   `claude-sonnet-4-6`, `gpt-4o`, `claude-opus-4-7` all work.
-- Retries transient failures automatically; failed calls still count one run.
 - Token counts and cost land on the step row. `flowforge_get_run_steps`
   includes these.
 - No tools available here — this is a plain completion call. For agentic
-  behaviour with tools, use an inline function instead.
+  behaviour with tools, use an inline function or `step.agent`.
+
+### Rate-limit handling (429) — durable retry
+
+When the provider returns 429, FlowForge does **not** block the executor
+worker sleeping. Instead it expands the logical `step.ai` into a chain of
+real durable sub-steps and frees the worker between them:
+
+```
+foo                     # attempt 1 — rate-limited, output.__rate_limited = true
+foo/retry-sleep-1       # step.sleep for Retry-After seconds (± 20% jitter)
+foo/attempt-2           # attempt 2 — succeeds, normal AI response
+```
+
+Same mechanism applies inside `step.agent` — each `iter-N/think` grows its
+own attempt chain; earlier iterations stay memoised and are never replayed.
+
+**Knobs:**
+
+- `num_retries=N` kwarg on `step.ai(...)` / `step.agent(...)` — per-call
+  budget. Pass `num_retries=0` to disable retry and get an immediate
+  typed exception.
+- `FLOWFORGE_LLM_NUM_RETRIES` env var — workspace/worker default.
+  Falls back to `LITELLM_NUM_RETRIES` for back-compat. Default 5.
+- `FLOWFORGE_LLM_MAX_RETRY_DELAY` env var — per-attempt sleep ceiling in
+  seconds. Default 120.
+
+**Typed exception:** when retries exhaust, the SDK raises
+`flowforge.RateLimited(retry_after, provider, model, original, ...)`.
+Catchable via `except RateLimited`, `except RetryableError`, or `except
+StepFailed` (all three — linear hierarchy).
+
+```python
+from flowforge import RateLimited
+
+try:
+    result = await step.agent("research", ..., num_retries=5)
+except RateLimited as e:
+    # Fallback: switch provider, park the run, notify the user.
+    await step.send_event("fallback", name="rate_limit/park", data={"retry_after": e.retry_after})
+```
+
+### Proactive throttling (avoid 429s entirely)
+
+Declare a token-bucket pre-flight cap on `@flowforge.function(...)`:
+
+```python
+from flowforge import TokenRateLimit
+
+@flowforge.function(
+    id="research",
+    rate_limits=[TokenRateLimit("claude-sonnet-4-6", tokens_per_minute=25_000)],
+)
+async def research(ctx):
+    ...
+```
+
+The server estimates the request size via `litellm.token_counter` and, if
+the bucket is full, returns the same `__rate_limited` signal — the SDK
+loop absorbs it durably. No provider 429 round-trip. Recommended when
+you know your TPM tier (always cheaper than reactive retry).
 
 ## When to avoid steps
 

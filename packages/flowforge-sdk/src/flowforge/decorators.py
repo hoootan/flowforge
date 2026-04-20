@@ -5,7 +5,14 @@ import inspect
 from collections.abc import Awaitable, Callable
 from typing import Any, ParamSpec, TypeVar
 
-from flowforge.config import Concurrency, Debounce, FunctionConfig, RateLimit, Throttle
+from flowforge.config import (
+    Concurrency,
+    Debounce,
+    FunctionConfig,
+    RateLimit,
+    Throttle,
+    TokenRateLimit,
+)
 from flowforge.context import Context
 from flowforge.triggers import Trigger
 
@@ -31,6 +38,7 @@ class FlowForgeFunction:
         timeout: str = "5m",
         concurrency: Concurrency | None = None,
         rate_limit: RateLimit | None = None,
+        rate_limits: list[TokenRateLimit] | None = None,
         throttle: Throttle | None = None,
         debounce: Debounce | None = None,
         cancel_on: list[str] | None = None,
@@ -47,6 +55,7 @@ class FlowForgeFunction:
             timeout=timeout,
             concurrency=concurrency,
             rate_limit=rate_limit,
+            rate_limits=rate_limits or [],
             throttle=throttle,
             debounce=debounce,
             cancel_on=cancel_on or [],
@@ -79,6 +88,7 @@ def function(
     timeout: str = "5m",
     concurrency: Concurrency | None = None,
     rate_limit: RateLimit | None = None,
+    rate_limits: list[TokenRateLimit] | None = None,
     throttle: Throttle | None = None,
     debounce: Debounce | None = None,
     cancel_on: list[str] | None = None,
@@ -97,7 +107,10 @@ def function(
         retries: Number of retry attempts on failure (default: 3).
         timeout: Maximum execution time (default: "5m").
         concurrency: Concurrency limiting configuration.
-        rate_limit: Rate limiting configuration.
+        rate_limit: Rate limiting configuration (invocations per period).
+        rate_limits: Per-model token-budget limits enforced pre-flight on
+            LLM calls (see TokenRateLimit). Prevents 429s by absorbing
+            back-pressure into durable step.sleep waits.
         throttle: Throttle configuration.
         debounce: Debounce configuration.
         cancel_on: List of events that cancel running instances.
@@ -156,6 +169,7 @@ def function(
             timeout=timeout,
             concurrency=concurrency,
             rate_limit=rate_limit,
+            rate_limits=rate_limits,
             throttle=throttle,
             debounce=debounce,
             cancel_on=cancel_on,

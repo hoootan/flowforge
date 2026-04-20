@@ -2,18 +2,59 @@
 
 import hashlib
 import json
+import os
+import random
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any, TypeVar
 
 from flowforge.agent import AgentResult, AgentState
 from flowforge.agent_def import AgentDefinition
-from flowforge.exceptions import StepCompleted, StepFailed
+from flowforge.exceptions import RateLimited, StepCompleted, StepFailed
 from flowforge.network import Network, NetworkResult, NetworkState, RouterContext
 from flowforge.router import LLMRouter
 from flowforge.tools import SubAgentConfig, Tool
 
 T = TypeVar("T")
+
+# Defaults for LLM-call retry on rate-limit. See _resolve_num_retries /
+# _retry_sleep below.
+_DEFAULT_LLM_NUM_RETRIES = 5
+_DEFAULT_LLM_MAX_RETRY_DELAY = 120.0
+_RETRY_JITTER_RANGE = (0.8, 1.2)
+
+
+def _resolve_num_retries(explicit: int | None) -> int:
+    """
+    Determine the retry budget for an LLM call.
+
+    Precedence: explicit kwarg > FLOWFORGE_LLM_NUM_RETRIES env >
+    LITELLM_NUM_RETRIES env (back-compat) > default 5. Clamped to >= 0.
+    """
+    if explicit is not None:
+        return max(0, int(explicit))
+    for var in ("FLOWFORGE_LLM_NUM_RETRIES", "LITELLM_NUM_RETRIES"):
+        raw = os.environ.get(var)
+        if raw is None:
+            continue
+        try:
+            return max(0, int(raw))
+        except ValueError:
+            continue
+    return _DEFAULT_LLM_NUM_RETRIES
+
+
+def _retry_sleep(retry_after: float) -> float:
+    """Apply ±20% jitter and clamp to [1s, FLOWFORGE_LLM_MAX_RETRY_DELAY]."""
+    try:
+        max_delay = float(
+            os.environ.get("FLOWFORGE_LLM_MAX_RETRY_DELAY", _DEFAULT_LLM_MAX_RETRY_DELAY)
+        )
+    except ValueError:
+        max_delay = _DEFAULT_LLM_MAX_RETRY_DELAY
+    base = max(0.0, float(retry_after))
+    jittered = base * random.uniform(*_RETRY_JITTER_RANGE)
+    return max(1.0, min(jittered, max_delay))
 
 
 def _parse_duration(duration: str | timedelta) -> float:
@@ -183,6 +224,7 @@ class StepManager:
         tools: list[Any] | None = None,
         tool_choice: str | dict[str, Any] = "auto",
         max_tool_calls: int = 10,
+        num_retries: int | None = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
         """
@@ -256,12 +298,9 @@ class StepManager:
             if result.get("tool_calls"):
                 print(f"Tools called: {result['tool_calls']}")
         """
-        # Check for memoized result
-        is_memoized, result = self._get_memoized_result(step_id)
-        if is_memoized:
-            return result  # type: ignore
+        num_retries = _resolve_num_retries(num_retries)
 
-        # Build messages if prompt provided
+        # Build messages once (shared across attempts).
         if prompt is not None and messages is None:
             if isinstance(prompt, str):
                 messages = [{"role": "user", "content": prompt}]
@@ -271,7 +310,6 @@ class StepManager:
         if messages is None:
             raise ValueError("Either 'prompt' or 'messages' must be provided")
 
-        # Convert Tool objects to JSON-serializable OpenAI schema dicts
         tools_schema = None
         if tools:
             tools_schema = [
@@ -279,8 +317,79 @@ class StepManager:
                 for t in tools
             ]
 
-        # This will be executed by the server/executor with LLM client
-        ai_request = {
+        # Durable retry loop. Each attempt is its own memoised sub-step, with
+        # a step.sleep between attempts so the worker is freed during the
+        # wait. First attempt keeps the caller's step_id (back-compat); only
+        # subsequent attempts get an /attempt-N suffix.
+        last_signal: dict[str, Any] | None = None
+        for attempt in range(num_retries + 1):
+            attempt_id = step_id if attempt == 0 else f"{step_id}/attempt-{attempt + 1}"
+            result = await self._ai_attempt(
+                attempt_id,
+                model=model,
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                provider=provider,
+                use_cache=use_cache,
+                tools_schema=tools_schema,
+                tool_choice=tool_choice,
+                max_tool_calls=max_tool_calls,
+                extra_kwargs=kwargs,
+            )
+
+            if not (isinstance(result, dict) and result.get("__rate_limited")):
+                return result  # type: ignore[return-value]
+
+            last_signal = result
+            if attempt >= num_retries:
+                break
+
+            retry_after = float(result.get("__retry_after") or 1.0)
+            sleep_s = _retry_sleep(retry_after)
+            await self.sleep(
+                f"{step_id}/retry-sleep-{attempt + 1}",
+                duration=f"{sleep_s:.3f}s",
+            )
+
+        assert last_signal is not None  # loop always sets it before breaking
+        raise RateLimited(
+            step_id=step_id,
+            retry_after=last_signal.get("__retry_after"),
+            provider=str(last_signal.get("__provider") or ""),
+            model=str(last_signal.get("__model") or model),
+            original=str(last_signal.get("__error") or ""),
+            attempt=num_retries + 1,
+            max_attempts=num_retries + 1,
+        )
+
+    async def _ai_attempt(
+        self,
+        attempt_id: str,
+        *,
+        model: str,
+        messages: list[dict[str, str]],
+        max_tokens: int,
+        temperature: float,
+        provider: str | None,
+        use_cache: bool,
+        tools_schema: list[dict[str, Any]] | None,
+        tool_choice: str | dict[str, Any],
+        max_tool_calls: int,
+        extra_kwargs: dict[str, Any],
+    ) -> dict[str, Any]:
+        """
+        Execute a single LLM attempt.
+
+        On first call yields to the server (raises StepCompleted). On replay,
+        returns the memoised server response — either a normal AI response dict
+        or a rate-limit marker ({"__rate_limited": True, "__retry_after": ...}).
+        """
+        is_memoized, result = self._get_memoized_result(attempt_id)
+        if is_memoized:
+            return result  # type: ignore[return-value]
+
+        ai_request: dict[str, Any] = {
             "type": "ai",
             "model": model,
             "messages": messages,
@@ -291,10 +400,10 @@ class StepManager:
             "tools": tools_schema,
             "tool_choice": tool_choice,
             "max_tool_calls": max_tool_calls,
-            **kwargs,
+            **extra_kwargs,
         }
 
-        raise StepCompleted(step_id=step_id, result=ai_request)
+        raise StepCompleted(step_id=attempt_id, result=ai_request)
 
     async def wait_for_event(
         self,
@@ -459,6 +568,7 @@ class StepManager:
         checkpoint_strategy: str = "per_tool",
         max_tool_calls: int = 50,
         temperature: float = 0.7,
+        num_retries: int | None = None,
         _depth: int = 0,
         _max_depth: int = 3,
         **kwargs: Any,
@@ -550,7 +660,9 @@ class StepManager:
                 state.status = "max_tool_calls"
                 break
 
-            # Call LLM with current messages
+            # Call LLM with current messages. num_retries propagates per
+            # iteration — a 429 on iter-N/think only retries iter-N/think;
+            # earlier iterations stay memoised.
             think_step_id = f"{step_id}/iter-{state.iteration}/think"
             ai_response = await self.ai(
                 think_step_id,
@@ -560,6 +672,7 @@ class StepManager:
                 tools=tools,
                 tool_choice="auto",
                 max_tool_calls=max_tool_calls - state.tool_calls_count,
+                num_retries=num_retries,
                 **kwargs,
             )
 
@@ -1156,6 +1269,7 @@ class _StepProxy:
         tools: list[Any] | None = None,
         tool_choice: str | dict[str, Any] = "auto",
         max_tool_calls: int = 10,
+        num_retries: int | None = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
         return await self._get_manager().ai(
@@ -1170,6 +1284,7 @@ class _StepProxy:
             tools=tools,
             tool_choice=tool_choice,
             max_tool_calls=max_tool_calls,
+            num_retries=num_retries,
             **kwargs,
         )
 
@@ -1219,6 +1334,7 @@ class _StepProxy:
         checkpoint_strategy: str = "per_tool",
         max_tool_calls: int = 50,
         temperature: float = 0.7,
+        num_retries: int | None = None,
         _depth: int = 0,
         _max_depth: int = 3,
         **kwargs: Any,
@@ -1233,6 +1349,7 @@ class _StepProxy:
             checkpoint_strategy=checkpoint_strategy,
             max_tool_calls=max_tool_calls,
             temperature=temperature,
+            num_retries=num_retries,
             _depth=_depth,
             _max_depth=_max_depth,
             **kwargs,

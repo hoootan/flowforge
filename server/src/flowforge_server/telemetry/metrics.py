@@ -114,6 +114,12 @@ if PROMETHEUS_AVAILABLE:
         buckets=(0.1, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0),
     )
 
+    LLM_RETRIES_TOTAL = Counter(
+        "flowforge_llm_retries_total",
+        "Total LLM call retries triggered (rate-limit, timeout, connection)",
+        ["provider", "model", "reason"],
+    )
+
 
 @metrics_router.get("/metrics")
 async def get_metrics() -> Response:
@@ -253,6 +259,22 @@ def track_ai_request(
             model=model,
             type="output",
         ).inc(output_tokens)
+
+
+def track_llm_retry(provider: str, model: str, reason: str = "rate_limit") -> None:
+    """Track an LLM retry event.
+
+    Call once per retry attempt (not per terminal failure). Typical reasons:
+    "rate_limit", "timeout", "connection", "5xx".
+    """
+    if not PROMETHEUS_AVAILABLE:
+        return
+
+    LLM_RETRIES_TOTAL.labels(
+        provider=provider or "unknown",
+        model=model or "unknown",
+        reason=reason,
+    ).inc()
 
 
 class MetricsMiddleware(BaseHTTPMiddleware):

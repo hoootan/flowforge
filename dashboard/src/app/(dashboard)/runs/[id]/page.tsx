@@ -729,6 +729,11 @@ export default function RunDetailPage({
                               {step.step_type}
                             </Badge>
                             {getStatusBadge(step.status)}
+                            {step.output && (step.output as { __rate_limited?: boolean }).__rate_limited && (
+                              <Badge className="text-xs border-amber-300 bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                                429 · retry in {Math.round(Number((step.output as { __retry_after?: number }).__retry_after ?? 0))}s
+                              </Badge>
+                            )}
                           </div>
                           <span className="font-mono text-sm text-muted-foreground">
                             {formatDuration(step.started_at, step.ended_at)}
@@ -738,7 +743,13 @@ export default function RunDetailPage({
                         {/* Step output preview */}
                         {step.output && (
                           <div className="rounded-lg border bg-muted/50 p-3">
-                            {step.step_type === "ai" ? (
+                            {(step.output as { __rate_limited?: boolean }).__rate_limited ? (
+                              <div className="text-xs text-amber-700 dark:text-amber-300">
+                                Rate-limited by {String((step.output as { __provider?: string }).__provider ?? "provider")} on {String((step.output as { __model?: string }).__model ?? "model")}. The SDK retry loop will sleep and re-attempt. {(step.output as { __error?: string }).__error && (
+                                  <span className="text-muted-foreground block mt-1">{(step.output as { __error?: string }).__error}</span>
+                                )}
+                              </div>
+                            ) : step.step_type === "ai" ? (
                               <div className="space-y-2">
                                 {(step.output as { content?: string }).content && (
                                   <p className="text-sm">{(step.output as { content?: string }).content}</p>

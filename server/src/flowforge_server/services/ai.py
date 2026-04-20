@@ -143,6 +143,75 @@ def calculate_cost(model: str, prompt_tokens: int, completion_tokens: int) -> fl
     return round(input_cost + output_cost, 6)
 
 
+def _estimate_prompt_tokens(model: str, messages: list[dict[str, Any]]) -> int:
+    """
+    Estimate prompt tokens for a request (for pre-flight token-bucket sizing).
+
+    Uses litellm.token_counter when available; falls back to a ~4-chars-per-
+    token heuristic otherwise. Overestimating slightly is safe (just means
+    we throttle marginally earlier than strictly necessary).
+    """
+    try:
+        tc = getattr(_get_litellm(), "token_counter", None)
+        if tc is not None:
+            return int(tc(model=model, messages=messages))
+    except Exception:
+        pass
+    total_chars = 0
+    for m in messages:
+        content = m.get("content") if isinstance(m, dict) else None
+        if isinstance(content, str):
+            total_chars += len(content)
+    return max(1, total_chars // 4)
+
+
+def _is_rate_limit_error(exc: BaseException) -> bool:
+    """
+    Detect provider rate-limit errors (HTTP 429) in a provider-agnostic way.
+
+    Checks:
+      1. `litellm.RateLimitError` by class (covers Anthropic, OpenAI, Google,
+         Bedrock, Vertex — every provider LiteLLM wraps).
+      2. `status_code == 429` on any other exception.
+    """
+    try:
+        rate_limit_cls = getattr(_get_litellm(), "RateLimitError", None)
+        if rate_limit_cls is not None and isinstance(exc, rate_limit_cls):
+            return True
+    except Exception:
+        pass
+    return getattr(exc, "status_code", None) == 429
+
+
+def _parse_retry_after(exc: BaseException) -> float | None:
+    """
+    Extract a Retry-After value from a rate-limit exception.
+
+    Priority: `response.headers["retry-after"]` > `exc.retry_after` attr.
+    Returns seconds as float, or None if no hint was provided.
+    """
+    response = getattr(exc, "response", None)
+    if response is not None:
+        headers = getattr(response, "headers", None)
+        if headers is not None:
+            try:
+                raw = headers.get("retry-after") or headers.get("Retry-After")
+            except Exception:
+                raw = None
+            if raw is not None:
+                try:
+                    return float(raw)
+                except (TypeError, ValueError):
+                    pass
+    attr = getattr(exc, "retry_after", None)
+    if attr is not None:
+        try:
+            return float(attr)
+        except (TypeError, ValueError):
+            pass
+    return None
+
+
 def detect_provider(model: str) -> str:
     """Detect the provider from the model name."""
     model_lower = model.lower()
@@ -323,6 +392,8 @@ class AIService:
         response_model: type[T] | None = None,
         tenant_id: uuid.UUID | None = None,
         session: AsyncSession | None = None,
+        function_id: str | None = None,
+        rate_limits: list[dict[str, Any]] | None = None,
         **kwargs: Any,
     ) -> AIResponse | T:
         """
@@ -371,6 +442,50 @@ class AIService:
         provider = detect_provider(model)
         start_time = time.time()
 
+        # Pre-flight token-bucket check. If the declared per-model TPM would
+        # be exceeded, short-circuit with the same structured rate-limit
+        # signal we return on 429 — the SDK's durable retry loop will sleep
+        # and try again. "Proactive throttling > reactive retry."
+        if rate_limits and tenant_id and function_id:
+            matching = [rl for rl in rate_limits if rl.get("model") == model]
+            if matching:
+                from flowforge_server.services.token_bucket import check_and_reserve
+
+                estimated = max(1, max_tokens) + _estimate_prompt_tokens(
+                    model, messages
+                )
+                redis_client = await self._get_redis()
+                for rl in matching:
+                    allowed, wait_s = await check_and_reserve(
+                        redis_client,
+                        tenant_id=tenant_id,
+                        function_id=function_id,
+                        model=model,
+                        estimated_tokens=estimated,
+                        tokens_per_minute=int(rl.get("tokens_per_minute", 0)),
+                        grouping_key=rl.get("key"),
+                    )
+                    if not allowed:
+                        return AIResponse(
+                            content="",
+                            model=model,
+                            provider=provider,
+                            usage=AIUsage(model=model, provider=provider),
+                            finish_reason="rate_limited",
+                            tool_calls=[],
+                            raw_response={
+                                "__rate_limited": True,
+                                "__retry_after": wait_s,
+                                "__provider": provider,
+                                "__model": model,
+                                "__error": (
+                                    f"token-bucket back-pressure: "
+                                    f"{rl.get('tokens_per_minute')} tokens/min "
+                                    f"limit on {model}"
+                                ),
+                            },
+                        )
+
         # Convert tools to provider-specific format if provided
         tool_schemas = None
         if tools:
@@ -404,154 +519,118 @@ class AIService:
             credential_override = resolved.credential
             credential_provider_id = resolved.provider_id
 
-        # Retry loop
-        last_error = None
-        for attempt in range(max_retries):
-            try:
-                # Build completion params
-                completion_params = {
-                    "model": litellm_model,
-                    "messages": messages,
-                    "max_tokens": max_tokens,
-                    "temperature": temperature,
-                    **kwargs,
-                }
+        # Build completion params. Note `num_retries=0` is passed explicitly to
+        # disable LiteLLM's inline retry loop — retries are handled durably in
+        # the SDK (step.ai loop + step.sleep) to avoid blocking executor
+        # workers during long Retry-After windows.
+        completion_params = {
+            "model": litellm_model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "num_retries": 0,
+            **kwargs,
+        }
+        if credential_override:
+            completion_params["api_key"] = credential_override
+        if tool_schemas:
+            completion_params["tools"] = tool_schemas
+            if tool_choice != "auto":
+                completion_params["tool_choice"] = tool_choice
 
-                # Add credential override
-                if credential_override:
-                    completion_params["api_key"] = credential_override
-
-                # Add tools if provided
-                if tool_schemas:
-                    if provider == "anthropic":
-                        completion_params["tools"] = tool_schemas
-                    else:
-                        completion_params["tools"] = tool_schemas
-
-                    # Add tool_choice if specified
-                    if tool_choice != "auto":
-                        completion_params["tool_choice"] = tool_choice
-
-                response = await _get_litellm().acompletion(**completion_params)
-
-                latency_ms = int((time.time() - start_time) * 1000)
-
-                # Extract usage
-                prompt_tokens = response.usage.prompt_tokens if response.usage else 0
-                completion_tokens = response.usage.completion_tokens if response.usage else 0
-                total_tokens = response.usage.total_tokens if response.usage else 0
-
-                # Calculate cost (use provider registry if available)
-                if self._provider_registry and session and tenant_id:
-                    # Use async pricing with tenant-specific/global custom pricing
-                    cost = await self._provider_registry.calculate_cost_async(
-                        session, tenant_id, model, prompt_tokens, completion_tokens
-                    )
-                elif self._provider_registry:
-                    # Fallback to sync pricing (defaults only)
-                    cost = self._provider_registry.calculate_cost(
-                        model, prompt_tokens, completion_tokens
-                    )
-                else:
-                    cost = calculate_cost(model, prompt_tokens, completion_tokens)
-
-                # Track health
+        try:
+            response = await _get_litellm().acompletion(**completion_params)
+        except Exception as e:
+            if _is_rate_limit_error(e):
+                # Return a structured rate-limit marker instead of raising so
+                # the SDK's step.ai loop can durably sleep + retry via
+                # step.sleep — freeing the executor worker in the meantime.
                 if self._health_checker:
-                    self._health_checker.mark_success(provider, latency_ms)
-
-                usage = AIUsage(
-                    prompt_tokens=prompt_tokens,
-                    completion_tokens=completion_tokens,
-                    total_tokens=total_tokens,
-                    cost_usd=cost,
+                    self._health_checker.mark_rate_limited(provider)
+                return AIResponse(
+                    content="",
                     model=model,
                     provider=provider,
-                    latency_ms=latency_ms,
+                    usage=AIUsage(model=model, provider=provider),
+                    finish_reason="rate_limited",
+                    tool_calls=[],
+                    raw_response={
+                        "__rate_limited": True,
+                        "__retry_after": _parse_retry_after(e),
+                        "__provider": provider,
+                        "__model": model,
+                        "__error": str(e),
+                    },
+                )
+            if self._health_checker:
+                self._health_checker.mark_error(provider, str(e))
+            raise
+
+        latency_ms = int((time.time() - start_time) * 1000)
+
+        # Extract usage
+        prompt_tokens = response.usage.prompt_tokens if response.usage else 0
+        completion_tokens = response.usage.completion_tokens if response.usage else 0
+        total_tokens = response.usage.total_tokens if response.usage else 0
+
+        # Calculate cost (use provider registry if available)
+        if self._provider_registry and session and tenant_id:
+            cost = await self._provider_registry.calculate_cost_async(
+                session, tenant_id, model, prompt_tokens, completion_tokens
+            )
+        elif self._provider_registry:
+            cost = self._provider_registry.calculate_cost(
+                model, prompt_tokens, completion_tokens
+            )
+        else:
+            cost = calculate_cost(model, prompt_tokens, completion_tokens)
+
+        if self._health_checker:
+            self._health_checker.mark_success(provider, latency_ms)
+
+        usage = AIUsage(
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
+            cost_usd=cost,
+            model=model,
+            provider=provider,
+            latency_ms=latency_ms,
+        )
+
+        # Parse tool calls if present
+        tool_calls_list = []
+        message = response.choices[0].message
+        if hasattr(message, "tool_calls") and message.tool_calls:
+            for tc in message.tool_calls:
+                args = tc.function.arguments
+                if isinstance(args, str):
+                    args = json.loads(args)
+                tool_calls_list.append(
+                    ToolCall(
+                        id=tc.id,
+                        name=tc.function.name,
+                        arguments=args,
+                    )
                 )
 
-                # Parse tool calls if present
-                tool_calls_list = []
-                message = response.choices[0].message
-                if hasattr(message, "tool_calls") and message.tool_calls:
-                    for tc in message.tool_calls:
-                        # Parse arguments (may be string or dict)
-                        args = tc.function.arguments
-                        if isinstance(args, str):
-                            import json
-                            args = json.loads(args)
+        result = AIResponse(
+            content=message.content or "",
+            model=response.model or model,
+            provider=provider,
+            usage=usage,
+            finish_reason=response.choices[0].finish_reason,
+            tool_calls=tool_calls_list,
+            raw_response={},
+        )
 
-                        tool_calls_list.append(
-                            ToolCall(
-                                id=tc.id,
-                                name=tc.function.name,
-                                arguments=args,
-                            )
-                        )
+        if use_cache and cache_key:
+            await self._set_cached(cache_key, result, cache_ttl)
 
-                result = AIResponse(
-                    content=message.content or "",
-                    model=response.model or model,
-                    provider=provider,
-                    usage=usage,
-                    finish_reason=response.choices[0].finish_reason,
-                    tool_calls=tool_calls_list,
-                    raw_response={},
-                )
+        if credential_provider_id:
+            self._record_provider_use(credential_provider_id)
 
-                # Cache successful response
-                if use_cache and cache_key:
-                    await self._set_cached(cache_key, result, cache_ttl)
-
-                if credential_provider_id:
-                    self._record_provider_use(credential_provider_id)
-
-                return result
-
-            except Exception as e:
-                last_error = e
-                error_str = str(e).lower()
-
-                # Check if rate limited
-                is_rate_limit = (
-                    "rate" in error_str
-                    or "quota" in error_str
-                    or "429" in error_str
-                    or "too many" in error_str
-                )
-
-                # Track health on errors
-                if self._health_checker:
-                    if is_rate_limit:
-                        self._health_checker.mark_rate_limited(provider)
-                    else:
-                        self._health_checker.mark_error(provider, str(e))
-
-                if is_rate_limit and attempt < max_retries - 1:
-                    # Exponential backoff for rate limits
-                    wait_time = min(2 ** (attempt + 1), 60)
-                    await asyncio.sleep(wait_time)
-                    continue
-
-                # Check if retryable
-                is_retryable = (
-                    is_rate_limit
-                    or "timeout" in error_str
-                    or "connection" in error_str
-                    or "500" in error_str
-                    or "502" in error_str
-                    or "503" in error_str
-                )
-
-                if is_retryable and attempt < max_retries - 1:
-                    # Short backoff for other retryable errors
-                    await asyncio.sleep(1 * (attempt + 1))
-                    continue
-
-                # Non-retryable or max retries exceeded
-                break
-
-        # All retries failed
-        raise last_error or Exception("AI completion failed")
+        return result
 
     async def complete_stream(
         self,

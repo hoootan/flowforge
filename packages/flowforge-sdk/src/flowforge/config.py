@@ -76,6 +76,45 @@ class Throttle:
 
 
 @dataclass
+class TokenRateLimit:
+    """
+    Per-model token-budget rate limit for LLM calls inside a function.
+
+    Caps the tokens consumed per minute for a specific model. Enforced as a
+    pre-flight token-bucket check inside the server's AI service: requests
+    that would exceed the bucket wait durably (via step.sleep inside the SDK
+    retry loop) instead of hitting the provider and getting a 429.
+
+    Example:
+        @flowforge.function(
+            id="research",
+            rate_limits=[
+                TokenRateLimit("claude-sonnet-4-6", tokens_per_minute=25_000),
+            ],
+        )
+    """
+
+    model: str
+    """Model name the limit applies to (e.g. "claude-sonnet-4-6")."""
+
+    tokens_per_minute: int
+    """Maximum tokens consumed per minute."""
+
+    key: str | None = None
+    """
+    Optional grouping key expression (e.g. "event.data.tenant_id") to split
+    the bucket across values. When None, the bucket is per function+model.
+    """
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "model": self.model,
+            "tokens_per_minute": self.tokens_per_minute,
+            "key": self.key,
+        }
+
+
+@dataclass
 class Debounce:
     """
     Debounce configuration for a function.
@@ -130,6 +169,9 @@ class FunctionConfig:
     rate_limit: RateLimit | None = None
     """Rate limiting configuration."""
 
+    rate_limits: list["TokenRateLimit"] = field(default_factory=list)
+    """Per-model token-budget limits (AC9)."""
+
     throttle: Throttle | None = None
     """Throttle configuration."""
 
@@ -157,6 +199,8 @@ class FunctionConfig:
             config["concurrency"] = self.concurrency.to_dict()
         if self.rate_limit:
             config["rate_limit"] = self.rate_limit.to_dict()
+        if self.rate_limits:
+            config["rate_limits"] = [rl.to_dict() for rl in self.rate_limits]
         if self.throttle:
             config["throttle"] = self.throttle.to_dict()
         if self.debounce:

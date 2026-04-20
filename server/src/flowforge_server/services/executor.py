@@ -720,6 +720,20 @@ class Executor:
                 },
             )
 
+            # Look up declarative TokenRateLimits on the function for pre-flight
+            # token-bucket throttling. Reuses the Function.config JSONB blob —
+            # no schema change.
+            rate_limits_cfg: list[dict[str, Any]] | None = None
+            try:
+                fn_row = await session.execute(
+                    select(Function).where(Function.id == run.function_id)
+                )
+                fn_obj = fn_row.scalar_one_or_none()
+                if fn_obj and isinstance(fn_obj.config, dict):
+                    rate_limits_cfg = fn_obj.config.get("rate_limits")
+            except Exception:
+                rate_limits_cfg = None
+
             try:
                 # Execute the AI call via LiteLLM with tenant-specific credentials
                 ai_service = self._get_ai_service()
@@ -733,42 +747,90 @@ class Executor:
                     tool_choice=tool_choice,
                     tenant_id=run.tenant_id,
                     session=session,
+                    function_id=job.function_id,
+                    rate_limits=rate_limits_cfg,
                 )
 
-                # Convert AIResponse to dict for storage
-                ai_response = response.to_dict()
+                # Detect the structured rate-limit marker. AIService returns
+                # this instead of raising on 429 so the SDK's step.ai loop can
+                # durably sleep + retry via step.sleep (freeing the worker).
+                raw = response.raw_response or {}
+                if raw.get("__rate_limited"):
+                    ai_response = {
+                        "__rate_limited": True,
+                        "__retry_after": raw.get("__retry_after"),
+                        "__provider": raw.get("__provider") or response.provider,
+                        "__model": raw.get("__model") or model,
+                        "__error": raw.get("__error"),
+                    }
+                    # Track the retry for observability. The SDK loop will emit
+                    # a step.sleep next, then re-attempt.
+                    try:
+                        from flowforge_server.telemetry.metrics import (
+                            track_llm_retry,
+                        )
 
-                # Record usage to database
-                usage_record = UsageRecord(
-                    tenant_id=run.tenant_id,
-                    run_id=run.id,
-                    model=response.usage.model or model,
-                    provider=response.usage.provider or response.provider,
-                    prompt_tokens=response.usage.prompt_tokens,
-                    completion_tokens=response.usage.completion_tokens,
-                    total_tokens=response.usage.total_tokens,
-                    cost_usd=response.usage.cost_usd,
-                    latency_ms=response.usage.latency_ms,
-                    request_type="completion" if not tools else "tool_call",
-                    extra_data={
-                        "step_id": step.step_id,
-                        "tool_calls_count": len(response.tool_calls) if response.tool_calls else 0,
-                    },
-                )
-                session.add(usage_record)
+                        track_llm_retry(
+                            provider=ai_response["__provider"],
+                            model=ai_response["__model"],
+                            reason="rate_limit",
+                        )
+                    except Exception:
+                        pass
+                    print(
+                        f"[Executor] AI step rate-limited: model={model} "
+                        f"retry_after={ai_response['__retry_after']}s "
+                        f"step_id={step.step_id}"
+                    )
+                    # Publish an SSE event so the live-activity panel reacts.
+                    try:
+                        await publish_run_event(
+                            str(run.id),
+                            RunEventType.THINKING,
+                            {
+                                "run_id": str(run.id),
+                                "step_id": step.step_id,
+                                "model": model,
+                                "status": "rate_limited",
+                                "retry_after": ai_response["__retry_after"],
+                            },
+                        )
+                    except Exception:
+                        pass
+                    # Skip UsageRecord: no tokens consumed.
+                else:
+                    # Normal successful AI response.
+                    ai_response = response.to_dict()
 
-                # Log tool calls if present
-                tool_calls_info = ""
-                if response.tool_calls:
-                    tool_calls_info = f", tools_called={len(response.tool_calls)}"
+                    usage_record = UsageRecord(
+                        tenant_id=run.tenant_id,
+                        run_id=run.id,
+                        model=response.usage.model or model,
+                        provider=response.usage.provider or response.provider,
+                        prompt_tokens=response.usage.prompt_tokens,
+                        completion_tokens=response.usage.completion_tokens,
+                        total_tokens=response.usage.total_tokens,
+                        cost_usd=response.usage.cost_usd,
+                        latency_ms=response.usage.latency_ms,
+                        request_type="completion" if not tools else "tool_call",
+                        extra_data={
+                            "step_id": step.step_id,
+                            "tool_calls_count": len(response.tool_calls) if response.tool_calls else 0,
+                        },
+                    )
+                    session.add(usage_record)
 
-                print(
-                    f"[Executor] AI step completed: model={model}, "
-                    f"tokens={response.usage.total_tokens}, "
-                    f"cost=${response.usage.cost_usd:.6f}, "
-                    f"latency={response.usage.latency_ms}ms"
-                    f"{tool_calls_info}"
-                )
+                    tool_calls_info = ""
+                    if response.tool_calls:
+                        tool_calls_info = f", tools_called={len(response.tool_calls)}"
+
+                    print(
+                        f"[Executor] AI step completed: model={model}, "
+                        f"tokens={response.usage.total_tokens}, "
+                        f"cost=${response.usage.cost_usd:.6f}, "
+                        f"latency={response.usage.latency_ms}ms"
+                        f"{tool_calls_info}"
+                    )
 
             except ImportError as e:
                 # LiteLLM not installed - fall back to simulated response
