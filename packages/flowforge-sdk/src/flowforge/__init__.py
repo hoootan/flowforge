@@ -9,6 +9,7 @@ from flowforge.config import (
     FunctionConfig,
     RateLimit,
     Throttle,
+    TokenRateLimit,
     concurrency,
     rate_limit,
     throttle,
@@ -18,6 +19,7 @@ from flowforge.decorators import function
 from flowforge.exceptions import (
     FlowForgeError,
     NonRetryableError,
+    RateLimited,
     RetryableError,
     StepCompleted,
     StepError,
@@ -66,6 +68,7 @@ __all__ = [
     # Configuration
     "Concurrency",
     "RateLimit",
+    "TokenRateLimit",
     "Throttle",
     "FunctionConfig",
     "concurrency",
@@ -81,5 +84,6 @@ __all__ = [
     "StepFailed",
     "StepTimeout",
     "RetryableError",
+    "RateLimited",
     "NonRetryableError",
 ]

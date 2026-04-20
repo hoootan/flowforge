@@ -137,19 +137,31 @@ class ExecutionEngine:
             )
 
         except StepFailed as e:
-            # Step failed, let server handle retry
+            # Step failed, let server handle retry.
+            # Preserve the actual exception class (StepFailed | RetryableError |
+            # RateLimited) so the server / dashboard can distinguish them.
+            error_payload: dict[str, Any] = {
+                "type": type(e).__name__,
+                "message": str(e.original_error),
+                "step_id": e.step_id,
+                "attempt": e.attempt,
+                "max_attempts": e.max_attempts,
+                "retryable": True,
+                "traceback": traceback.format_exc(),
+            }
+            retry_after = getattr(e, "retry_after", None)
+            if retry_after is not None:
+                error_payload["retry_after"] = retry_after
+            provider = getattr(e, "provider", None)
+            if provider:
+                error_payload["provider"] = provider
+            model = getattr(e, "model", None)
+            if model:
+                error_payload["model"] = model
             return ExecutionResult(
                 status="error",
                 step_id=e.step_id,
-                error={
-                    "type": "StepFailed",
-                    "message": str(e.original_error),
-                    "step_id": e.step_id,
-                    "attempt": e.attempt,
-                    "max_attempts": e.max_attempts,
-                    "retryable": True,
-                    "traceback": traceback.format_exc(),
-                },
+                error=error_payload,
             )
 
         except NonRetryableError as e:

@@ -57,7 +57,7 @@ Quick-triage table. Follow the reference link for nuance.
 | Goal | Use | Notes |
 |------|-----|-------|
 | Durable side effect (API call, DB write) | `step.run(id, fn, *args)` | Memoised; idempotent on replay |
-| Let an LLM do something | `step.ai(id, model=, prompt=)` | Built-in retries, cost tracked |
+| Let an LLM do something | `step.ai(id, model=, prompt=)` | Durable 429 retry (attempt-N/retry-sleep-N chain), typed `RateLimited` on exhaustion |
 | Pause until an event fires | `step.wait_for_event(id, event=, match=)` | Resumed by matching event; see `references/step-primitives.md` for match semantics |
 | Call another function | `step.invoke(id, function_id=, data=)` | Blocks until target run completes |
 | Emit an event (fanout) | `step.send_event(id, name=, data=)` | Non-blocking; other functions pick it up |
@@ -169,6 +169,13 @@ Quick pointers; full playbooks in `references/debugging.md`:
   health; check Redis is reachable; `flowforge_cancel_run` if truly wedged.
 - Tool calls silently dropped in an agent run → check `requires_approval`
   on the tool; pending approvals live in `flowforge_list_approvals`.
+- `iter-N/think` sub-step finished at 0ms with `rate_limit_error` → server
+  on a pre-retry-loop build. On current builds, 429s are durable:
+  expect an `attempt-1` (rate-limited) + `retry-sleep-1` + `attempt-2`…
+  chain instead. Set `num_retries=N` on `step.ai`/`step.agent` or
+  `FLOWFORGE_LLM_NUM_RETRIES` on the worker. For proactive back-pressure,
+  add `rate_limits=[TokenRateLimit(model, tokens_per_minute=N)]` on the
+  function. Typed exception on exhaustion: `flowforge.RateLimited`.
 
 ## Getting the answer right on the first try
 

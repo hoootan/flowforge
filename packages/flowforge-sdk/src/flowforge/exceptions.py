@@ -58,17 +58,67 @@ class StepTimeout(StepError):
         super().__init__(step_id, f"timed out after {timeout_seconds}s")
 
 
-class RetryableError(FlowForgeError):
+class RetryableError(StepFailed):
     """
     Raised to indicate an error that should trigger a retry.
 
-    Use this to signal that the current step should be retried,
-    e.g., for transient network errors or rate limits.
+    Used for transient failures (rate limits, brief network issues). Subclasses
+    StepFailed so existing `except StepFailed` catchers still catch it; callers
+    that want retry-specific behaviour can catch RetryableError directly.
     """
 
-    def __init__(self, message: str, retry_after: float | None = None) -> None:
+    def __init__(
+        self,
+        message: str = "",
+        *,
+        step_id: str = "",
+        retry_after: float | None = None,
+        attempt: int = 1,
+        max_attempts: int = 1,
+    ) -> None:
         self.retry_after = retry_after
-        super().__init__(message)
+        super().__init__(step_id, message, attempt=attempt, max_attempts=max_attempts)
+
+
+class RateLimited(RetryableError):
+    """
+    Raised when an LLM provider rate-limited the request and retries exhausted.
+
+    Carries enough context for callers to decide follow-up behaviour (switch
+    providers, surface to the user, park the run).
+
+    Aliases:
+      - ``self.original`` / ``self.original_error`` — both point at the
+        underlying provider exception (or its string form). Error payloads
+        serialised via ``str(e.original_error)`` therefore surface the real
+        root cause, not the synthesised "rate limited by …" banner.
+    """
+
+    def __init__(
+        self,
+        *,
+        step_id: str = "",
+        retry_after: float | None = None,
+        provider: str = "",
+        model: str = "",
+        original: Exception | str = "",
+        attempt: int = 1,
+        max_attempts: int = 1,
+    ) -> None:
+        self.provider = provider
+        self.model = model
+        self.original = original
+        # Pass `original` through StepFailed so `e.original_error` reflects
+        # the underlying provider failure. The exception's __str__ still
+        # includes a readable banner via the StepError base message.
+        banner = f"rate limited by {provider or 'provider'} on {model or 'model'}"
+        super().__init__(
+            original if original else banner,
+            step_id=step_id,
+            retry_after=retry_after,
+            attempt=attempt,
+            max_attempts=max_attempts,
+        )
 
 
 class NonRetryableError(FlowForgeError):

@@ -75,6 +75,35 @@ Symptom → diagnosis:
   your tool took too long. If the work is legitimately slow, move it to a
   webhook tool.
 
+## Rate-limit (429) signatures
+
+FlowForge expands rate-limited LLM calls into a durable chain:
+`{step_id}` (first attempt, marked rate-limited) → `{step_id}/retry-sleep-1`
+→ `{step_id}/attempt-2` → … until success or exhaustion.
+
+- *"Sub-step finished in 0ms with `rate_limit_error`"* on old runs → server
+  on a pre-retry-loop build. Redeploy; re-run with `flowforge_retry_run`.
+- *"Run is stuck in `running` with a `.../retry-sleep-N` child"* — expected.
+  The worker is free; the executor is waiting on the durable sleep. Should
+  wake within `Retry-After` seconds. Check the step's `output.duration_seconds`.
+- *"`RateLimited` raised, run failed"* — retries exhausted. Inspect the
+  last-attempt step's `output.__retry_after` / `output.__provider`. Either
+  bump `num_retries` on the call, raise `FLOWFORGE_LLM_NUM_RETRIES`, lower
+  the declared `rate_limits=[TokenRateLimit(...)]` on the function, or
+  upgrade the provider tier.
+- *"Anthropic TPM never recovers"* — check
+  `flowforge_llm_retries_total{provider="anthropic"}` in Prometheus. If it
+  increases faster than real load, you're pointed at a deprecated key /
+  wrong tier / shared org.
+- *"Token-bucket says wait but provider has capacity"* — your declared
+  `tokens_per_minute` is too low for the actual tier. Either raise it or
+  remove the declaration (rely on reactive 429 retry instead).
+
+Knobs (all live on the worker, not the server):
+
+- `FLOWFORGE_LLM_NUM_RETRIES` (default 5) / `LITELLM_NUM_RETRIES` (fallback).
+- `FLOWFORGE_LLM_MAX_RETRY_DELAY` (default 120s per attempt).
+
 ## Stuck runs
 
 - `docker compose -f docker-compose.prod.yml ps` — check executor and
