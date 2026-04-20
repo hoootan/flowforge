@@ -228,11 +228,21 @@ class StepManager:
         **kwargs: Any,
     ) -> dict[str, Any]:
         """
-        Execute an LLM call with automatic retry and cost tracking.
+        Execute an LLM call with durable rate-limit retry and cost tracking.
 
-        Supports multiple providers (OpenAI, Anthropic, etc.) with
-        unified interface. Automatically retries on rate limits
-        and transient errors.
+        Supports multiple providers (OpenAI, Anthropic, etc.) with a unified
+        interface. On provider 429 (or pre-flight token-bucket exhaustion),
+        expands into a durable chain of ``{step_id}`` (first attempt,
+        rate-limited) → ``{step_id}/retry-sleep-1`` → ``{step_id}/attempt-2``
+        → … driven by Retry-After with ±20% jitter. The worker is freed
+        during each sleep. When retries exhaust, raises
+        :class:`flowforge.RateLimited`.
+
+        **Narrower than you might expect:** only provider 429 responses are
+        retried here. Non-rate-limit transient errors (timeouts, 5xx,
+        connection failures) propagate immediately as ``StepFailed`` and
+        are subject to the function-level retry policy set on
+        ``@flowforge.function(retries=N)``.
 
         Args:
             step_id: Unique identifier for this AI step.
@@ -246,6 +256,10 @@ class StepManager:
             tools: List of Tool objects that the LLM can call.
             tool_choice: How the LLM should choose tools ("auto", "required", "none", or specific tool).
             max_tool_calls: Maximum number of tool calls allowed in this step.
+            num_retries: Override the rate-limit retry budget for this call.
+                ``None`` (default) reads ``FLOWFORGE_LLM_NUM_RETRIES`` →
+                ``LITELLM_NUM_RETRIES`` → 5. ``0`` disables retry and
+                raises ``RateLimited`` on the first 429.
             **kwargs: Additional provider-specific parameters.
 
         Returns:

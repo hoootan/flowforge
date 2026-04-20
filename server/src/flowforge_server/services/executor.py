@@ -69,6 +69,12 @@ class Executor:
         self._ai_service: AIService | None = None
         self._inline_executor: InlineExecutor | None = None
         self._event_stream: RedisEventStream | None = None
+        # Short-TTL cache for per-function rate_limits config so long agent
+        # runs (many AI steps on the same function) don't re-query Function
+        # on every step. Keyed by function_id, value is
+        # (expires_at_monotonic, rate_limits_cfg_or_None).
+        self._rate_limits_cache: dict[str, tuple[float, list[dict[str, Any]] | None]] = {}
+        self._rate_limits_cache_ttl: float = 30.0
 
     async def _get_http_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""
@@ -602,6 +608,42 @@ class Executor:
             run.steps.append(step)
             return step
 
+    async def _get_rate_limits_cfg(
+        self,
+        session: AsyncSession,
+        function_id_str: str,
+        function_pk: Any,
+    ) -> list[dict[str, Any]] | None:
+        """
+        Fetch the ``rate_limits`` block from a Function's config with a short
+        TTL cache, so back-to-back AI steps on the same function don't
+        re-query the DB. Cache TTL is ~30s (self._rate_limits_cache_ttl).
+
+        ``function_id_str`` is the cache key (the user-facing string id);
+        ``function_pk`` is the PK UUID used in the fallback SELECT.
+        """
+        now = asyncio.get_event_loop().time()
+        cached = self._rate_limits_cache.get(function_id_str)
+        if cached and cached[0] > now:
+            return cached[1]
+
+        cfg: list[dict[str, Any]] | None = None
+        try:
+            fn_row = await session.execute(
+                select(Function).where(Function.id == function_pk)
+            )
+            fn_obj = fn_row.scalar_one_or_none()
+            if fn_obj and isinstance(fn_obj.config, dict):
+                cfg = fn_obj.config.get("rate_limits")
+        except Exception:
+            cfg = None
+
+        self._rate_limits_cache[function_id_str] = (
+            now + self._rate_limits_cache_ttl,
+            cfg,
+        )
+        return cfg
+
     async def _handle_special_step(
         self,
         session: AsyncSession,
@@ -721,18 +763,12 @@ class Executor:
             )
 
             # Look up declarative TokenRateLimits on the function for pre-flight
-            # token-bucket throttling. Reuses the Function.config JSONB blob —
-            # no schema change.
-            rate_limits_cfg: list[dict[str, Any]] | None = None
-            try:
-                fn_row = await session.execute(
-                    select(Function).where(Function.id == run.function_id)
-                )
-                fn_obj = fn_row.scalar_one_or_none()
-                if fn_obj and isinstance(fn_obj.config, dict):
-                    rate_limits_cfg = fn_obj.config.get("rate_limits")
-            except Exception:
-                rate_limits_cfg = None
+            # token-bucket throttling. Reuses the Function.config JSONB blob.
+            # Cached per-function with a short TTL so long agent runs (many
+            # AI steps on the same function) don't hit the DB on every step.
+            rate_limits_cfg = await self._get_rate_limits_cfg(
+                session, job.function_id, run.function_id
+            )
 
             try:
                 # Execute the AI call via LiteLLM with tenant-specific credentials

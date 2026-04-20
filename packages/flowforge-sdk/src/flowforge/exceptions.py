@@ -86,6 +86,12 @@ class RateLimited(RetryableError):
 
     Carries enough context for callers to decide follow-up behaviour (switch
     providers, surface to the user, park the run).
+
+    Aliases:
+      - ``self.original`` / ``self.original_error`` — both point at the
+        underlying provider exception (or its string form). Error payloads
+        serialised via ``str(e.original_error)`` therefore surface the real
+        root cause, not the synthesised "rate limited by …" banner.
     """
 
     def __init__(
@@ -102,9 +108,12 @@ class RateLimited(RetryableError):
         self.provider = provider
         self.model = model
         self.original = original
-        message = f"rate limited by {provider or 'provider'} on {model or 'model'}"
+        # Pass `original` through StepFailed so `e.original_error` reflects
+        # the underlying provider failure. The exception's __str__ still
+        # includes a readable banner via the StepError base message.
+        banner = f"rate limited by {provider or 'provider'} on {model or 'model'}"
         super().__init__(
-            message,
+            original if original else banner,
             step_id=step_id,
             retry_after=retry_after,
             attempt=attempt,

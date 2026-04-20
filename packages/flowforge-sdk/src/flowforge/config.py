@@ -102,8 +102,15 @@ class TokenRateLimit:
 
     key: str | None = None
     """
-    Optional grouping key expression (e.g. "event.data.tenant_id") to split
-    the bucket across values. When None, the bucket is per function+model.
+    Optional *literal* grouping key used as a suffix on the Redis bucket so
+    distinct values get distinct buckets. When None, the bucket is scoped
+    per (tenant, function, model).
+
+    Note: this is currently a static string, not an expression. The server
+    uses it verbatim as the Redis-key suffix; per-event evaluation (e.g.
+    ``event.data.tenant_id``) is a follow-up. To isolate buckets by caller
+    today, pass a concrete value like ``"premium"`` or ``"free"`` from the
+    code that constructs the decorator.
     """
 
     def to_dict(self) -> dict[str, Any]:

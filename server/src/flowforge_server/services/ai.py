@@ -404,7 +404,15 @@ class AIService:
             messages: List of message dicts with 'role' and 'content'.
             max_tokens: Maximum tokens to generate.
             temperature: Sampling temperature.
-            max_retries: Maximum retry attempts.
+            max_retries: Maximum retry attempts. **Applies only to the
+                structured-output (``response_model``) path** — it's passed
+                through to the structured generator which retries on
+                schema-validation failures. For regular completions this
+                parameter is ignored: rate-limit retries happen durably in
+                the SDK (``step.ai`` loop + ``step.sleep``) and non-429
+                errors propagate immediately. LiteLLM's own ``num_retries``
+                is forced to 0 here to prevent inline retries from blocking
+                the executor worker.
             use_cache: Whether to use caching.
             cache_ttl: Cache TTL in seconds (overrides default).
             tools: List of Tool objects that can be called.
@@ -412,11 +420,19 @@ class AIService:
             response_model: Optional Pydantic model for structured output generation.
             tenant_id: Optional tenant ID for per-tenant API key lookup.
             session: Optional database session for tenant key lookup.
+            function_id: Function ID, used with ``rate_limits`` to scope the
+                pre-flight token bucket.
+            rate_limits: Optional list of ``TokenRateLimit`` dicts from the
+                function config. If set and the bucket is full, returns a
+                structured ``__rate_limited`` AIResponse instead of calling
+                the provider — the SDK's step.ai loop absorbs it durably.
             **kwargs: Additional provider-specific parameters.
 
         Returns:
             AIResponse with content and usage information, or a Pydantic model instance
-            if response_model is provided.
+            if response_model is provided. On provider 429 or token-bucket
+            exhaustion, the returned AIResponse has ``finish_reason="rate_limited"``
+            and a ``raw_response["__rate_limited"]=True`` marker.
         """
         # Handle structured output generation
         if response_model is not None:
@@ -547,6 +563,13 @@ class AIService:
                 # step.sleep — freeing the executor worker in the meantime.
                 if self._health_checker:
                     self._health_checker.mark_rate_limited(provider)
+                # Normalise to a concrete floor so the dashboard and SDK
+                # never see ``None``/``0`` — if the provider didn't send
+                # Retry-After we still want at least a 1s cooldown.
+                parsed_retry_after = _parse_retry_after(e)
+                retry_after = (
+                    float(parsed_retry_after) if parsed_retry_after else 1.0
+                )
                 return AIResponse(
                     content="",
                     model=model,
@@ -556,7 +579,7 @@ class AIService:
                     tool_calls=[],
                     raw_response={
                         "__rate_limited": True,
-                        "__retry_after": _parse_retry_after(e),
+                        "__retry_after": retry_after,
                         "__provider": provider,
                         "__model": model,
                         "__error": str(e),
