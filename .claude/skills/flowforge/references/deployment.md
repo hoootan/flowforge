@@ -1,0 +1,148 @@
+# Deployment
+
+Two deploy targets: local dev (`docker-compose up -d`) and production (the
+stravix host and any equivalent). The rules are different; mixing them up
+is the most common ops failure mode in this repo.
+
+## Local development
+
+```bash
+docker-compose up -d                 # postgres + redis (dev config)
+flowforge dev .                       # SDK worker + auto-reload
+```
+
+Local compose auto-loads both `docker-compose.yml` and
+`docker-compose.override.yml`. The override rewires dashboard
+`NEXT_PUBLIC_API_URL` to the local server and resets host port bindings for
+hot-reload. Don't use this config on any host exposed to the internet.
+
+## Production (stravix and equivalent)
+
+Captured in user memory: **always pass `-f docker-compose.prod.yml`** to
+every `build|up|ps` call. Without it, Compose auto-loads the dev override
+and two bad things happen: (a) the dashboard image bakes in the wrong
+`NEXT_PUBLIC_API_URL`, (b) `ports: !reset` strips host port bindings so
+nginx can't reach the containers.
+
+The stravix host is at `135.181.109.95` / `ff.stravix.app`. Install path:
+`/home/admin/flowforge`. Nginx proxies `/api/v1/` → `127.0.0.1:9473`
+(server) and `/` → `127.0.0.1:9474` (dashboard). Never proxy all `/api/`
+blindly — the dashboard owns `/api/auth/*` Next.js route handlers.
+
+The `/sx-deploy` command automates the whole loop:
+
+1. SSH + `git stash; git pull origin main; git stash pop` (preserves local
+   compose tweaks).
+2. `git diff HEAD@{1} HEAD --name-only` to decide what to rebuild.
+3. `docker compose -f docker-compose.prod.yml build <services>` +
+   `up -d <services>`.
+4. `docker compose -f docker-compose.prod.yml ps` to verify.
+
+Path → service mapping:
+
+- `dashboard/**` → rebuild `dashboard`
+- `server/**` → rebuild `server`, `executor`, `runner`
+- `packages/flowforge-sdk/**` or `packages/flowforge-cli/**` → rebuild
+  `server`, `executor`, `runner` (workers share the SDK image)
+- `docker-compose.yml` → rebuild everything affected
+- `packages/flowforge-mcp/**` or `.github/**` → **nothing** (MCP is an npm
+  package consumed by MCP clients, not a compose service)
+
+Do NOT rebuild services that didn't change — it's slower and for the
+dashboard it wipes the cached build layers.
+
+## Migrations
+
+All migrations live at `server/migrations/*.py`. They run automatically on
+server startup via `server/src/flowforge_server/db/migrations.py`.
+
+**The runner only calls functions named `upgrade(engine)`.** A file that
+only defines `up(session)` is silently skipped (Copilot caught this on PR
+#27 before it escaped to prod). When adding a migration, copy
+`server/migrations/add_function_soft_delete.py` as the template — it
+exposes both shapes:
+
+```python
+from sqlalchemy import text
+
+MIGRATION_ID = "add_foo_bar"
+MIGRATION_DATE = "2026-04-20"
+DESCRIPTION = "..."
+
+ADD_COLUMN_SQL = """ALTER TABLE foo ADD COLUMN IF NOT EXISTS bar TEXT;"""
+DROP_COLUMN_SQL = """ALTER TABLE foo DROP COLUMN IF EXISTS bar;"""
+
+async def upgrade(engine) -> None:
+    async with engine.begin() as conn:
+        await conn.execute(text(ADD_COLUMN_SQL))
+
+async def downgrade(engine) -> None:
+    async with engine.begin() as conn:
+        await conn.execute(text(DROP_COLUMN_SQL))
+
+# Kept for parity with older peer migrations — harmless.
+async def up(session) -> None:
+    await session.execute(text(ADD_COLUMN_SQL)); await session.commit()
+
+async def down(session) -> None:
+    await session.execute(text(DROP_COLUMN_SQL)); await session.commit()
+```
+
+Other things worth knowing:
+
+- Column type: use `TIMESTAMPTZ` in raw SQL and `DateTime(timezone=True)`
+  in the ORM model to match `TimestampMixin`.
+- Write the corresponding Python value as tz-aware: `datetime.now(UTC)`.
+  Ruff's `UP017` prefers `datetime.UTC` over `timezone.utc`.
+- Applied migrations are tracked in a `_migrations` table. Re-running the
+  server does not re-apply.
+
+## Post-deploy smoke checks
+
+- `docker compose -f docker-compose.prod.yml ps` — all five containers
+  Up, server+postgres+redis healthy, executor+runner either healthy or
+  `health: starting` (~30s).
+- `docker logs flowforge-server 2>&1 | grep -i migration | tail` — shows
+  the migration runner's output, including which files it ran and which
+  it skipped (missing `upgrade(engine)`).
+- `docker exec flowforge-postgres psql -U flowforge -d flowforge -c "\\d <table>"`
+  to confirm a new column actually landed.
+
+## Release / publishing workflow
+
+Git tag `vX.Y.Z` pushed to origin triggers `.github/workflows/publish-sdks.yml`
+which publishes three packages:
+
+- `flowforge-client` (npm) ← `packages/flowforge-client-ts`
+- `flowforge-sdk` (PyPI) ← `packages/flowforge-sdk`
+- `flowforge-mcp-server` (npm) ← `packages/flowforge-mcp`
+
+The workflow overwrites the `version` in each package's manifest before
+publishing, so the source-tree version doesn't have to match. After all
+three succeed, a GitHub release is auto-created via `gh release create`
+with autogenerated notes.
+
+To release:
+
+```bash
+git tag -a v0.X.Y -m "…"
+git push origin v0.X.Y
+```
+
+Then monitor via `gh run list --workflow=publish-sdks.yml` and verify with
+`npm view flowforge-client version` and `pip index versions flowforge-sdk`.
+
+## Recovery playbooks
+
+- **Server crashes on startup with "column … does not exist"**: the
+  migration didn't run. Either the file only has `up(session)` (fix the
+  file, redeploy) or the migration errored (check logs for the traceback).
+  As a last resort you can `docker exec flowforge-postgres psql -U
+  flowforge -d flowforge -c "<the ALTER TABLE>"` manually then restart
+  the server.
+- **Dashboard says "Network error" after deploy**: you likely rebuilt
+  without `-f docker-compose.prod.yml`. The image has the wrong
+  `NEXT_PUBLIC_API_URL`. Rebuild with the prod file.
+- **Migration re-runs on every boot**: the `_migrations` table got wiped
+  or the migration file's stem doesn't match the name in `_migrations`.
+  The runner keys on `migration_file.stem`.
