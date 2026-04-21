@@ -446,7 +446,11 @@ class Runner:
             .limit(100)
         )
 
-        runs_to_enqueue: list[tuple[Run, Function]] = []
+        # Dedupe by run.id: a single run could in theory have >1 due sleeping
+        # steps (parallel branches, future features, or data weirdness) —
+        # enqueuing the same run multiple times would just cause duplicate
+        # executor work on the same (now RUNNING) state.
+        runs_to_enqueue: dict[uuid.UUID, tuple[Run, Function]] = {}
 
         for step in result.scalars().all():
             # Drive the sleep step to terminal state. Its existing output
@@ -465,14 +469,14 @@ class Runner:
             run.resume_at = None
 
             fn = run.function
-            if fn:
-                runs_to_enqueue.append((run, fn))
+            if fn and run.id not in runs_to_enqueue:
+                runs_to_enqueue[run.id] = (run, fn)
 
         # Commit before enqueuing so the executor sees RUNNING, not stale PAUSED.
         if runs_to_enqueue:
             await session.commit()
 
-        for run, fn in runs_to_enqueue:
+        for run, fn in runs_to_enqueue.values():
             await self._enqueue_run(run, fn)
             print(f"[Runner] Resumed run {run.id}")
 
