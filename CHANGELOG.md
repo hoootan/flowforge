@@ -7,6 +7,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+### Fixed
+- Runner: durable sleep steps are now marked `COMPLETED` when their
+  `scheduled_at` elapses, so the SDK's memoisation sees them on replay and
+  doesn't re-emit the same sleep. Previously a paused run would replay its
+  sleep endlessly (the step stayed `SLEEPING`, was filtered out of
+  `completed_steps`, and the SDK yielded a fresh `StepCompleted` with new
+  jitter, re-pausing the run). This surfaced most visibly via the PR #32
+  retry-sleep chain on provider 429s, but affected any use of `step.sleep`.
+- Runner: commit step/run updates before enqueuing the continuation job, so
+  the executor doesn't race and read stale `PAUSED` status. Matches the
+  pattern already used by `_resolve_waiting_steps`.
+
 ## [0.2.11] — 2026-02-27
 
 ### Added
