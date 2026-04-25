@@ -77,7 +77,8 @@ Quick-triage table. Follow the reference link for nuance.
 
 - `custom` — Python sandbox (`execute(**kwargs)`). Fast to author, no external
   infra, but runs inside RestrictedPython 8.x with a whitelist of imports.
-  Never put secrets in the code — use `{{credential:name}}` placeholders.
+  Never put secrets in the code — call `credentials.get("name")` from the
+  sandbox; HTTP goes through the injected `http_request(...)` helper.
 - `webhook` — HTTP endpoint. Best when you already have a service. Supports
   `{{credential:name}}` and `{{env:VAR}}` placeholders in URL and headers.
 - `builtin` — Platform-provided. Reference by name only.

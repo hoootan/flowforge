@@ -9,7 +9,7 @@ types, very different tradeoffs.
 |---|---|---|---|
 | Runs | inside FlowForge server (Python sandbox) | external HTTP service | inside FlowForge, maintained by the platform |
 | Speed to author | minutes | depends on your service | zero (reference by name) |
-| Secrets | `{{credential:name}}` placeholders | same, in URL + headers | N/A |
+| Secrets | `credentials.get("name")` (in code) | `{{credential:name}}` in URL + headers | N/A |
 | Approval gate | `requires_approval=True` | same | same |
 | Determinism | whatever your code does | whatever your service does | documented |
 | Good for | glue, data transforms, domain-specific small logic | calling existing microservices, third-party APIs | standard capabilities (e.g. web search) |
@@ -25,7 +25,12 @@ Since v0.4.0 the sandbox runs under RestrictedPython 8.x. What you get:
 - `json` / `datetime` / `math` / `re` are pre-imported into the sandbox.
 - `http_request(url, method="GET", headers=None, json=None, timeout=30)` for
   SSRF-safe HTTP. Use this instead of any `requests`/`httpx`/`urllib` call.
+- `credentials.get(name, default=None)` — pulls a decrypted secret from the
+  encrypted credential store, scoped to the calling tenant. Created via
+  `flowforge_create_credential` or the dashboard. Only `.get()` and `in` are
+  exposed; you cannot enumerate names.
 - Read-only `os.environ` proxy — `.get`, `[]`, `in` work; nothing else.
+  Use this for non-secret runtime config; **secrets belong in `credentials`**.
 - Execution cap: `DEFAULT_TIMEOUT_SECONDS = 30`.
 
 What you don't get (by design — these raise `SandboxSecurityError`):
@@ -46,6 +51,22 @@ def execute(url: str, selector: str) -> dict:
         return {"error": f"http {resp['status_code']}", "body": resp["text"]}
     # parse (e.g. with `re` or `json`) and return plain dict
     return {"title": _extract(resp["text"], selector)}
+```
+
+With a credential (the typical third-party-API shape):
+
+```python
+def execute(query: str) -> dict:
+    api_key = credentials.get("tavily_api_key")
+    if not api_key:
+        return {"error": "missing credential: tavily_api_key"}
+    resp = http_request(
+        "https://api.tavily.com/search",
+        method="POST",
+        headers={"Authorization": f"Bearer {api_key}"},
+        json={"query": query},
+    )
+    return {"status": resp["status_code"], "body": resp["text"]}
 ```
 
 Gotchas:
@@ -110,9 +131,22 @@ Create via `flowforge_create_credential` (or the dashboard). Four types —
 `api_key`, `bearer_token`, `basic_auth`, `custom` — used for UI grouping;
 the value is an opaque string either way.
 
+How to read a credential depends on the tool type:
+
+- **Custom tools** — call `credentials.get("name")` from inside `execute()`.
+  Returns the decrypted value or `None` if the credential is missing or
+  inactive. Only `.get()` and `in` are exposed; the tool cannot enumerate
+  names.
+- **Webhook tools** — use `{{credential:name}}` placeholders inside
+  `webhook_url` and `webhook_headers`. Resolved server-side before the
+  request goes out.
+
+Both paths read from the same encrypted store, scoped to the calling
+tenant. Decrypted values are never logged or returned by any API.
+
 To rotate: call `flowforge_create_credential` again with the same name. The
-old encrypted value is replaced; all webhook tools referencing
-`{{credential:name}}` pick up the new value on the next call.
+old encrypted value is replaced; tools pick up the new value on the next
+invocation (no caching across runs).
 
 ## Human-in-the-loop approvals
 

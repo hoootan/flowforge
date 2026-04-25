@@ -238,3 +238,94 @@ def execute() -> int:
 """
         with pytest.raises(SandboxTimeoutError):
             await execute_sandboxed(code, {}, timeout_seconds=1)
+
+
+class TestSandboxCredentials:
+    """Tests for the ``credentials`` global injected into the sandbox."""
+
+    def test_credentials_get_returns_value(self):
+        code = """
+def execute() -> str:
+    return credentials.get("api_key")
+"""
+        result = execute_sandboxed_sync(
+            code, {}, credentials={"api_key": "secret-123"}
+        )
+        assert result == "secret-123"
+
+    def test_credentials_get_missing_returns_default(self):
+        code = """
+def execute() -> str:
+    return credentials.get("missing", "fallback")
+"""
+        result = execute_sandboxed_sync(code, {}, credentials={"other": "x"})
+        assert result == "fallback"
+
+    def test_credentials_get_missing_returns_none(self):
+        code = """
+def execute():
+    return credentials.get("missing")
+"""
+        result = execute_sandboxed_sync(code, {}, credentials={})
+        assert result is None
+
+    def test_credentials_default_empty_when_omitted(self):
+        code = """
+def execute():
+    return credentials.get("api_key")
+"""
+        # No credentials kwarg → empty dict → returns None.
+        result = execute_sandboxed_sync(code, {})
+        assert result is None
+
+    def test_credentials_in_operator(self):
+        code = """
+def execute() -> bool:
+    return "api_key" in credentials
+"""
+        result = execute_sandboxed_sync(code, {}, credentials={"api_key": "v"})
+        assert result is True
+
+    def test_credentials_cannot_enumerate(self):
+        # No iter / keys / values — tools can't probe for cred names.
+        code = """
+def execute():
+    return list(credentials)
+"""
+        with pytest.raises(SandboxExecutionError):
+            execute_sandboxed_sync(code, {}, credentials={"a": "1", "b": "2"})
+
+    def test_credentials_no_keys_method(self):
+        code = """
+def execute():
+    return credentials.keys()
+"""
+        with pytest.raises(SandboxExecutionError):
+            execute_sandboxed_sync(code, {}, credentials={"a": "1"})
+
+    def test_credentials_no_subscript_access(self):
+        # Only .get() is allowed; bracket access is not exposed.
+        code = """
+def execute():
+    return credentials["api_key"]
+"""
+        with pytest.raises(SandboxExecutionError):
+            execute_sandboxed_sync(code, {}, credentials={"api_key": "v"})
+
+    async def test_credentials_passed_through_async_entrypoint(self):
+        code = """
+def execute() -> str:
+    return credentials.get("token")
+"""
+        result = await execute_sandboxed(
+            code, {}, credentials={"token": "async-tok"}
+        )
+        assert result == "async-tok"
+
+    def test_existing_tools_unaffected_when_credentials_omitted(self):
+        # Regression: prior call sites that don't pass credentials still work.
+        code = """
+def execute(x: int, y: int) -> int:
+    return x + y
+"""
+        assert execute_sandboxed_sync(code, {"x": 2, "y": 3}) == 5

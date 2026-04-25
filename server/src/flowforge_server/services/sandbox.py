@@ -184,6 +184,27 @@ class _ReadOnlyEnviron:
 _SAFE_ENVIRON = _ReadOnlyEnviron()
 
 
+class _SandboxCredentials:
+    """Read-only view over pre-resolved credentials for the calling tenant.
+
+    Exposed to sandboxed tool code as the ``credentials`` global. Only
+    ``.get(name, default=None)`` and ``in`` are supported — no enumeration,
+    no iteration, no dict access by ``[]`` raising — so a tool can't probe
+    for credential names it shouldn't know about.
+    """
+
+    __slots__ = ("_d",)
+
+    def __init__(self, resolved: dict[str, str] | None = None) -> None:
+        self._d = resolved or {}
+
+    def get(self, name: str, default: str | None = None) -> str | None:
+        return self._d.get(name, default)
+
+    def __contains__(self, name: object) -> bool:
+        return name in self._d
+
+
 def _guarded_import(
     name: str,
     globals_dict: dict | None = None,
@@ -211,8 +232,16 @@ def _write_guard(obj: Any) -> Any:
     raise SandboxSecurityError(f"Cannot modify objects of type {type(obj).__name__}")
 
 
-def _create_restricted_globals() -> dict[str, Any]:
-    """Create the restricted globals for sandboxed execution."""
+def _create_restricted_globals(
+    credentials: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Create the restricted globals for sandboxed execution.
+
+    Args:
+        credentials: Pre-resolved {name: plaintext} for the calling tenant.
+            Exposed to tool code as the ``credentials`` global with a
+            minimal ``.get(name, default)`` API.
+    """
 
     # Build a safe os-like namespace with only environ access
     class _SafeOs:
@@ -237,6 +266,8 @@ def _create_restricted_globals() -> dict[str, Any]:
         "_print_": lambda *args, **kwargs: None,  # Disable print
         # Safe os proxy for reading environment variables
         "os": _SafeOs(),
+        # Tenant-scoped, pre-resolved credentials (read-only, no enumeration)
+        "credentials": _SandboxCredentials(credentials),
     }
 
 
@@ -265,6 +296,7 @@ def execute_sandboxed_sync(
     code: str,
     arguments: dict[str, Any],
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+    credentials: dict[str, str] | None = None,
 ) -> Any:
     """
     Execute sandboxed code synchronously.
@@ -273,6 +305,8 @@ def execute_sandboxed_sync(
         code: Python source code defining an 'execute' function
         arguments: Arguments to pass to the execute function
         timeout_seconds: Maximum execution time
+        credentials: Optional pre-resolved {name: plaintext} dict exposed
+            to tool code as the ``credentials`` global.
 
     Returns:
         Result from the execute function
@@ -284,7 +318,7 @@ def execute_sandboxed_sync(
     compiled = compile_sandboxed(code)
 
     # Create restricted globals
-    globals_dict = _create_restricted_globals()
+    globals_dict = _create_restricted_globals(credentials)
 
     # Execute the code to define functions
     exec(compiled, globals_dict)
@@ -335,6 +369,7 @@ async def execute_sandboxed(
     code: str,
     arguments: dict[str, Any],
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+    credentials: dict[str, str] | None = None,
 ) -> Any:
     """
     Execute sandboxed code asynchronously.
@@ -346,6 +381,8 @@ async def execute_sandboxed(
         code: Python source code defining an 'execute' function
         arguments: Arguments to pass to the execute function
         timeout_seconds: Maximum execution time
+        credentials: Optional pre-resolved {name: plaintext} dict exposed
+            to tool code as the ``credentials`` global.
 
     Returns:
         Result from the execute function
@@ -364,6 +401,7 @@ async def execute_sandboxed(
                 code,
                 arguments,
                 timeout_seconds,
+                credentials,
             ),
         ),
         timeout=timeout_seconds + 1,  # Extra second for thread overhead
@@ -376,6 +414,7 @@ async def execute_async_sandboxed(
     code: str,
     arguments: dict[str, Any],
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+    credentials: dict[str, str] | None = None,
 ) -> Any:
     """
     Execute sandboxed code that may define an async execute function.
@@ -400,7 +439,7 @@ async def execute_async_sandboxed(
     # If async support is needed, the tool should be a built-in or
     # use a webhook-based execution model.
 
-    return await execute_sandboxed(code, arguments, timeout_seconds)
+    return await execute_sandboxed(code, arguments, timeout_seconds, credentials)
 
 
 def validate_tool_code(code: str) -> list[str]:
