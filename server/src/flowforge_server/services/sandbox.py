@@ -189,7 +189,7 @@ class _SandboxCredentials:
 
     Exposed to sandboxed tool code as the ``credentials`` global. Only
     ``.get(name, default=None)`` and ``in`` are supported — no enumeration,
-    no iteration, no dict access by ``[]`` raising — so a tool can't probe
+    no iteration, and no dict access via ``[]`` — so a tool can't probe
     for credential names it shouldn't know about.
     """
 

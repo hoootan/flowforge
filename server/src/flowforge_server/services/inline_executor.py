@@ -41,7 +41,11 @@ from flowforge_server.services.credentials import (
     resolve_dict_placeholders,
     resolve_placeholders,
 )
-from flowforge_server.services.crypto import decrypt_value
+from flowforge_server.services.crypto import (
+    EncryptionError,
+    EncryptionKeyMissing,
+    decrypt_value,
+)
 from flowforge_server.services.network_utils import create_ssrf_safe_client, validate_webhook_url
 from flowforge_server.services.sandbox import (
     DEFAULT_TIMEOUT_SECONDS,
@@ -907,7 +911,10 @@ class InlineExecutor:
 
         Returned to the sandbox as the ``credentials`` global. A single
         bad row (e.g. corrupted ciphertext) is logged and skipped rather
-        than failing the whole tool invocation.
+        than failing the whole tool invocation. Platform-level
+        misconfiguration — namely a missing/invalid encryption key — is
+        re-raised so the run fails fast, matching the behavior of the
+        webhook ``{{credential:name}}`` resolver.
         """
         result = await session.execute(
             select(Credential).where(
@@ -919,7 +926,12 @@ class InlineExecutor:
         for cred in result.scalars().all():
             try:
                 resolved[cred.name] = decrypt_value(cred.encrypted_value)
-            except Exception as exc:  # noqa: BLE001 — log and skip individual failures
+            except EncryptionKeyMissing:
+                # Platform-level misconfiguration: no encryption key set.
+                # Fail fast — matches the webhook {{credential:name}} path
+                # so we don't silently run tools with empty credentials.
+                raise
+            except EncryptionError as exc:
                 log.warning(
                     "credential_decrypt_failed",
                     tenant_id=str(tenant_id),

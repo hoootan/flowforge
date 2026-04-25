@@ -142,7 +142,10 @@ How to read a credential depends on the tool type:
   request goes out.
 
 Both paths read from the same encrypted store, scoped to the calling
-tenant. Decrypted values are never logged or returned by any API.
+tenant. FlowForge does not expose decrypted values via the credentials
+API or log them. Custom tool authors must avoid returning secrets in
+tool outputs or error messages after calling `credentials.get()` —
+anything a tool returns flows into the agent transcript and run record.
 
 To rotate: call `flowforge_create_credential` again with the same name. The
 old encrypted value is replaced; tools pick up the new value on the next

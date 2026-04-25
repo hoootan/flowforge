@@ -69,9 +69,13 @@ def stub_decrypt(monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
         "enc-broken": "should-not-be-reached",
     }
 
+    from flowforge_server.services.crypto import EncryptionError
+
     def fake_decrypt(ciphertext: str) -> str:
         if ciphertext == "enc-broken":
-            raise ValueError("simulated decryption failure")
+            # Real decrypt_value wraps lower-level errors as EncryptionError;
+            # mirror that so per-row failures are caught and skipped.
+            raise EncryptionError("simulated decryption failure")
         return mapping[ciphertext]
 
     monkeypatch.setattr(inline_executor_module, "decrypt_value", fake_decrypt)
@@ -125,6 +129,23 @@ class TestResolveTenantCredentials:
         resolved = await executor._resolve_tenant_credentials(session, uuid.uuid4())
         assert resolved == {"good": "tavily-plaintext", "good2": "apify-plaintext"}
         assert "broken" not in resolved
+
+    async def test_encryption_key_missing_propagates(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Platform misconfiguration must fail fast — never silently run with
+        an empty credentials view. Matches the webhook resolver's behavior."""
+        from flowforge_server.services.crypto import EncryptionKeyMissing
+
+        def fake_decrypt(_ciphertext: str) -> str:
+            raise EncryptionKeyMissing("FLOWFORGE_ENCRYPTION_KEY is not set")
+
+        monkeypatch.setattr(inline_executor_module, "decrypt_value", fake_decrypt)
+        executor = InlineExecutor(ai_service=None)  # type: ignore[arg-type]
+        session = _FakeSession([_FakeCredentialRow("any", "enc")])
+
+        with pytest.raises(EncryptionKeyMissing):
+            await executor._resolve_tenant_credentials(session, uuid.uuid4())
 
 
 class TestCustomToolReceivesCredentials:
