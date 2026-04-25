@@ -26,6 +26,7 @@ from flowforge_server.db.models import (
     ToolApproval,
     UsageRecord,
 )
+from flowforge_server.db.models.credential import Credential
 from flowforge_server.logging import Loggers
 from flowforge_server.services.ai import AIService, ToolCall
 from flowforge_server.services.builtin_tools import (
@@ -39,6 +40,11 @@ from flowforge_server.services.credentials import (
     CredentialResolutionError,
     resolve_dict_placeholders,
     resolve_placeholders,
+)
+from flowforge_server.services.crypto import (
+    EncryptionError,
+    EncryptionKeyMissing,
+    decrypt_value,
 )
 from flowforge_server.services.network_utils import create_ssrf_safe_client, validate_webhook_url
 from flowforge_server.services.sandbox import (
@@ -819,7 +825,12 @@ class InlineExecutor:
         elif tool_info.get("webhook_url"):
             return await self._execute_webhook_tool(session, tool_info, arguments)
         elif tool_info.get("code"):
-            return await self._execute_custom_tool(tool_info["code"], arguments)
+            return await self._execute_custom_tool(
+                tool_info["code"],
+                arguments,
+                session=session,
+                tenant_id=tool_info.get("tenant_id"),
+            )
         else:
             return {"error": f"Tool '{tool_info['name']}' has no implementation"}
 
@@ -891,11 +902,53 @@ class InlineExecutor:
         except httpx.RequestError as e:
             return {"error": f"Webhook request failed: {str(e)}"}
 
+    async def _resolve_tenant_credentials(
+        self,
+        session: AsyncSession,
+        tenant_id: Any,
+    ) -> dict[str, str]:
+        """Pre-fetch and decrypt all active credentials for a tenant.
+
+        Returned to the sandbox as the ``credentials`` global. A single
+        bad row (e.g. corrupted ciphertext) is logged and skipped rather
+        than failing the whole tool invocation. Platform-level
+        misconfiguration — namely a missing/invalid encryption key — is
+        re-raised so the run fails fast, matching the behavior of the
+        webhook ``{{credential:name}}`` resolver.
+        """
+        result = await session.execute(
+            select(Credential).where(
+                Credential.tenant_id == tenant_id,
+                Credential.is_active == True,  # noqa: E712
+            )
+        )
+        resolved: dict[str, str] = {}
+        for cred in result.scalars().all():
+            try:
+                resolved[cred.name] = decrypt_value(cred.encrypted_value)
+            except EncryptionKeyMissing:
+                # Platform-level misconfiguration: no encryption key set.
+                # Fail fast — matches the webhook {{credential:name}} path
+                # so we don't silently run tools with empty credentials.
+                raise
+            except EncryptionError as exc:
+                log.warning(
+                    "credential_decrypt_failed",
+                    tenant_id=str(tenant_id),
+                    credential_name=cred.name,
+                    value_prefix=cred.value_prefix,
+                    error=str(exc),
+                )
+        return resolved
+
     async def _execute_custom_tool(
         self,
         code: str,
         arguments: dict[str, Any],
         timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+        *,
+        session: AsyncSession | None = None,
+        tenant_id: Any = None,
     ) -> Any:
         """
         Execute custom tool code in a sandboxed environment.
@@ -903,27 +956,39 @@ class InlineExecutor:
         The code should define a function called 'execute'.
         Example:
             def execute(query: str) -> dict:
-                return {"result": f"Searched for {query}"}
+                api_key = credentials.get("tavily_api_key")
+                return http_request("https://api.example.com",
+                                    headers={"Authorization": f"Bearer {api_key}"})
 
         Security features:
         - Code is compiled with RestrictedPython
         - Only safe builtins are allowed (str, int, list, dict, etc.)
         - File I/O and dangerous imports are blocked
         - Timeout enforcement prevents infinite loops
+        - Credentials are pre-resolved for the calling tenant only
 
         Args:
             code: Python source code defining an 'execute' function
             arguments: Arguments to pass to the execute function
             timeout_seconds: Maximum execution time (default 30s)
+            session: Active DB session (used to resolve tenant credentials)
+            tenant_id: Tenant whose credentials to expose to the tool
 
         Returns:
             Result from the execute function, or error dict on failure
         """
+        resolved_credentials: dict[str, str] | None = None
+        if session is not None and tenant_id is not None:
+            resolved_credentials = await self._resolve_tenant_credentials(
+                session, tenant_id
+            )
+
         try:
             result = await execute_sandboxed(
                 code=code,
                 arguments=arguments,
                 timeout_seconds=timeout_seconds,
+                credentials=resolved_credentials,
             )
             return result
 
