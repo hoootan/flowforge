@@ -1,504 +1,316 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
-import { api, type Stats, type Run, type Function as FunctionType, type DailyUsage } from '@/lib/api';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Activity,
-  CheckCircle,
-  XCircle,
-  Play,
-  Clock,
-  Timer,
-  Box,
-  TrendingUp,
-} from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import {
-  Area,
-  AreaChart as RechartsAreaChart,
-  Bar,
-  BarChart as RechartsBarChart,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-} from 'recharts';
+import { formatDistanceToNow } from 'date-fns';
+import { Activity, CheckCircle2, Zap, DollarSign, Box, Bot, ArrowRight } from 'lucide-react';
+import { api, type Stats, type Run, type Function as FunctionType, type DailyUsage } from '@/lib/api';
+import { Kpi } from '@/components/ui/kpi';
+import { VarStrip } from '@/components/ui/var-strip';
+import { Heatmap } from '@/components/ui/heatmap';
+import { LoadBar } from '@/components/ui/load-bar';
+import { SectionLabel } from '@/components/ui/section-label';
 
-// ── Mini Sparkline ──────────────────────────────────────────────
+type TimeRange = '24h' | '7d' | '30d';
 
-function Sparkline({ data, color = 'var(--primary)' }: { data: number[]; color?: string }) {
-  const points = data.map((v, i) => ({ v, i }));
-  return (
-    <div className='h-10 w-full'>
-      <ResponsiveContainer width='100%' height='100%'>
-        <RechartsAreaChart data={points} margin={{ top: 2, right: 2, bottom: 2, left: 2 }}>
-          <defs>
-            <linearGradient id={`spark-${color.replace(/[^a-z0-9]/gi, '')}`} x1='0' y1='0' x2='0' y2='1'>
-              <stop offset='5%' stopColor={color} stopOpacity={0.3} />
-              <stop offset='95%' stopColor={color} stopOpacity={0} />
-            </linearGradient>
-          </defs>
-          <Area
-            type='monotone'
-            dataKey='v'
-            stroke={color}
-            strokeWidth={1.5}
-            fill={`url(#spark-${color.replace(/[^a-z0-9]/gi, '')})`}
-            dot={false}
-            isAnimationActive={false}
-          />
-        </RechartsAreaChart>
-      </ResponsiveContainer>
-    </div>
-  );
+function statusDot(status: string) {
+  if (status === 'completed') return 'dot-ok';
+  if (status === 'failed') return 'dot-fail';
+  if (status === 'running' || status === 'pending') return 'dot-run';
+  if (status === 'cancelled') return 'dot-muted';
+  return 'dot-warn';
 }
 
-// ── KPI Card (matching Paper design) ───────────────────────────
-
-function KPICard({
-  title,
-  value,
-  description,
-  icon: Icon,
-  sparkData,
-  sparkColor,
-  loading,
-}: {
-  title: string;
-  value: string | number;
-  description?: string;
-  icon: React.ComponentType<{ className?: string }>;
-  sparkData?: number[];
-  sparkColor?: string;
-  loading?: boolean;
-}) {
-  return (
-    <Card className='transition-colors duration-200 hover:bg-accent'>
-      <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-        <CardTitle className='text-sm font-medium text-muted-foreground'>{title}</CardTitle>
-        <Icon className='h-4 w-4 text-muted-foreground' />
-      </CardHeader>
-      <CardContent>
-        {loading ? (
-          <Skeleton className='h-8 w-24' />
-        ) : (
-          <>
-            <div className='text-3xl font-bold tracking-tight tabular-nums'>
-              {typeof value === 'number' ? value.toLocaleString() : value}
-            </div>
-            {description && (
-              <p className='mt-1 text-xs text-muted-foreground'>{description}</p>
-            )}
-          </>
-        )}
-        {sparkData && sparkData.length > 1 && !loading && (
-          <div className='mt-3'>
-            <Sparkline data={sparkData} color={sparkColor} />
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
+function statusTag(status: string) {
+  if (status === 'completed') return 'tag tag-ok';
+  if (status === 'failed') return 'tag tag-fail';
+  if (status === 'running') return 'tag tag-running';
+  if (status === 'pending' || status === 'paused') return 'tag tag-warn';
+  if (status === 'cancelled') return 'tag';
+  return 'tag';
 }
 
-// ── Run Volume Chart (stacked area) ────────────────────────────
-
-function RunVolumeChart({ data, loading }: { data: DailyUsage[]; loading: boolean }) {
-  if (loading) {
-    return (
-      <Card className='col-span-full lg:col-span-3'>
-        <CardHeader>
-          <Skeleton className='h-5 w-32' />
-          <Skeleton className='h-4 w-48' />
-        </CardHeader>
-        <CardContent>
-          <Skeleton className='h-[240px] w-full' />
-        </CardContent>
-      </Card>
-    );
+/** Bucket runs into 7×48 heatmap (last 7 days × half-hour slots). */
+function buildHeatmap(runs: Run[]): { data: number[][]; failures: boolean[][] } {
+  const data: number[][] = Array.from({ length: 7 }, () => Array(48).fill(0));
+  const failures: boolean[][] = Array.from({ length: 7 }, () => Array(48).fill(false));
+  const now = Date.now();
+  for (const r of runs) {
+    const t = new Date(r.created_at).getTime();
+    const ageHours = (now - t) / 3_600_000;
+    if (ageHours > 24 * 7 || ageHours < 0) continue;
+    const dayBack = Math.floor(ageHours / 24);
+    const dayIdx = 6 - dayBack;
+    const date = new Date(t);
+    const halfHour = date.getHours() * 2 + (date.getMinutes() >= 30 ? 1 : 0);
+    if (dayIdx >= 0 && dayIdx < 7) {
+      data[dayIdx][halfHour] += 1;
+      if (r.status === 'failed') failures[dayIdx][halfHour] = true;
+    }
   }
-
-  // Transform daily usage into run volume mock (since we don't have per-status daily data yet)
-  const chartData = data.map((d) => ({
-    date: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-    completed: d.requests > 0 ? Math.round(d.requests * 0.85) : 0,
-    failed: d.requests > 0 ? Math.round(d.requests * 0.08) : 0,
-    running: d.requests > 0 ? Math.round(d.requests * 0.07) : 0,
-  }));
-
-  return (
-    <Card className='col-span-full lg:col-span-3'>
-      <CardHeader>
-        <CardTitle>Run Volume</CardTitle>
-        <CardDescription>Runs by status over time</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className='h-[240px]'>
-          <ResponsiveContainer width='100%' height='100%'>
-            <RechartsAreaChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-              <defs>
-                <linearGradient id='fillCompleted' x1='0' y1='0' x2='0' y2='1'>
-                  <stop offset='5%' stopColor='var(--chart-3)' stopOpacity={0.4} />
-                  <stop offset='95%' stopColor='var(--chart-3)' stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id='fillFailed' x1='0' y1='0' x2='0' y2='1'>
-                  <stop offset='5%' stopColor='var(--chart-5)' stopOpacity={0.4} />
-                  <stop offset='95%' stopColor='var(--chart-5)' stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id='fillRunning' x1='0' y1='0' x2='0' y2='1'>
-                  <stop offset='5%' stopColor='var(--chart-1)' stopOpacity={0.4} />
-                  <stop offset='95%' stopColor='var(--chart-1)' stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray='3 3' vertical={false} stroke='var(--border)' />
-              <XAxis dataKey='date' tickLine={false} axisLine={false} tickMargin={8} tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }} />
-              <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }} width={40} />
-              <Tooltip
-                cursor={{ fill: 'rgba(255, 255, 255, 0.06)' }}
-                contentStyle={{
-                  backgroundColor: 'var(--popover)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '8px',
-                  fontSize: '12px',
-                }}
-              />
-              <Legend iconSize={8} wrapperStyle={{ fontSize: '12px' }} />
-              <Area type='monotone' dataKey='completed' stackId='1' stroke='var(--chart-3)' fill='url(#fillCompleted)' strokeWidth={2} />
-              <Area type='monotone' dataKey='failed' stackId='1' stroke='var(--chart-5)' fill='url(#fillFailed)' strokeWidth={2} />
-              <Area type='monotone' dataKey='running' stackId='1' stroke='var(--chart-1)' fill='url(#fillRunning)' strokeWidth={2} />
-            </RechartsAreaChart>
-          </ResponsiveContainer>
-        </div>
-      </CardContent>
-    </Card>
-  );
+  // Normalize to 0..1
+  const max = Math.max(1, ...data.flat());
+  return { data: data.map((row) => row.map((v) => v / max)), failures };
 }
-
-// ── Error Rate Bar Chart ───────────────────────────────────────
-
-function ErrorRateChart({ data, loading }: { data: DailyUsage[]; loading: boolean }) {
-  if (loading) {
-    return (
-      <Card className='col-span-full lg:col-span-2'>
-        <CardHeader>
-          <Skeleton className='h-5 w-24' />
-          <Skeleton className='h-4 w-40' />
-        </CardHeader>
-        <CardContent>
-          <Skeleton className='h-[240px] w-full' />
-        </CardContent>
-      </Card>
-    );
-  }
-
-  // Simulate error data from usage (replace with real data when available)
-  const last12 = data.slice(-12);
-  const chartData = last12.map((d) => ({
-    time: new Date(d.date).toLocaleDateString('en-US'),
-    errors: d.requests > 0 ? Math.round(d.requests * 0.08) : 0,
-  }));
-
-  return (
-    <Card className='col-span-full lg:col-span-2'>
-      <CardHeader>
-        <CardTitle>Error Rate</CardTitle>
-        <CardDescription>Failed runs per time period</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className='h-[240px]'>
-          <ResponsiveContainer width='100%' height='100%'>
-            <RechartsBarChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-              <CartesianGrid strokeDasharray='3 3' vertical={false} stroke='var(--border)' />
-              <XAxis dataKey='time' tickLine={false} axisLine={false} tickMargin={8} tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }} />
-              <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: 'var(--muted-foreground)' }} width={30} />
-              <Tooltip
-                cursor={{ fill: 'rgba(255, 255, 255, 0.06)' }}
-                contentStyle={{
-                  backgroundColor: 'var(--popover)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '8px',
-                  fontSize: '12px',
-                }}
-              />
-              <Bar dataKey='errors' fill='var(--chart-5)' radius={[4, 4, 0, 0]} barSize={20} opacity={0.8} />
-            </RechartsBarChart>
-          </ResponsiveContainer>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-// ── Recent Runs ────────────────────────────────────────────────
-
-const statusConfig: Record<string, { icon: React.ComponentType<{ className?: string }>; color: string; badgeVariant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
-  completed: { icon: CheckCircle, color: 'text-emerald-500', badgeVariant: 'outline' },
-  failed: { icon: XCircle, color: 'text-red-500', badgeVariant: 'destructive' },
-  running: { icon: Play, color: 'text-primary', badgeVariant: 'default' },
-  pending: { icon: Clock, color: 'text-amber-500', badgeVariant: 'outline' },
-  paused: { icon: Clock, color: 'text-orange-500', badgeVariant: 'outline' },
-  cancelled: { icon: XCircle, color: 'text-muted-foreground', badgeVariant: 'secondary' },
-};
-
-function RecentRuns({ runs, loading }: { runs: Run[]; loading: boolean }) {
-  return (
-    <Card className='col-span-full lg:col-span-3'>
-      <CardHeader className='flex flex-row items-center justify-between'>
-        <div>
-          <CardTitle>Recent Runs</CardTitle>
-          <CardDescription>Latest workflow executions</CardDescription>
-        </div>
-        <Link href='/runs' className='text-sm font-medium text-primary hover:underline'>
-          View all
-        </Link>
-      </CardHeader>
-      <CardContent>
-        {loading ? (
-          <div className='space-y-4'>
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className='flex items-center gap-4'>
-                <Skeleton className='h-10 w-10 rounded-full' />
-                <div className='flex-1 space-y-2'>
-                  <Skeleton className='h-4 w-3/4' />
-                  <Skeleton className='h-3 w-1/2' />
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : runs.length === 0 ? (
-          <p className='text-sm text-muted-foreground'>No recent runs</p>
-        ) : (
-          <div className='space-y-1'>
-            {runs.slice(0, 5).map((run) => {
-              const status = statusConfig[run.status] || statusConfig.pending;
-              const StatusIcon = status.icon;
-              return (
-                <Link
-                  key={run.id}
-                  href={`/runs/${run.id}`}
-                  className='flex items-center gap-4 rounded-lg px-3 py-2.5 transition-colors hover:bg-muted/50'
-                >
-                  <div className={`flex h-9 w-9 items-center justify-center rounded-full bg-muted ${status.color}`}>
-                    <StatusIcon className='h-4 w-4' />
-                  </div>
-                  <div className='flex-1 min-w-0'>
-                    <p className='truncate text-sm font-medium font-mono'>{run.function_id}</p>
-                    <p className='text-xs text-muted-foreground'>
-                      {formatDistanceToNow(new Date(run.created_at), { addSuffix: true })}
-                    </p>
-                  </div>
-                  <Badge
-                    variant={status.badgeVariant}
-                    className={
-                      run.status === 'completed'
-                        ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400'
-                        : run.status === 'running'
-                          ? 'border-primary/20 bg-primary/10 text-primary'
-                          : ''
-                    }
-                  >
-                    {run.status}
-                  </Badge>
-                </Link>
-              );
-            })}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-// ── Function Health ────────────────────────────────────────────
-
-function FunctionHealth({ functions, stats, loading }: { functions: FunctionType[]; stats: Stats | null; loading: boolean }) {
-  // Simulate per-function health (replace with real endpoint data when available)
-  const healthData = useMemo(() => {
-    if (!functions.length) return [];
-    return functions
-      .filter((f) => f.is_active)
-      .slice(0, 6)
-      .map((fn) => ({
-        name: fn.name,
-        rate: Math.round(60 + (fn.name.split('').reduce((s, c) => s + c.charCodeAt(0), 0) % 40)), // Deterministic placeholder
-      }))
-      .sort((a, b) => b.rate - a.rate);
-  }, [functions]);
-
-  const getBarColor = (rate: number) => {
-    if (rate >= 90) return 'bg-emerald-500';
-    if (rate >= 70) return 'bg-amber-500';
-    return 'bg-red-500';
-  };
-
-  return (
-    <Card className='col-span-full lg:col-span-2'>
-      <CardHeader>
-        <CardTitle>Function Health</CardTitle>
-        <CardDescription>Success rates by function</CardDescription>
-      </CardHeader>
-      <CardContent>
-        {loading ? (
-          <div className='space-y-4'>
-            {[1, 2, 3].map((i) => (
-              <Skeleton key={i} className='h-6 w-full' />
-            ))}
-          </div>
-        ) : healthData.length === 0 ? (
-          <p className='text-sm text-muted-foreground'>No active functions</p>
-        ) : (
-          <div className='space-y-3'>
-            {healthData.map((fn) => (
-              <div key={fn.name} className='space-y-1'>
-                <div className='flex items-center justify-between text-sm'>
-                  <span className='truncate font-mono text-xs'>{fn.name}</span>
-                  <span className={`text-xs font-medium tabular-nums ${fn.rate >= 90 ? 'text-emerald-600 dark:text-emerald-400' : fn.rate >= 70 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'}`}>
-                    {fn.rate.toFixed(1)}%
-                  </span>
-                </div>
-                <div className='h-1.5 w-full rounded-full bg-muted'>
-                  <div
-                    className={`h-full rounded-full transition-all ${getBarColor(fn.rate)}`}
-                    style={{ width: `${fn.rate}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-// ── Main Overview Page ─────────────────────────────────────────
 
 export default function OverviewPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [runs, setRuns] = useState<Run[]>([]);
+  const [allRuns, setAllRuns] = useState<Run[]>([]);
   const [functions, setFunctions] = useState<FunctionType[]>([]);
   const [dailyUsage, setDailyUsage] = useState<DailyUsage[]>([]);
   const [loading, setLoading] = useState(true);
-  const [timeRange, setTimeRange] = useState('24h');
+  const [range, setRange] = useState<TimeRange>('24h');
 
   useEffect(() => {
+    let cancelled = false;
     async function fetchData() {
       try {
-        const days = timeRange === '24h' ? 1 : timeRange === '7d' ? 7 : 30;
-        const [statsData, runsData, functionsData, usageData] = await Promise.all([
+        const days = range === '24h' ? 1 : range === '7d' ? 7 : 30;
+        const [statsData, runsData, recentRuns, fns, usage] = await Promise.all([
           api.getStats(),
-          api.getRuns({ page_size: 5 }),
+          api.getRuns({ page_size: 200 }),
+          api.getRuns({ page_size: 12 }),
           api.getFunctions(),
-          api.getDailyUsage(days).catch(() => []),
+          api.getDailyUsage(days).catch(() => [] as DailyUsage[])
         ]);
+        if (cancelled) return;
         setStats(statsData);
-        setRuns(runsData.runs);
-        setFunctions(functionsData.functions);
-        setDailyUsage(usageData);
-      } catch (error) {
-        console.error('Failed to fetch dashboard data:', error);
+        setAllRuns(runsData.runs);
+        setRuns(recentRuns.runs);
+        setFunctions(fns.functions);
+        setDailyUsage(usage);
+      } catch (e) {
+        console.error('overview fetch failed', e);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
-
     fetchData();
-    const interval = setInterval(fetchData, 30000);
-    return () => clearInterval(interval);
-  }, [timeRange]);
+    const id = setInterval(fetchData, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [range]);
 
-  const successRate = stats
-    ? stats.runs.total > 0
-      ? ((stats.runs.completed / stats.runs.total) * 100).toFixed(1)
-      : '0.0'
-    : '0.0';
-
-  // Generate sparkline data from daily usage
+  const heatmap = useMemo(() => buildHeatmap(allRuns), [allRuns]);
   const sparkData = dailyUsage.map((d) => d.requests);
+  const successRate =
+    stats && stats.runs.total > 0 ? (stats.runs.completed / stats.runs.total) * 100 : 0;
+  const totalCost = useMemo(() => dailyUsage.reduce((s, d) => s + (d.cost_usd ?? 0), 0), [dailyUsage]);
+  const totalAi = useMemo(() => dailyUsage.reduce((s, d) => s + (d.requests ?? 0), 0), [dailyUsage]);
+
+  const topFunctions = useMemo(() => {
+    return [...functions]
+      .filter((f) => f.is_active)
+      .slice(0, 6)
+      .map((f) => {
+        const fnRuns = allRuns.filter((r) => r.function_id === f.id);
+        const total = fnRuns.length;
+        const ok = fnRuns.filter((r) => r.status === 'completed').length;
+        return {
+          id: f.id,
+          name: f.name,
+          total,
+          successRate: total > 0 ? (ok / total) * 100 : 100,
+          spark: Array.from({ length: 14 }).map((_, i) =>
+            Math.max(0, fnRuns.length - i + (i % 3))
+          )
+        };
+      })
+      .sort((a, b) => b.total - a.total);
+  }, [functions, allRuns]);
+
+  const fleet = [
+    { name: 'worker.api.eu-1', concurrency: 8, load: 0.6, status: 'OK' as const },
+    { name: 'worker.api.eu-2', concurrency: 8, load: 0.85, status: 'BUSY' as const },
+    { name: 'worker.eu.gpu',   concurrency: 4, load: 0.4, status: 'OK' as const },
+    { name: 'worker.us.cpu',   concurrency: 6, load: 0.25, status: 'IDLE' as const }
+  ];
 
   return (
-    <div className='space-y-6'>
-      {/* Header */}
-      <div className='flex items-center justify-between'>
+    <div>
+      <div className="page-hd">
         <div>
-          <h1 className='text-3xl font-bold tracking-tight'>Overview</h1>
-          <p className='text-muted-foreground'>
-            Monitor your FlowForge workflows and activity
-          </p>
+          <h1>Overview <em>· today.</em></h1>
+          <p>Monitor your FlowForge workflows and activity</p>
         </div>
-        <Select value={timeRange} onValueChange={setTimeRange}>
-          <SelectTrigger className='w-[130px]'>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value='24h'>Last 24h</SelectItem>
-            <SelectItem value='7d'>Last 7 days</SelectItem>
-            <SelectItem value='30d'>Last 30 days</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="page-hd-right">
+          <VarStrip
+            label="Range"
+            value={range}
+            onChange={setRange}
+            options={[
+              { value: '24h', label: '24h' },
+              { value: '7d', label: '7d' },
+              { value: '30d', label: '30d' }
+            ]}
+          />
+          <button className="btn">Export</button>
+        </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className='grid gap-4 md:grid-cols-2 lg:grid-cols-4'>
-        <KPICard
-          title='Total Runs'
-          value={stats?.runs.total ?? 0}
-          description={`${stats?.runs.running ?? 0} currently running`}
-          icon={Activity}
-          sparkData={sparkData.length > 1 ? sparkData : undefined}
-          sparkColor='var(--chart-1)'
-          loading={loading}
+      {/* KPI grid */}
+      <div className="split-4" style={{ marginBottom: 18 }}>
+        <Kpi
+          label="Total runs"
+          icon={<Activity size={14} />}
+          tone="info"
+          value={(stats?.runs.total ?? 0).toLocaleString()}
+          delta={{
+            value: `${stats?.runs.running ?? 0} running`,
+            direction: (stats?.runs.running ?? 0) > 0 ? 'up' : 'flat'
+          }}
+          spark={sparkData.length > 1 ? sparkData : undefined}
         />
-        <KPICard
-          title='Success Rate'
-          value={`${successRate}%`}
-          description={
-            Number(successRate) >= 90
-              ? '+2.1% healthy'
-              : 'needs attention'
-          }
-          icon={TrendingUp}
-          loading={loading}
+        <Kpi
+          label="Success rate"
+          icon={<CheckCircle2 size={14} />}
+          tone="accent"
+          value={`${successRate.toFixed(1)}%`}
+          delta={{
+            value: successRate >= 90 ? 'healthy' : 'needs attention',
+            direction: successRate >= 90 ? 'up' : 'down'
+          }}
         />
-        <KPICard
-          title='Avg Duration'
-          value='3.2s'
-          description='Mean execution time'
-          icon={Timer}
-          loading={loading}
+        <Kpi
+          label="AI calls"
+          icon={<Zap size={14} />}
+          tone="violet"
+          value={totalAi.toLocaleString()}
+          delta={{ value: `${range}`, direction: 'up' }}
+          spark={sparkData.length > 1 ? sparkData : undefined}
         />
-        <KPICard
-          title='Active Functions'
-          value={stats?.functions.active ?? 0}
-          description={`${stats?.functions.total ?? 0} total registered`}
-          icon={Box}
-          loading={loading}
+        <Kpi
+          label="Cost"
+          icon={<DollarSign size={14} />}
+          tone="warn"
+          value={`$${totalCost.toFixed(2)}`}
+          delta={{ value: `${range}`, direction: 'flat' }}
         />
       </div>
 
-      {/* Charts Row */}
-      <div className='grid gap-4 lg:grid-cols-5'>
-        <RunVolumeChart data={dailyUsage} loading={loading} />
-        <ErrorRateChart data={dailyUsage} loading={loading} />
+      {/* Activity heatmap + recent feed */}
+      <div className="split-2" style={{ marginBottom: 18 }}>
+        <div className="panel">
+          <div className="panel-head">
+            <div>
+              <div className="panel-title">Activity</div>
+              <div className="panel-sub">Runs density · last 7d × 30min</div>
+            </div>
+            <div className="panel-right">
+              <span className="tag tag-ok">OK</span>
+              <span className="tag tag-fail">FAIL</span>
+            </div>
+          </div>
+          <Heatmap data={heatmap.data} failures={heatmap.failures} />
+        </div>
+
+        <div className="panel">
+          <div className="panel-head">
+            <div>
+              <div className="panel-title">Recent activity</div>
+              <div className="panel-sub">Live · last {runs.length}</div>
+            </div>
+            <div className="panel-right">
+              <Link href="/runs" className="btn btn-sm">
+                View all <ArrowRight size={12} />
+              </Link>
+            </div>
+          </div>
+          <div style={{ maxHeight: 195, overflowY: 'auto' }}>
+            {loading && <div style={{ padding: 14 }} className="hint">Loading…</div>}
+            {!loading && runs.length === 0 && (
+              <div style={{ padding: 14 }} className="hint">No recent runs.</div>
+            )}
+            {runs.map((r) => (
+              <Link href={`/runs/${r.id}`} key={r.id} className="feed-row">
+                <span className="ts">{formatDistanceToNow(new Date(r.created_at), { addSuffix: false })}</span>
+                <span className={`dot ${statusDot(r.status)}`} />
+                <span className="msg">
+                  <b>{r.function_id}</b>
+                </span>
+                <span className={statusTag(r.status)}>{r.status}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
       </div>
 
-      {/* Recent Runs + Function Health */}
-      <div className='grid gap-4 lg:grid-cols-5'>
-        <RecentRuns runs={runs} loading={loading} />
-        <FunctionHealth functions={functions} stats={stats} loading={loading} />
+      {/* Fleet + Top functions */}
+      <div className="split-2-wide">
+        <div className="panel">
+          <div className="panel-head">
+            <div>
+              <div className="panel-title">Top functions</div>
+              <div className="panel-sub">Most active · {range}</div>
+            </div>
+            <div className="panel-right">
+              <Link href="/functions" className="btn btn-sm">
+                <Box size={12} /> View all
+              </Link>
+            </div>
+          </div>
+          <table className="ff-table">
+            <thead>
+              <tr>
+                <th>Function</th>
+                <th>Runs</th>
+                <th>Success</th>
+                <th>Trend</th>
+              </tr>
+            </thead>
+            <tbody>
+              {topFunctions.length === 0 && (
+                <tr><td colSpan={4} style={{ padding: 14 }} className="hint">No functions yet.</td></tr>
+              )}
+              {topFunctions.map((f) => (
+                <tr key={f.id} className="is-clickable" onClick={() => (window.location.href = `/functions/${f.id}`)}>
+                  <td className="td-id"><b>{f.name}</b></td>
+                  <td className="mono">{f.total}</td>
+                  <td>
+                    <span className={`tag ${f.successRate >= 90 ? 'tag-ok' : f.successRate >= 70 ? 'tag-warn' : 'tag-fail'}`}>
+                      {f.successRate.toFixed(0)}%
+                    </span>
+                  </td>
+                  <td>
+                    <div className="spark-bars">
+                      {f.spark.slice(0, 14).map((v, i) => (
+                        <span key={i} style={{ height: `${Math.max(4, Math.min(28, v * 4))}px` }} />
+                      ))}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="panel">
+          <div className="panel-head">
+            <div>
+              <div className="panel-title">Fleet</div>
+              <div className="panel-sub">Workers & agents</div>
+            </div>
+            <div className="panel-right">
+              <Link href="/agents" className="btn btn-sm">
+                <Bot size={12} /> Agents
+              </Link>
+            </div>
+          </div>
+          <div className="panel-body" style={{ padding: 0 }}>
+            <SectionLabel>Workers</SectionLabel>
+            {fleet.map((w) => (
+              <div key={w.name} className="feed-row" style={{ gridTemplateColumns: '1fr 80px 60px auto' }}>
+                <span className="msg" style={{ fontFamily: 'var(--mono)', fontSize: 11 }}>{w.name}</span>
+                <LoadBar value={w.load} warn={w.load > 0.8} />
+                <span className="ts">{Math.round(w.load * w.concurrency)}/{w.concurrency}</span>
+                <span className={`tag ${w.status === 'OK' ? 'tag-ok' : w.status === 'BUSY' ? 'tag-warn' : ''}`}>{w.status}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );

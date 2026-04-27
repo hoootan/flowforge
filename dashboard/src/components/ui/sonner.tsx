@@ -1,10 +1,10 @@
 'use client';
 
-import { useTheme } from 'next-themes';
+import { useShellStore } from '@/stores/shell-store';
 import { Toaster as Sonner, ToasterProps } from 'sonner';
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = 'system' } = useTheme();
+  const theme = useShellStore((s) => s.theme);
 
   return (
     <Sonner

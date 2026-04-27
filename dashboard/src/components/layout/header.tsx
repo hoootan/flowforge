@@ -1,146 +1,171 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { SidebarTrigger } from '../ui/sidebar';
-import { Separator } from '../ui/separator';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger
-} from '../ui/tooltip';
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator
-} from '../ui/breadcrumb';
-import { ModeToggle } from './ThemeToggle/theme-toggle';
-import { NotificationBell } from '../notifications/NotificationBell';
-import { Search, Command } from 'lucide-react';
+import { Moon, Sun, Search, Command as CommandIcon, PanelLeft } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useShellStore } from '@/stores/shell-store';
+import { NotificationBell } from '@/components/notifications/NotificationBell';
+import { useKBar } from 'kbar';
 
-function ServerStatus() {
-  const [status, setStatus] = useState<'checking' | 'connected' | 'disconnected'>(
-    'checking'
-  );
-
-  useEffect(() => {
-    async function checkHealth() {
-      const healthy = await api.checkHealth();
-      setStatus(healthy ? 'connected' : 'disconnected');
-    }
-
-    checkHealth();
-    const interval = setInterval(checkHealth, 10000);
-    return () => clearInterval(interval);
+function useHealth() {
+  const [status, setStatus] = React.useState<'checking' | 'connected' | 'disconnected'>('checking');
+  React.useEffect(() => {
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const ok = await api.checkHealth();
+        if (!cancelled) setStatus(ok ? 'connected' : 'disconnected');
+      } catch {
+        if (!cancelled) setStatus('disconnected');
+      }
+    };
+    check();
+    const id = setInterval(check, 10000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
   }, []);
+  return status;
+}
 
-  const statusConfig = {
-    checking: { color: 'bg-yellow-500', label: 'Checking server...', text: '...' },
-    connected: { color: 'bg-emerald-500', label: 'Server connected', text: 'Healthy' },
-    disconnected: { color: 'bg-red-500', label: 'Server disconnected', text: 'Offline' }
-  };
-
-  const config = statusConfig[status];
-
+function HealthPill() {
+  const status = useHealth();
+  const label = status === 'connected' ? 'Healthy' : status === 'checking' ? '...' : 'Offline';
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div className='flex items-center gap-2 rounded-full border bg-card px-3 py-1.5 text-xs font-medium'>
-            <span className={`h-2 w-2 rounded-full ${config.color} ${status === 'connected' ? '' : 'animate-pulse'}`} />
-            <span>{config.text}</span>
-          </div>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>{config.label}</p>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <span className={`health-pill${status === 'disconnected' ? ' is-down' : ''}`}>
+      <span className="health-dot" />
+      {label}
+    </span>
   );
 }
 
-function Breadcrumbs() {
-  const pathname = usePathname();
+function ThemeToggle() {
+  const { theme, setTheme } = useShellStore();
+  return (
+    <div className="theme-toggle" role="group" aria-label="Theme">
+      <button
+        type="button"
+        className={theme === 'light' ? 'is-on' : ''}
+        onClick={() => setTheme('light')}
+        aria-pressed={theme === 'light'}
+        aria-label="Light theme"
+      >
+        <Sun />
+      </button>
+      <button
+        type="button"
+        className={theme === 'dark' ? 'is-on' : ''}
+        onClick={() => setTheme('dark')}
+        aria-pressed={theme === 'dark'}
+        aria-label="Dark theme"
+      >
+        <Moon />
+      </button>
+    </div>
+  );
+}
+
+function DensityToggle() {
+  const { density, setDensity } = useShellStore();
+  return (
+    <div className="density-toggle" role="group" aria-label="Density">
+      {(['tight', 'comfortable', 'spacious'] as const).map((d) => (
+        <button
+          key={d}
+          type="button"
+          className={density === d ? 'is-on' : ''}
+          onClick={() => setDensity(d)}
+          aria-pressed={density === d}
+          title={`${d} density`}
+        >
+          {d[0]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Crumbs() {
+  const pathname = usePathname() ?? '/';
   const segments = pathname.split('/').filter(Boolean);
-
-  if (segments.length === 0) {
-    return (
-      <Breadcrumb>
-        <BreadcrumbList>
-          <BreadcrumbItem>
-            <BreadcrumbPage>Overview</BreadcrumbPage>
-          </BreadcrumbItem>
-        </BreadcrumbList>
-      </Breadcrumb>
-    );
-  }
-
-  const formatSegment = (segment: string) => {
-    return segment
-      .split('-')
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
-  };
+  const fmt = (s: string) =>
+    s.split('-').map((w) => w[0].toUpperCase() + w.slice(1)).join(' ');
 
   return (
-    <Breadcrumb>
-      <BreadcrumbList>
-        <BreadcrumbItem>
-          <BreadcrumbLink asChild>
-            <Link href='/'>Overview</Link>
-          </BreadcrumbLink>
-        </BreadcrumbItem>
-        {segments.map((segment, index) => {
-          const href = '/' + segments.slice(0, index + 1).join('/');
-          const isLast = index === segments.length - 1;
+    <nav className="ff-crumbs" aria-label="Breadcrumb">
+      <Link href="/" className={segments.length === 0 ? 'is-current' : ''}>
+        {segments.length === 0 ? <b>Overview</b> : <span>Overview</span>}
+      </Link>
+      {segments.map((seg, i) => {
+        const href = '/' + segments.slice(0, i + 1).join('/');
+        const last = i === segments.length - 1;
+        return (
+          <React.Fragment key={href}>
+            <span className="ff-crumbs-sep">/</span>
+            {last ? (
+              <b>{fmt(seg)}</b>
+            ) : (
+              <Link href={href}>{fmt(seg)}</Link>
+            )}
+          </React.Fragment>
+        );
+      })}
+    </nav>
+  );
+}
 
-          return (
-            <BreadcrumbItem key={segment}>
-              <BreadcrumbSeparator />
-              {isLast ? (
-                <BreadcrumbPage>{formatSegment(segment)}</BreadcrumbPage>
-              ) : (
-                <BreadcrumbLink asChild>
-                  <Link href={href}>{formatSegment(segment)}</Link>
-                </BreadcrumbLink>
-              )}
-            </BreadcrumbItem>
-          );
-        })}
-      </BreadcrumbList>
-    </Breadcrumb>
+function SearchTrigger() {
+  const { query } = useKBar();
+  return (
+    <div
+      className="ff-top-search"
+      onClick={() => query.toggle()}
+      role="button"
+      tabIndex={0}
+      aria-label="Open command palette"
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          query.toggle();
+        }
+      }}
+    >
+      <div className="ff-top-search-inner">
+        <Search />
+        <input
+          type="text"
+          placeholder="Search runs, functions, agents…"
+          readOnly
+          tabIndex={-1}
+        />
+        <kbd>⌘K</kbd>
+      </div>
+    </div>
   );
 }
 
 export default function Header() {
+  const toggleSidebar = useShellStore((s) => s.toggleSidebar);
   return (
-    <header className='flex h-14 shrink-0 items-center justify-between gap-2 border-b bg-background/60 backdrop-blur-xl px-4 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12'>
-      <div className='flex items-center gap-2'>
-        <SidebarTrigger className='-ml-1' />
-        <Separator orientation='vertical' className='mr-2 h-4' />
-        <Breadcrumbs />
-      </div>
-
-      <div className='flex items-center gap-3'>
-        {/* Search bar */}
-        <button className='relative hidden h-9 w-56 items-center justify-start rounded-lg border border-input bg-card px-3 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring md:flex lg:w-72'>
-          <Search className='mr-2 h-4 w-4' />
-          <span>Search...</span>
-          <kbd className='pointer-events-none absolute right-2 top-1/2 hidden h-5 -translate-y-1/2 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium opacity-100 sm:flex'>
-            <Command className='h-3 w-3' />K
-          </kbd>
-        </button>
-
-        <NotificationBell />
-        <ServerStatus />
-        <ModeToggle />
-      </div>
+    <header className="ff-top">
+      <button
+        type="button"
+        className="ff-top-btn is-icon"
+        onClick={toggleSidebar}
+        aria-label="Toggle sidebar"
+        title="Toggle sidebar"
+      >
+        <PanelLeft />
+      </button>
+      <Crumbs />
+      <SearchTrigger />
+      <DensityToggle />
+      <ThemeToggle />
+      <HealthPill />
+      <NotificationBell />
     </header>
   );
 }
