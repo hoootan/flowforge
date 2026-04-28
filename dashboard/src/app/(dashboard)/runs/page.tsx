@@ -49,7 +49,7 @@ export default function RunsPage() {
     let cancelled = false;
     const fetch = async () => {
       try {
-        const r = await api.getRuns({ page_size: 200, status: status === 'all' ? undefined : status });
+        const r = await api.getRuns({ page_size: 100, status: status === 'all' ? undefined : status });
         if (!cancelled) setRuns(r.runs);
       } finally {
         if (!cancelled) setLoading(false);
@@ -261,7 +261,7 @@ function GraphView({ runs }: { runs: Run[] }) {
             <div style={{ height: h, width: '100%', background: 'var(--bg-3)', borderRadius: 2, position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
               {b.fail > 0 && <div style={{ background: 'var(--danger)', height: `${(b.fail / total) * 100}%` }} />}
               {b.run > 0 && <div style={{ background: 'var(--info)', height: `${(b.run / total) * 100}%` }} />}
-              {b.ok > 0 && <div style={{ background: 'var(--accent)', height: `${(b.ok / total) * 100}%` }} />}
+              {b.ok > 0 && <div style={{ background: 'var(--brand)', height: `${(b.ok / total) * 100}%` }} />}
             </div>
             <span className="mono" style={{ fontSize: 9, color: 'var(--ink-3)' }}>{b.ts}</span>
           </div>

@@ -61,7 +61,7 @@ export default function LoginPage() {
       <div className="dot-grid" style={{ position: 'fixed', inset: 0, opacity: 0.5, pointerEvents: 'none' }} />
       <div style={{ width: '100%', maxWidth: 400, position: 'relative' }}>
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44, background: 'var(--accent)', color: 'var(--accent-ink)', borderRadius: 8, marginBottom: 12 }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44, background: 'var(--brand)', color: 'var(--brand-ink)', borderRadius: 8, marginBottom: 12 }}>
             <FlowForgeLogo style={{ width: 24, height: 24 }} />
           </div>
           <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0, color: 'var(--ink-1)' }}>
@@ -83,7 +83,7 @@ export default function LoginPage() {
             {requires2FA ? (
               <form onSubmit={handleVerify2FA}>
                 <div style={{ textAlign: 'center', marginBottom: 16 }}>
-                  <Shield size={28} style={{ color: 'var(--accent)', marginBottom: 8 }} />
+                  <Shield size={28} style={{ color: 'var(--brand)', marginBottom: 8 }} />
                   <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink-1)' }}>Two-factor authentication</div>
                   <div className="mono" style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 4 }}>Enter the code from your authenticator app</div>
                 </div>

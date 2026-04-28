@@ -24,7 +24,7 @@ export default function FunctionsPage() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([api.getFunctions(), api.getRuns({ page_size: 200 })])
+    Promise.all([api.getFunctions(), api.getRuns({ page_size: 100 })])
       .then(([f, r]) => {
         if (cancelled) return;
         setFns(f.functions);
