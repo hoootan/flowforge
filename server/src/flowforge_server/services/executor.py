@@ -21,11 +21,13 @@ from flowforge_server.db.models import (
     Step,
     StepStatus,
     StepType,
+    Tenant,
     UsageRecord,
 )
 from flowforge_server.queue import FairQueue, Job
 from flowforge_server.services import notifier as notifier_service
 from flowforge_server.services.ai import AIService, get_ai_service
+from flowforge_server.services.concurrency import read_tenant_concurrency
 from flowforge_server.stream.pubsub import RunEventType, publish_run_event
 
 
@@ -48,6 +50,27 @@ def _parse_timeout_to_seconds(s: str | None) -> int | None:
         return int(s)
     except (ValueError, TypeError):
         return None
+
+
+async def _resolve_tenant_step_timeout(
+    session: AsyncSession, tenant_id: Any
+) -> int | None:
+    """Load the workspace default_step_timeout_s from the tenant row.
+
+    Used by _execute_run as a correctness fallback when the runner-injected
+    job config is absent (e.g. on the _recover_stuck_runs re-enqueue path,
+    which only carries trigger_data + endpoint_url). Returns None if the
+    tenant or settings can't be read so callers can use their own defaults.
+    """
+    try:
+        result = await session.execute(
+            select(Tenant).where(Tenant.id == tenant_id)
+        )
+        tenant = result.scalar_one_or_none()
+    except Exception:
+        return None
+    cfg = read_tenant_concurrency(tenant)
+    return cfg.default_step_timeout_s
 
 
 def _fire_run_failed_notification(run_id: Any) -> None:
@@ -360,6 +383,10 @@ class Executor:
                 # default (default_step_timeout_s, injected by runner._enqueue_run).
                 # Each /invoke call is bounded by one step yield, so this gives a
                 # real per-step soft timeout for worker-mode functions.
+                #
+                # Fallback to a tenant DB load when the job config lacks a
+                # default_step_timeout_s — covers _recover_stuck_runs and any
+                # future enqueue site that doesn't carry full config.
                 fn_cfg = job.data.get("config") or {}
                 fn_timeout_str = fn_cfg.get("timeout") if isinstance(fn_cfg, dict) else None
                 tenant_default_step_s = (
@@ -367,6 +394,10 @@ class Executor:
                     if isinstance(fn_cfg, dict)
                     else None
                 )
+                if tenant_default_step_s is None:
+                    tenant_default_step_s = await _resolve_tenant_step_timeout(
+                        session, run.tenant_id
+                    )
                 step_timeout_s = (
                     _parse_timeout_to_seconds(fn_timeout_str)
                     if fn_timeout_str
@@ -444,10 +475,15 @@ class Executor:
                 },
             }
         except httpx.RequestError as e:
+            # Distinguish read-timeout from other transport errors so the
+            # notifier can gate on `notify_on_run_timeout` vs `notify_on_run_failed`.
+            # httpx.TimeoutException is the parent of ReadTimeout / ConnectTimeout
+            # / WriteTimeout / PoolTimeout, all of which we treat as "timeout".
+            err_type = "HTTPTimeout" if isinstance(e, httpx.TimeoutException) else "RequestError"
             return {
                 "status": "error",
                 "error": {
-                    "type": "RequestError",
+                    "type": err_type,
                     "message": str(e),
                     "retryable": True,
                 },
@@ -863,6 +899,11 @@ class Executor:
                 if isinstance(fn_cfg_blob, dict) and fn_cfg_blob.get("default_step_timeout_s")
                 else None
             )
+            # Fallback to a tenant DB load when the job config lacks a
+            # default_step_timeout_s — covers _recover_stuck_runs and any
+            # future enqueue site that doesn't carry full config.
+            if tenant_default is None:
+                tenant_default = await _resolve_tenant_step_timeout(session, run.tenant_id)
             ai_step_timeout_s: int | None = (
                 step_level_timeout if step_level_timeout else (fn_timeout or tenant_default)
             )

@@ -22,15 +22,25 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from flowforge_server.db import get_session_context
 from flowforge_server.db.models import Run, TenantNotificationConfig
 from flowforge_server.logging import Loggers
+from flowforge_server.services.network_utils import create_ssrf_safe_client
+
+# Error.type values that we treat as "this run hit a timeout, not a generic
+# failure" — used by notify_run_failed to gate on cfg.notify_on_run_timeout
+# instead of cfg.notify_on_run_failed. Set at the failure site (executor.py).
+TIMEOUT_ERROR_TYPES = frozenset({"TimeoutError", "HTTPTimeout"})
+
 
 # Single shared client. Created lazily so tests can monkeypatch httpx.
+# Uses the SSRF-safe wrapper so a misconfigured webhook URL can't reach
+# private network space (defense-in-depth on top of the route-level
+# validate_webhook_url + hooks.slack.com pinning).
 _http_client: httpx.AsyncClient | None = None
 
 
 def _client() -> httpx.AsyncClient:
     global _http_client
     if _http_client is None:
-        _http_client = httpx.AsyncClient(timeout=10.0)
+        _http_client = create_ssrf_safe_client(timeout=10.0)
     return _http_client
 
 
@@ -116,7 +126,21 @@ async def notify_run_failed(run_id: uuid.UUID | str) -> None:
                 return
 
             cfg = await _load_config(session, run.tenant_id)
-            if cfg is None or not cfg.notify_on_run_failed:
+            if cfg is None:
+                return
+
+            # Classify the failure to honor the right toggle. Timeout-class
+            # failures gate on `notify_on_run_timeout`; all other failures
+            # gate on `notify_on_run_failed`. The failure site sets
+            # `error.type` to "HTTPTimeout" or "TimeoutError" — see
+            # executor._invoke_function and the asyncio.wait_for branch.
+            err = run.error or {}
+            err_type = err.get("type") if isinstance(err, dict) else None
+            is_timeout = err_type in TIMEOUT_ERROR_TYPES
+
+            if is_timeout and not cfg.notify_on_run_timeout:
+                return
+            if not is_timeout and not cfg.notify_on_run_failed:
                 return
 
             # Best-effort load function name

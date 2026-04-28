@@ -7,26 +7,15 @@ from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from flowforge_server.api.schemas.tenant import ConcurrencySettings
 from flowforge_server.config import get_settings
 from flowforge_server.db import get_session_context
 from flowforge_server.db.models import Function, Run, RunStatus, Step, StepStatus, Tenant
 from flowforge_server.queue import FairQueue, Job
+from flowforge_server.services.concurrency import read_tenant_concurrency
 from flowforge_server.stream import RedisEventStream, StreamMessage
-
-
-def _tenant_concurrency(tenant: Tenant | None) -> ConcurrencySettings:
-    """Read the workspace concurrency block from a tenant row, with defaults.
-
-    Mirrors the logic in api/routes/tenants.py so the runner can honor settings
-    without going through the API layer.
-    """
-    if tenant is None:
-        return ConcurrencySettings()
-    raw = (tenant.settings or {}).get("concurrency") or {}
-    return ConcurrencySettings(**{k: v for k, v in raw.items() if v is not None})
 
 
 class Runner:
@@ -368,17 +357,37 @@ class Runner:
         Honors the workspace `use_event_id_idempotency` setting: when enabled,
         the trigger event id becomes the new run's idempotency key so a
         redelivered event from the broker maps to the same logical run.
+
+        Uses an optimistic query-then-insert pattern guarded by a SAVEPOINT
+        (``begin_nested``) so a concurrent inserter racing on the same key
+        doesn't poison the outer session transaction (this session is shared
+        with ``_resolve_waiting_steps`` further down ``_process_event``).
+        The partial UNIQUE index ``uq_runs_tenant_idempotency`` from
+        ``add_runs_idempotency_unique.py`` closes the race window.
         """
         # Read tenant concurrency settings to decide on idempotency
         tenant_result = await session.execute(
             select(Tenant).where(Tenant.id == fn.tenant_id)
         )
         tenant = tenant_result.scalar_one_or_none()
-        concurrency_cfg = _tenant_concurrency(tenant)
+        concurrency_cfg = read_tenant_concurrency(tenant)
 
         idempotency_key: str | None = None
         if concurrency_cfg.use_event_id_idempotency and message.event_id:
             idempotency_key = f"event:{message.event_id}:fn:{fn.id}"
+
+            # Optimistic check: if this redelivered event already produced a
+            # run, return that one. Cheaper than failing on the constraint
+            # in the common (non-racing) case.
+            existing = await session.execute(
+                select(Run).where(
+                    Run.tenant_id == fn.tenant_id,
+                    Run.idempotency_key == idempotency_key,
+                )
+            )
+            existing_run = existing.scalar_one_or_none()
+            if existing_run is not None:
+                return existing_run
 
         run = Run(
             tenant_id=fn.tenant_id,
@@ -397,10 +406,28 @@ class Runner:
             idempotency_key=idempotency_key,
         )
 
-        session.add(run)
-        await session.flush()
-        await session.refresh(run)
+        try:
+            async with session.begin_nested():
+                session.add(run)
+                await session.flush()
+        except IntegrityError:
+            # Lost the race against a concurrent runner. The SAVEPOINT
+            # rolled back, so the outer transaction is still healthy.
+            # Re-query and return whatever the winner inserted.
+            if idempotency_key is None:
+                raise  # No idempotency key — must be a different constraint failure.
+            winner = await session.execute(
+                select(Run).where(
+                    Run.tenant_id == fn.tenant_id,
+                    Run.idempotency_key == idempotency_key,
+                )
+            )
+            existing_run = winner.scalar_one_or_none()
+            if existing_run is not None:
+                return existing_run
+            raise  # Constraint failure that we still can't explain.
 
+        await session.refresh(run)
         return run
 
     async def _enqueue_run(self, run: Run, fn: Function) -> None:
@@ -417,7 +444,7 @@ class Runner:
                 select(Tenant).where(Tenant.id == run.tenant_id)
             )
             tenant = tenant_row.scalar_one_or_none()
-            cfg = _tenant_concurrency(tenant)
+            cfg = read_tenant_concurrency(tenant)
 
             running_count = await cfg_session.execute(
                 select(func.count())

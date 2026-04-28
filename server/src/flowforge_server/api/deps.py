@@ -284,7 +284,7 @@ async def get_tenant_with_dev_fallback(
         # Try the new ApiKey model first
         api_key_model, tenant = await _validate_api_key_from_model(session, api_key)
         if tenant:
-            return tenant
+            return _bounce_if_deleted(tenant)
 
         # Fall back to legacy Tenant.api_key_hash for backwards compatibility
         api_key_hash = hash_api_key(api_key)
@@ -294,7 +294,7 @@ async def get_tenant_with_dev_fallback(
         tenant = result.scalar_one_or_none()
 
         if tenant:
-            return tenant
+            return _bounce_if_deleted(tenant)
 
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -308,7 +308,7 @@ async def get_tenant_with_dev_fallback(
         tenant = await _validate_jwt_token(session, token, settings)
 
         if tenant:
-            return tenant
+            return _bounce_if_deleted(tenant)
 
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -318,7 +318,10 @@ async def get_tenant_with_dev_fallback(
 
     # No credentials provided
     if settings.is_development and settings.dev_auth_bypass:
-        # In development with auth bypass enabled, fall back to default tenant
+        # In development with auth bypass enabled, fall back to default tenant.
+        # The dev tenant is fetched (not created) here, so a soft-deleted dev
+        # tenant should bounce too — keeps the bypass path consistent with
+        # the authenticated paths.
         result = await session.execute(
             select(Tenant).where(Tenant.id == DEFAULT_TENANT_ID)
         )
@@ -329,7 +332,7 @@ async def get_tenant_with_dev_fallback(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Default tenant not found. Run database seeds.",
             )
-        return tenant
+        return _bounce_if_deleted(tenant)
 
     # Production requires authentication
     raise HTTPException(

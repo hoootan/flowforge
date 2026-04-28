@@ -82,14 +82,13 @@ async def update_concurrency(
     merged = current.model_copy(update=patch)
 
     # Persist back to the tenant row. We re-fetch through the request session so
-    # the JSONB write participates in the transaction.
+    # the JSONB write participates in the transaction. ORM-only path —
+    # mutating the attached instance and flagging the JSONB key as modified
+    # is the canonical SQLAlchemy pattern; an explicit `update(...)` here
+    # would fire a second UPDATE on commit.
     settings = dict(tenant.settings or {})
     settings[CONCURRENCY_KEY] = merged.model_dump()
 
-    await session.execute(
-        update(Tenant).where(Tenant.id == tenant.id).values(settings=settings)
-    )
-    # Mirror the new value onto the in-memory tenant the dep handed us.
     tenant.settings = settings
     flag_modified(tenant, "settings")
     await session.commit()
@@ -222,10 +221,8 @@ async def delete_workspace(
             detail="confirm_slug does not match the workspace slug.",
         )
 
+    # ORM-only mutation; the attached instance flushes one UPDATE on commit.
     now = datetime.now(UTC)
-    await session.execute(
-        update(Tenant).where(Tenant.id == tenant.id).values(deleted_at=now)
-    )
     tenant.deleted_at = now
     await session.commit()
     return DeleteWorkspaceResponse(deleted_at=now)
