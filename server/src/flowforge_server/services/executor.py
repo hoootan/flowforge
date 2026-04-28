@@ -24,8 +24,8 @@ from flowforge_server.db.models import (
     UsageRecord,
 )
 from flowforge_server.queue import FairQueue, Job
-from flowforge_server.services.ai import AIService, get_ai_service
 from flowforge_server.services import notifier as notifier_service
+from flowforge_server.services.ai import AIService, get_ai_service
 from flowforge_server.stream.pubsub import RunEventType, publish_run_event
 
 

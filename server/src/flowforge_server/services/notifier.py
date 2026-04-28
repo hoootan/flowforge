@@ -23,7 +23,6 @@ from flowforge_server.db import get_session_context
 from flowforge_server.db.models import Run, TenantNotificationConfig
 from flowforge_server.logging import Loggers
 
-
 # Single shared client. Created lazily so tests can monkeypatch httpx.
 _http_client: httpx.AsyncClient | None = None
 
