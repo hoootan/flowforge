@@ -25,7 +25,21 @@ from flowforge_server.db.models import (
 )
 from flowforge_server.queue import FairQueue, Job
 from flowforge_server.services.ai import AIService, get_ai_service
+from flowforge_server.services import notifier as notifier_service
 from flowforge_server.stream.pubsub import RunEventType, publish_run_event
+
+
+def _fire_run_failed_notification(run_id: Any) -> None:
+    """Schedule a fire-and-forget notification dispatch.
+
+    Wrapped so a missing event loop (e.g. during sync teardown) doesn't crash
+    the executor. The notifier itself is exception-safe.
+    """
+    try:
+        asyncio.create_task(notifier_service.notify_run_failed(run_id))
+    except RuntimeError:
+        # No running event loop — best-effort skip.
+        pass
 
 if TYPE_CHECKING:
     from flowforge_server.services.inline_executor import InlineExecutor
@@ -503,6 +517,10 @@ class Executor:
                     },
                 )
 
+                # Fire workspace notifications (Slack / PagerDuty).
+                # Fire-and-forget — must not block run completion.
+                _fire_run_failed_notification(run.id)
+
                 print(f"[Executor] Run {run.id} permanently failed")
 
                 # Sync linked task status
@@ -901,6 +919,8 @@ class Executor:
                     print(f"[Executor] Run {run.id} failed permanently (AI step error, no retries left)")
 
                 await session.commit()
+                if not will_retry:
+                    _fire_run_failed_notification(run.id)
                 return True
 
             # Update step with actual result

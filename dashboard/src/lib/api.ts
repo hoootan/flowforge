@@ -638,6 +638,33 @@ const emptyToolsResponse: ToolsResponse = { tools: [], total: 0 };
 const emptyApprovalsResponse: ApprovalsResponse = { approvals: [], total: 0 };
 const emptyUsersResponse: UsersResponse = { users: [], total: 0 };
 const emptyApiKeysResponse: ApiKeysResponse = { keys: [], total: 0 };
+
+// Workspace notification settings
+export interface NotificationSettings {
+  slack_channel: string | null;
+  slack_webhook_url: string | null;
+  pagerduty_enabled: boolean;
+  pagerduty_integration_key: string | null;
+  email_digest_enabled: boolean;
+  notify_on_run_failed: boolean;
+  notify_on_run_timeout: boolean;
+}
+
+export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
+  slack_channel: null,
+  slack_webhook_url: null,
+  pagerduty_enabled: false,
+  pagerduty_integration_key: null,
+  email_digest_enabled: false,
+  notify_on_run_failed: true,
+  notify_on_run_timeout: true,
+};
+
+export interface NotificationTestResponse {
+  ok: boolean;
+  channel: string;
+  message: string;
+}
 const emptyStats: Stats = {
   runs: { total: 0, completed: 0, failed: 0, running: 0 },
   functions: { total: 0, active: 0 },
@@ -1835,6 +1862,41 @@ class FlowForgeAPI {
         by_model: { models: [] },
         daily: { daily: [] },
       };
+    }
+  }
+
+  // Tenant / workspace notification settings
+  async getNotificationSettings(): Promise<NotificationSettings> {
+    try {
+      return await this.request<NotificationSettings>("/tenant/notifications");
+    } catch {
+      return DEFAULT_NOTIFICATION_SETTINGS;
+    }
+  }
+
+  async updateNotificationSettings(
+    data: Partial<NotificationSettings>
+  ): Promise<NotificationSettings | null> {
+    try {
+      return await this.request<NotificationSettings>("/tenant/notifications", {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async testNotification(
+    channel: "slack" | "pagerduty"
+  ): Promise<NotificationTestResponse | null> {
+    try {
+      return await this.request<NotificationTestResponse>(
+        "/tenant/notifications/test",
+        { method: "POST", body: JSON.stringify({ channel }) }
+      );
+    } catch {
+      return null;
     }
   }
 }

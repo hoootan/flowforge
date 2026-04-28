@@ -27,6 +27,7 @@ import {
   Lock,
   DollarSign,
   FileText,
+  Bell,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore, usePermissions } from "@/stores/auth-store";
@@ -38,6 +39,7 @@ import { SecurityTab } from "@/components/settings/security-tab";
 import { ModelPricingTab } from "@/components/settings/model-pricing-tab";
 import { AuditLogTab } from "@/components/settings/audit-log-tab";
 import { CredentialsTab } from "@/components/settings/credentials-tab";
+import { NotificationsTab } from "@/components/settings/notifications-tab";
 import type { User } from "@/lib/api";
 
 interface SettingsData {
@@ -139,7 +141,7 @@ export default function SettingsPage() {
 
       {/* Tabbed Settings Interface */}
       <Tabs defaultValue="general" className="flex-1">
-        <TabsList className={`grid w-full max-w-5xl ${showUsersTab ? "grid-cols-9" : "grid-cols-7"}`}>
+        <TabsList className={`grid w-full max-w-6xl ${showUsersTab ? "grid-cols-10" : "grid-cols-8"}`}>
           <TabsTrigger value="general" className="gap-1.5">
             <Settings className="h-4 w-4" />
             <span className="hidden sm:inline">General</span>
@@ -176,6 +178,10 @@ export default function SettingsPage() {
               <span className="hidden sm:inline">Audit</span>
             </TabsTrigger>
           )}
+          <TabsTrigger value="notifications" className="gap-1.5">
+            <Bell className="h-4 w-4" />
+            <span className="hidden sm:inline">Notifications</span>
+          </TabsTrigger>
           <TabsTrigger value="appearance" className="gap-1.5">
             <Palette className="h-4 w-4" />
             <span className="hidden sm:inline">Theme</span>
@@ -360,6 +366,11 @@ export default function SettingsPage() {
             <AuditLogTab />
           </TabsContent>
         )}
+
+        {/* Notifications Tab */}
+        <TabsContent value="notifications" className="mt-6 space-y-6">
+          <NotificationsTab />
+        </TabsContent>
 
         {/* Appearance Tab */}
         <TabsContent value="appearance" className="mt-6 space-y-6">

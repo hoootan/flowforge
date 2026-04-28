@@ -17,6 +17,9 @@ from flowforge_server.db.models.skill_template import SkillTemplate
 from flowforge_server.db.models.step import Step, StepStatus, StepType
 from flowforge_server.db.models.task import Task, TaskPriority, TaskStatus
 from flowforge_server.db.models.tenant import Tenant
+from flowforge_server.db.models.tenant_notification_config import (
+    TenantNotificationConfig,
+)
 from flowforge_server.db.models.tool import Tool
 from flowforge_server.db.models.tool_approval import ApprovalStatus, ToolApproval
 from flowforge_server.db.models.usage import UsageRecord
@@ -59,4 +62,5 @@ __all__ = [
     "Comment",
     "Notification",
     "SkillTemplate",
+    "TenantNotificationConfig",
 ]
