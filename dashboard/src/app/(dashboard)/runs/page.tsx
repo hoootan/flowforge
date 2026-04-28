@@ -1,365 +1,272 @@
-"use client"
+'use client';
 
-import { useEffect, useState, useCallback, useMemo } from "react"
-import { useRouter } from "next/navigation"
-import {
-  ColumnDef,
-  ColumnFiltersState,
-  SortingState,
-  VisibilityState,
-  PaginationState,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getSortedRowModel,
-  useReactTable,
-} from "@tanstack/react-table"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import {
-  CheckCircle,
-  Clock,
-  XCircle,
-  Pause,
-  RefreshCw,
-  PlayCircle,
-  StopCircle,
-  MoreHorizontal,
-} from "lucide-react"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { toast } from "sonner"
-import { api, Run } from "@/lib/api"
-import {
-  DataTable,
-  DataTableColumnHeader,
-  DataTableFacetedFilter,
-  DataTableToolbar,
-  DataTableSkeleton,
-  type FilterOption,
-} from "@/components/data-table"
-import { NoDataState } from "@/components/empty-state"
+import { useEffect, useState, useMemo } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { formatDistanceToNow } from 'date-fns';
+import { RefreshCw, Search } from 'lucide-react';
+import { api, type Run } from '@/lib/api';
+import { VarStrip } from '@/components/ui/var-strip';
 
-function getStatusIcon(status: string) {
-  switch (status) {
-    case "completed":
-      return <CheckCircle className="h-4 w-4 text-emerald-500" />
-    case "running":
-      return <PlayCircle className="h-4 w-4 text-primary animate-pulse" />
-    case "failed":
-      return <XCircle className="h-4 w-4 text-destructive" />
-    case "paused":
-      return <Pause className="h-4 w-4 text-amber-500" />
-    default:
-      return <Clock className="h-4 w-4 text-muted-foreground" />
-  }
+type View = 'table' | 'cards' | 'graph';
+type StatusFilter = 'all' | 'completed' | 'failed' | 'running' | 'pending' | 'cancelled';
+
+function statusTag(s: string) {
+  if (s === 'completed') return 'tag tag-ok';
+  if (s === 'failed') return 'tag tag-fail';
+  if (s === 'running') return 'tag tag-running';
+  if (s === 'pending' || s === 'paused') return 'tag tag-warn';
+  return 'tag';
 }
 
-function getStatusBadge(status: string) {
-  const config: Record<
-    string,
-    { variant: "default" | "secondary" | "destructive" | "outline"; className?: string }
-  > = {
-    completed: { variant: "outline", className: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400" },
-    running: { variant: "outline", className: "border-primary/20 bg-primary/10 text-primary" },
-    failed: { variant: "outline", className: "border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-400" },
-    pending: { variant: "outline", className: "border-muted text-muted-foreground" },
-    paused: { variant: "outline", className: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-400" },
-  }
-
-  const { variant, className } = config[status] || { variant: "outline" as const }
-
-  return (
-    <Badge variant={variant} className={className}>
-      {status}
-    </Badge>
-  )
+function statusDot(s: string) {
+  if (s === 'completed') return 'dot-ok';
+  if (s === 'failed') return 'dot-fail';
+  if (s === 'running') return 'dot-run';
+  if (s === 'pending' || s === 'paused') return 'dot-warn';
+  return 'dot-muted';
 }
 
-function formatDuration(startedAt: string | null, endedAt: string | null): string {
-  if (!startedAt) return "-"
-  const start = new Date(startedAt).getTime()
-  const end = endedAt ? new Date(endedAt).getTime() : Date.now()
-  const ms = end - start
-  if (ms < 1000) return `${ms}ms`
-  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`
-  return `${(ms / 60000).toFixed(1)}m`
+function fmtDuration(r: Run): string {
+  if (!r.started_at) return '—';
+  const start = new Date(r.started_at).getTime();
+  const end = r.ended_at ? new Date(r.ended_at).getTime() : Date.now();
+  const ms = end - start;
+  if (ms < 1000) return `${ms}ms`;
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+  return `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
 }
-
-function formatTimestamp(iso: string | null): string {
-  if (!iso) return "-"
-  const date = new Date(iso)
-  return date.toLocaleString([], {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  })
-}
-
-const statusOptions: FilterOption[] = [
-  { label: "Running", value: "running", icon: PlayCircle },
-  { label: "Completed", value: "completed", icon: CheckCircle },
-  { label: "Failed", value: "failed", icon: XCircle },
-  { label: "Paused", value: "paused", icon: Pause },
-  { label: "Pending", value: "pending", icon: Clock },
-]
-
-const PAGE_SIZE = 20
 
 export default function RunsPage() {
-  const router = useRouter()
-  const [runs, setRuns] = useState<Run[]>([])
-  const [totalRows, setTotalRows] = useState(0)
-  const [initialLoading, setInitialLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [pagination, setPagination] = useState<PaginationState>({
-    pageIndex: 0,
-    pageSize: PAGE_SIZE,
-  })
-  const [sorting, setSorting] = useState<SortingState>([])
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
-  const [rowSelection, setRowSelection] = useState({})
-
-  const fetchRuns = useCallback(async (page: number, pageSize: number, isInitial = false) => {
-    if (isInitial) {
-      setInitialLoading(true)
-    } else {
-      setRefreshing(true)
-    }
-    const response = await api.getRuns({
-      page: page + 1, // API uses 1-based indexing
-      page_size: pageSize
-    })
-    setRuns(response.runs || [])
-    setTotalRows(response.total || 0)
-    setInitialLoading(false)
-    setRefreshing(false)
-  }, [])
-
-  const handleCancelRun = useCallback(async (runId: string, e: React.MouseEvent) => {
-    e.stopPropagation() // Prevent row click
-    const result = await api.cancelRun(runId)
-    if (result?.success) {
-      toast.success("Run cancelled successfully")
-      fetchRuns(pagination.pageIndex, pagination.pageSize, false)
-    } else {
-      toast.error("Failed to cancel run")
-    }
-  }, [fetchRuns, pagination.pageIndex, pagination.pageSize])
+  const router = useRouter();
+  const [runs, setRuns] = useState<Run[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [view, setView] = useState<View>('table');
+  const [status, setStatus] = useState<StatusFilter>('all');
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
-    fetchRuns(pagination.pageIndex, pagination.pageSize, runs.length === 0)
-  }, [fetchRuns, pagination.pageIndex, pagination.pageSize])
+    let cancelled = false;
+    const fetch = async () => {
+      try {
+        const r = await api.getRuns({ page_size: 200, status: status === 'all' ? undefined : status });
+        if (!cancelled) setRuns(r.runs);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    fetch();
+    const id = setInterval(fetch, 15000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [status]);
 
-  const columns: ColumnDef<Run>[] = useMemo(
-    () => [
-      {
-        accessorKey: "status",
-        header: ({ column }) => (
-          <DataTableColumnHeader column={column} title="Status" />
-        ),
-        cell: ({ row }) => {
-          const status = row.getValue("status") as string
-          return (
-            <div className="flex items-center gap-2">
-              {getStatusIcon(status)}
-              {getStatusBadge(status)}
-            </div>
-          )
-        },
-        filterFn: (row, id, value) => {
-          return value.includes(row.getValue(id))
-        },
-      },
-      {
-        accessorKey: "function_id",
-        header: ({ column }) => (
-          <DataTableColumnHeader column={column} title="Function" />
-        ),
-        cell: ({ row }) => (
-          <div className="font-medium">{row.getValue("function_id")}</div>
-        ),
-      },
-      {
-        accessorKey: "id",
-        header: ({ column }) => (
-          <DataTableColumnHeader column={column} title="Run ID" />
-        ),
-        cell: ({ row }) => (
-          <div className="font-mono text-xs text-muted-foreground">
-            {(row.getValue("id") as string).slice(0, 8)}...
-          </div>
-        ),
-      },
-      {
-        accessorKey: "trigger_type",
-        header: ({ column }) => (
-          <DataTableColumnHeader column={column} title="Trigger" />
-        ),
-        cell: ({ row }) => (
-          <Badge variant="outline" className="font-mono text-xs">
-            {row.getValue("trigger_type")}
-          </Badge>
-        ),
-      },
-      {
-        id: "duration",
-        header: ({ column }) => (
-          <DataTableColumnHeader column={column} title="Duration" />
-        ),
-        cell: ({ row }) => (
-          <div className="font-mono text-sm">
-            {formatDuration(row.original.started_at, row.original.ended_at)}
-          </div>
-        ),
-      },
-      {
-        accessorKey: "started_at",
-        header: ({ column }) => (
-          <DataTableColumnHeader column={column} title="Started" />
-        ),
-        cell: ({ row }) => (
-          <div className="text-muted-foreground">
-            {formatTimestamp(row.getValue("started_at"))}
-          </div>
-        ),
-      },
-      {
-        id: "actions",
-        cell: ({ row }) => {
-          const run = row.original
-          const canCancel = run.status === "running" || run.status === "pending" || run.status === "paused"
+  const filtered = useMemo(() => {
+    if (!search) return runs;
+    const q = search.toLowerCase();
+    return runs.filter((r) => r.id.toLowerCase().includes(q) || r.function_id?.toLowerCase().includes(q));
+  }, [runs, search]);
 
-          return (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {canCancel && (
-                  <DropdownMenuItem
-                    onClick={(e) => handleCancelRun(run.id, e as unknown as React.MouseEvent)}
-                    className="text-destructive focus:text-destructive"
-                  >
-                    <StopCircle className="mr-2 h-4 w-4" />
-                    Cancel Run
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    router.push(`/runs/${run.id}`)
-                  }}
-                >
-                  View Details
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )
-        },
-      },
-    ],
-    [handleCancelRun, router]
-  )
-
-  const pageCount = Math.ceil(totalRows / pagination.pageSize)
-
-  const table = useReactTable({
-    data: runs,
-    columns,
-    pageCount,
-    manualPagination: true,
-    onPaginationChange: setPagination,
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    onColumnVisibilityChange: setColumnVisibility,
-    onRowSelectionChange: setRowSelection,
-    state: {
-      pagination,
-      sorting,
-      columnFilters,
-      columnVisibility,
-      rowSelection,
-    },
-  })
-
-  if (initialLoading) {
-    return (
-      <div className="space-y-6 animate-fade-in">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Runs</h1>
-            <p className="text-muted-foreground">
-              View and manage all function executions.
-            </p>
-          </div>
-        </div>
-        <DataTableSkeleton columnCount={6} rowCount={10} />
-      </div>
-    )
-  }
+  const counts = useMemo(() => {
+    const c = { all: runs.length, completed: 0, failed: 0, running: 0, pending: 0, cancelled: 0 };
+    for (const r of runs) {
+      if (r.status in c) (c as Record<string, number>)[r.status]++;
+    }
+    return c;
+  }, [runs]);
 
   return (
-    <div className="flex h-full flex-col space-y-6 animate-fade-in">
-      {/* Page Header */}
-      <div className="flex items-center justify-between">
+    <div>
+      <div className="page-hd">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Runs</h1>
-          <p className="text-muted-foreground">
-            View and manage all function executions.
-          </p>
+          <h1>Runs <em>· every execution.</em></h1>
+          <p>{filtered.length} run{filtered.length === 1 ? '' : 's'}{search ? ` matching "${search}"` : ''}</p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => fetchRuns(pagination.pageIndex, pagination.pageSize, false)}
-          disabled={refreshing}
-        >
-          <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-          Refresh
-        </Button>
+        <div className="page-hd-right">
+          <VarStrip
+            value={view}
+            onChange={setView}
+            options={[
+              { value: 'table', label: 'Table' },
+              { value: 'cards', label: 'Cards' },
+              { value: 'graph', label: 'Graph' }
+            ]}
+          />
+          <button className="btn" onClick={() => router.refresh()}>
+            <RefreshCw size={12} /> Refresh
+          </button>
+        </div>
       </div>
 
-      {runs.length === 0 ? (
-        <NoDataState resource="runs" />
-      ) : (
-        <div className={`transition-opacity duration-200 ${refreshing ? "opacity-60" : "opacity-100"}`}>
-        <DataTable
-          table={table}
-          totalRows={totalRows}
-          onRowClick={(run) => router.push(`/runs/${run.id}`)}
-        >
-          <DataTableToolbar
-            table={table}
-            searchColumn="function_id"
-            searchPlaceholder="Search functions..."
-          >
-            {table.getColumn("status") && (
-              <DataTableFacetedFilter
-                column={table.getColumn("status")}
-                title="Status"
-                options={statusOptions}
-              />
-            )}
-          </DataTableToolbar>
-        </DataTable>
+      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+        {/* Filter rail */}
+        <aside style={{ width: 180, flex: 'none' }}>
+          <div className="panel">
+            <div className="panel-head">
+              <div className="panel-title" style={{ fontSize: 12 }}>Status</div>
+            </div>
+            <div style={{ padding: 6 }}>
+              {(['all', 'completed', 'failed', 'running', 'pending', 'cancelled'] as const).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  className={`ff-side-link${status === s ? ' is-active' : ''}`}
+                  onClick={() => setStatus(s)}
+                  style={{ width: '100%', textTransform: 'capitalize' }}
+                >
+                  <span className={`dot ${s === 'all' ? 'dot-muted' : statusDot(s)}`} />
+                  <span className="ff-side-link-text">{s}</span>
+                  <span className="ff-side-link-badge">{counts[s] ?? 0}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="panel" style={{ marginTop: 12 }}>
+            <div className="panel-head">
+              <div className="panel-title" style={{ fontSize: 12 }}>Search</div>
+            </div>
+            <div className="panel-body" style={{ padding: 10 }}>
+              <div style={{ position: 'relative' }}>
+                <Search size={12} style={{ position: 'absolute', left: 8, top: 10, color: 'var(--ink-3)' }} />
+                <input
+                  className="field-input mono"
+                  placeholder="run id, function…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  style={{ paddingLeft: 26 }}
+                />
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        {/* Main */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {view === 'table' && (
+            <div className="panel">
+              <table className="ff-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: 8 }}></th>
+                    <th>Run ID</th>
+                    <th>Function</th>
+                    <th>Status</th>
+                    <th>Trigger</th>
+                    <th>Duration</th>
+                    <th>Started</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading && (
+                    <tr><td colSpan={7} className="hint" style={{ padding: 14 }}>Loading…</td></tr>
+                  )}
+                  {!loading && filtered.length === 0 && (
+                    <tr><td colSpan={7} className="hint" style={{ padding: 14 }}>No runs found.</td></tr>
+                  )}
+                  {filtered.map((r) => (
+                    <tr key={r.id} className="is-clickable" onClick={() => router.push(`/runs/${r.id}`)}>
+                      <td><span className={`dot ${statusDot(r.status)}`} /></td>
+                      <td className="td-id"><b>{r.id.slice(0, 8)}</b><span style={{ color: 'var(--ink-4)' }}>{r.id.slice(8, 14)}…</span></td>
+                      <td className="mono">{r.function_id}</td>
+                      <td><span className={statusTag(r.status)}>{r.status}</span></td>
+                      <td className="mono" style={{ color: 'var(--ink-3)' }}>{r.event_id ? 'event' : 'manual'}</td>
+                      <td className="mono">{fmtDuration(r)}</td>
+                      <td className="mono" style={{ color: 'var(--ink-3)' }}>
+                        {formatDistanceToNow(new Date(r.created_at), { addSuffix: true })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {view === 'cards' && (
+            <div className="split-3">
+              {loading && <div className="hint">Loading…</div>}
+              {!loading && filtered.length === 0 && <div className="hint">No runs.</div>}
+              {filtered.map((r) => (
+                <Link key={r.id} href={`/runs/${r.id}`} className="panel" style={{ textDecoration: 'none' }}>
+                  <div className="panel-body">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span className={`dot ${statusDot(r.status)}`} />
+                      <span className={statusTag(r.status)}>{r.status}</span>
+                      <span className="mono" style={{ marginLeft: 'auto', fontSize: 10.5, color: 'var(--ink-3)' }}>
+                        {fmtDuration(r)}
+                      </span>
+                    </div>
+                    <div className="mono" style={{ marginTop: 12, fontSize: 13, color: 'var(--ink-1)' }}>
+                      {r.function_id}
+                    </div>
+                    <div className="mono" style={{ marginTop: 4, fontSize: 11, color: 'var(--ink-3)' }}>
+                      #{r.id.slice(0, 12)}
+                    </div>
+                    <div className="mono" style={{ marginTop: 10, fontSize: 10.5, color: 'var(--ink-3)' }}>
+                      {formatDistanceToNow(new Date(r.created_at), { addSuffix: true })}
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+
+          {view === 'graph' && (
+            <div className="panel">
+              <div className="panel-head">
+                <div className="panel-title">Graph view</div>
+                <div className="panel-sub">Run volume by hour</div>
+              </div>
+              <div className="panel-body">
+                <GraphView runs={filtered} />
+              </div>
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
-  )
+  );
+}
+
+function GraphView({ runs }: { runs: Run[] }) {
+  const buckets = useMemo(() => {
+    const out: { ts: string; ok: number; fail: number; run: number }[] = [];
+    const now = Date.now();
+    for (let h = 23; h >= 0; h--) {
+      const slotStart = now - (h + 1) * 3_600_000;
+      const slotEnd = now - h * 3_600_000;
+      const inSlot = runs.filter((r) => {
+        const t = new Date(r.created_at).getTime();
+        return t >= slotStart && t < slotEnd;
+      });
+      out.push({
+        ts: new Date(slotEnd).getHours() + 'h',
+        ok: inSlot.filter((r) => r.status === 'completed').length,
+        fail: inSlot.filter((r) => r.status === 'failed').length,
+        run: inSlot.filter((r) => r.status === 'running').length
+      });
+    }
+    return out;
+  }, [runs]);
+  const max = Math.max(1, ...buckets.map((b) => b.ok + b.fail + b.run));
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 200, paddingTop: 16 }}>
+      {buckets.map((b, i) => {
+        const total = b.ok + b.fail + b.run;
+        const h = (total / max) * 180;
+        return (
+          <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+            <div style={{ height: h, width: '100%', background: 'var(--bg-3)', borderRadius: 2, position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+              {b.fail > 0 && <div style={{ background: 'var(--danger)', height: `${(b.fail / total) * 100}%` }} />}
+              {b.run > 0 && <div style={{ background: 'var(--info)', height: `${(b.run / total) * 100}%` }} />}
+              {b.ok > 0 && <div style={{ background: 'var(--accent)', height: `${(b.ok / total) * 100}%` }} />}
+            </div>
+            <span className="mono" style={{ fontSize: 9, color: 'var(--ink-3)' }}>{b.ts}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
 }

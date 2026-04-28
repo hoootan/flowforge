@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useTheme } from "next-themes";
+import { useShellStore } from "@/stores/shell-store";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,7 +62,7 @@ const DEFAULT_SETTINGS: SettingsData = {
 const STORAGE_KEY = "flowforge-settings";
 
 export default function SettingsPage() {
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme } = useShellStore();
   const { isAdmin } = usePermissions();
   const [settings, setSettings] = useState<SettingsData>(DEFAULT_SETTINGS);
   const [isSaving, setIsSaving] = useState(false);
@@ -379,7 +379,7 @@ export default function SettingsPage() {
               {mounted && (
                 <RadioGroup
                   value={theme}
-                  onValueChange={setTheme}
+                  onValueChange={(v) => setTheme(v === 'light' ? 'light' : 'dark')}
                   className="grid gap-4 md:grid-cols-3"
                 >
                   {/* Light Theme */}

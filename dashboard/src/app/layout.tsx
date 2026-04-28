@@ -1,15 +1,7 @@
 import { fontVariables } from '@/lib/font';
-import ThemeProvider from '@/components/layout/ThemeToggle/theme-provider';
 import { cn } from '@/lib/utils';
 import type { Metadata, Viewport } from 'next';
-import { cookies } from 'next/headers';
 import './globals.css';
-import './theme.css';
-
-const META_THEME_COLORS = {
-  light: '#f5f5f4',
-  dark: '#09090b'
-};
 
 export const metadata: Metadata = {
   metadataBase: new URL(
@@ -31,50 +23,43 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: META_THEME_COLORS.light
+  themeColor: '#07080B'
 };
 
-export default async function RootLayout({
+const PRE_HYDRATION_SCRIPT = `
+  (function () {
+    try {
+      var raw = localStorage.getItem('ff.shell');
+      var s = raw ? (JSON.parse(raw).state || {}) : {};
+      var theme = s.theme === 'light' ? 'light' : 'dark';
+      var density = ['tight','comfortable','spacious'].indexOf(s.density) >= 0 ? s.density : 'tight';
+      var sidebar = s.sidebar === 'compact' ? 'compact' : 'full';
+      document.documentElement.setAttribute('data-theme', theme);
+      document.body && document.body.setAttribute('data-density', density);
+      document.body && document.body.setAttribute('data-sidebar', sidebar);
+    } catch (e) {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    }
+  })();
+`;
+
+export default function RootLayout({
   children
 }: {
   children: React.ReactNode;
 }) {
-  const cookieStore = await cookies();
-  const activeThemeValue = cookieStore.get('active_theme')?.value;
-  const isScaled = activeThemeValue?.endsWith('-scaled');
-
   return (
-    <html lang='en' suppressHydrationWarning>
+    <html lang="en" data-theme="dark" suppressHydrationWarning>
       <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              try {
-                if (localStorage.theme === 'dark' || ((!('theme' in localStorage) || localStorage.theme === 'system') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-                  document.querySelector('meta[name="theme-color"]').setAttribute('content', '${META_THEME_COLORS.dark}')
-                }
-              } catch (_) {}
-            `
-          }}
-        />
+        <script dangerouslySetInnerHTML={{ __html: PRE_HYDRATION_SCRIPT }} />
       </head>
       <body
-        className={cn(
-          'bg-background min-h-screen font-sans antialiased',
-          activeThemeValue ? `theme-${activeThemeValue}` : '',
-          isScaled ? 'theme-scaled' : '',
-          fontVariables
-        )}
+        data-density="tight"
+        data-sidebar="full"
+        className={cn('min-h-screen antialiased', fontVariables)}
+        suppressHydrationWarning
       >
-        <ThemeProvider
-          attribute='class'
-          defaultTheme='dark'
-          enableSystem
-          disableTransitionOnChange
-          enableColorScheme
-        >
-          {children}
-        </ThemeProvider>
+        {children}
       </body>
     </html>
   );

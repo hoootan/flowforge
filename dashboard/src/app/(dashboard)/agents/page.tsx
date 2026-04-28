@@ -1,375 +1,155 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Bot, Plus, RefreshCw } from 'lucide-react';
 import { api, type AgentType } from '@/lib/api';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { Bot, Plus, Circle, Trash2, Sparkles, X } from 'lucide-react';
-import { toast } from 'sonner';
-import { type SkillType } from '@/lib/api';
+import { CodeBlock } from '@/components/ui/code-block';
+import { SectionLabel } from '@/components/ui/section-label';
 
-const statusColors: Record<string, string> = {
-  online: 'bg-green-500',
-  idle: 'bg-yellow-500',
-  busy: 'bg-blue-500',
-  offline: 'bg-gray-400',
-};
-
-const statusBadge: Record<string, string> = {
-  online: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-  idle: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-  busy: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-  offline: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200',
+const STATUS_DOT: Record<string, string> = {
+  online: 'dot-ok',
+  idle: 'dot-warn',
+  busy: 'dot-run',
+  offline: 'dot-muted'
 };
 
 export default function AgentsPage() {
   const [agents, setAgents] = useState<AgentType[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showCreate, setShowCreate] = useState(false);
-  const [newAgent, setNewAgent] = useState({ name: '', description: '', model: '' });
-  const [availableModels, setAvailableModels] = useState<string[]>([]);
-  const [allSkills, setAllSkills] = useState<SkillType[]>([]);
-  const [skillPickerAgent, setSkillPickerAgent] = useState<AgentType | null>(null);
-  const [skillPickerOpen, setSkillPickerOpen] = useState(false);
-  const [pendingSkills, setPendingSkills] = useState<string[]>([]);
+  const [selected, setSelected] = useState<AgentType | null>(null);
 
-  const fetchAgents = async () => {
-    setLoading(true);
-    const data = await api.getAgents();
-    setAgents(data.agents);
-    setLoading(false);
-  };
+  useEffect(() => {
+    let cancelled = false;
+    const fetch = async () => {
+      try {
+        const r = await api.getAgents();
+        if (!cancelled) {
+          setAgents(r.agents);
+          setSelected((prev) => prev ?? r.agents[0] ?? null);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    fetch();
+    const id = setInterval(fetch, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, []);
 
-  const fetchSkills = async () => {
-    const data = await api.getSkills();
-    setAllSkills(data.skills);
-  };
-
-  const fetchModels = async () => {
-    const data = await api.getKnownProviders();
-    const models = data.providers.flatMap((p) => p.models);
-    setAvailableModels(models);
-  };
-
-  useEffect(() => { fetchAgents(); fetchSkills(); fetchModels(); }, []);
-
-  const handleCreate = async () => {
-    if (!newAgent.name.trim()) return;
-    const agent = await api.createAgent({
-      name: newAgent.name,
-      description: newAgent.description || undefined,
-      model: newAgent.model || undefined,
-    });
-    if (agent) {
-      toast.success(`Agent "${agent.name}" created`);
-      setShowCreate(false);
-      setNewAgent({ name: '', description: '', model: '' });
-      fetchAgents();
-    } else {
-      toast.error('Failed to create agent');
-    }
-  };
-
-  const handleDelete = async (agentId: string, name: string) => {
-    if (!confirm(`Delete agent "${name}"?`)) return;
-    const success = await api.deleteAgent(agentId);
-    if (success) {
-      toast.success(`Agent "${name}" deleted`);
-      fetchAgents();
-    }
-  };
-
-  const handleOpenSkillPicker = (agent: AgentType) => {
-    setSkillPickerAgent(agent);
-    setPendingSkills(agent.enabled_skills || []);
-    setSkillPickerOpen(true);
-  };
-
-  const handleToggleSkill = (skillId: string) => {
-    setPendingSkills(prev =>
-      prev.includes(skillId) ? prev.filter(id => id !== skillId) : [...prev, skillId]
-    );
-  };
-
-  const handleSaveSkills = async () => {
-    if (!skillPickerAgent) return;
-    const result = await api.setAgentSkills(skillPickerAgent.id, pendingSkills);
-    if (result) {
-      toast.success(`Updated skills for "${skillPickerAgent.name}"`);
-      setSkillPickerOpen(false);
-      fetchAgents();
-    } else {
-      toast.error('Failed to update skills');
-    }
-  };
-
-  const onlineCount = agents.filter(a => a.status !== 'offline').length;
-  const totalRuns = agents.reduce((sum, a) => sum + ((a.stats as any)?.total_runs || 0), 0);
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { all: agents.length, online: 0, idle: 0, busy: 0, offline: 0 };
+    for (const a of agents) c[a.status] = (c[a.status] ?? 0) + 1;
+    return c;
+  }, [agents]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div>
+      <div className="page-hd">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Agents</h2>
-          <p className="text-muted-foreground">
-            AI team members that can be assigned tasks and execute workflows
-          </p>
+          <h1>Agents <em>· your AI team.</em></h1>
+          <p>{agents.length} agent{agents.length === 1 ? '' : 's'} · {counts.online ?? 0} online</p>
         </div>
-        <Dialog open={showCreate} onOpenChange={setShowCreate}>
-          <DialogTrigger asChild>
-            <Button><Plus className="mr-2 h-4 w-4" /> New Agent</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Create Agent</DialogTitle>
-              <DialogDescription>
-                Add a new AI agent to your team
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Name</Label>
-                <Input
-                  id="name"
-                  placeholder="e.g., Code Reviewer, Deploy Bot"
-                  value={newAgent.name}
-                  onChange={(e) => setNewAgent({ ...newAgent, name: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  placeholder="What does this agent do?"
-                  value={newAgent.description}
-                  onChange={(e) => setNewAgent({ ...newAgent, description: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="model">Default Model</Label>
-                <Select
-                  value={newAgent.model}
-                  onValueChange={(value) => setNewAgent({ ...newAgent, model: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a model" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableModels.map((model) => (
-                      <SelectItem key={model} value={model}>
-                        {model}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
-              <Button onClick={handleCreate}>Create Agent</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <div className="page-hd-right">
+          <button className="btn"><RefreshCw size={12} /> Refresh</button>
+          <button className="btn btn-primary"><Plus size={12} /> New agent</button>
+        </div>
       </div>
 
-      {/* Stats row */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Agents</CardTitle>
-            <Bot className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{loading ? <Skeleton className="h-8 w-12" /> : agents.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Online</CardTitle>
-            <Circle className="h-4 w-4 text-green-500 fill-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{loading ? <Skeleton className="h-8 w-12" /> : onlineCount}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Runs</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{loading ? <Skeleton className="h-8 w-12" /> : totalRuns}</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Agent cards */}
-      {loading ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {[1, 2, 3].map(i => (
-            <Card key={i}><CardContent className="p-6"><Skeleton className="h-24" /></CardContent></Card>
-          ))}
-        </div>
-      ) : agents.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Bot className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold">No agents yet</h3>
-            <p className="text-muted-foreground text-sm mt-1">Create your first AI agent to get started</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {agents.map(agent => (
-            <Card key={agent.id} className="relative group">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="relative">
-                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                        <Bot className="h-5 w-5 text-primary" />
-                      </div>
-                      <div className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background ${statusColors[agent.status] || statusColors.offline}`} />
-                    </div>
-                    <div>
-                      <CardTitle className="text-base">{agent.name}</CardTitle>
-                      <CardDescription className="text-xs">{agent.slug}</CardDescription>
-                    </div>
-                  </div>
-                  <Badge className={statusBadge[agent.status] || statusBadge.offline} variant="secondary">
-                    {agent.status}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {agent.description && (
-                  <p className="text-sm text-muted-foreground line-clamp-2">{agent.description}</p>
-                )}
-                <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                  {agent.model && <span className="font-mono">{agent.model}</span>}
-                  {agent.is_active ? (
-                    <Badge variant="outline" className="text-xs">Active</Badge>
-                  ) : (
-                    <Badge variant="destructive" className="text-xs">Inactive</Badge>
-                  )}
-                </div>
-                {/* Enabled Skills */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                      <Sparkles className="h-3 w-3" /> Skills ({agent.enabled_skills?.length || 0})
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 text-xs px-2"
-                      onClick={() => handleOpenSkillPicker(agent)}
-                    >
-                      Manage
-                    </Button>
-                  </div>
-                  {agent.enabled_skills && agent.enabled_skills.length > 0 ? (
-                    <div className="flex flex-wrap gap-1">
-                      {agent.enabled_skills.slice(0, 3).map(skillId => {
-                        const skill = allSkills.find(s => s.id === skillId);
-                        return (
-                          <Badge key={skillId} variant="secondary" className="text-xs gap-1">
-                            {skill?.icon || '🔧'} {skill?.name || skillId.slice(0, 8)}
-                          </Badge>
-                        );
-                      })}
-                      {agent.enabled_skills.length > 3 && (
-                        <Badge variant="outline" className="text-xs">+{agent.enabled_skills.length - 3}</Badge>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground/60">No skills enabled</p>
-                  )}
-                </div>
-                <div className="flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-destructive"
-                    onClick={() => handleDelete(agent.id, agent.name)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {/* Skill Picker Dialog */}
-      <Dialog open={skillPickerOpen} onOpenChange={setSkillPickerOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Manage Skills for {skillPickerAgent?.name}</DialogTitle>
-            <DialogDescription>
-              Toggle skills on/off. Enabled skills inject their knowledge into the agent&apos;s context at runtime.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2 max-h-[400px] overflow-y-auto py-2 scrollbar-none">
-            {allSkills.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">No skills available. Import skills from the Marketplace first.</p>
-            ) : (
-              allSkills.map(skill => {
-                const isEnabled = pendingSkills.includes(skill.id);
-                return (
-                  <div
-                    key={skill.id}
-                    className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                      isEnabled ? 'bg-primary/5 border-primary/30' : 'hover:bg-muted/50'
-                    }`}
-                    onClick={() => handleToggleSkill(skill.id)}
-                  >
-                    <span className="text-lg shrink-0">{skill.icon || '🔧'}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium">{skill.name}</span>
-                        {skill.source !== 'local' && (
-                          <Badge variant="secondary" className="text-xs">{skill.source === 'skills_sh' ? 'skills.sh' : 'GitHub'}</Badge>
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground truncate">{skill.description}</p>
-                    </div>
-                    <div className={`h-5 w-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${
-                      isEnabled ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground/30'
-                    }`}>
-                      {isEnabled && <span className="text-xs">✓</span>}
-                    </div>
-                  </div>
-                );
-              })
-            )}
+      <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 16, alignItems: 'start' }}>
+        <div className="panel">
+          <div className="panel-head">
+            <div className="panel-title">Roster</div>
+            <div className="panel-sub mono">{agents.length}</div>
           </div>
-          <DialogFooter>
-            <div className="flex items-center justify-between w-full">
-              <span className="text-xs text-muted-foreground">{pendingSkills.length} skill(s) enabled</span>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setSkillPickerOpen(false)}>Cancel</Button>
-                <Button onClick={handleSaveSkills}>Save</Button>
+          <div>
+            {loading && <div className="hint" style={{ margin: 12 }}>Loading…</div>}
+            {!loading && agents.length === 0 && <div className="hint" style={{ margin: 12 }}>No agents yet.</div>}
+            {agents.map((a) => {
+              const initials = a.name.split(' ').map((s) => s[0]).slice(0, 2).join('').toUpperCase();
+              const active = selected?.id === a.id;
+              return (
+                <button
+                  key={a.id}
+                  type="button"
+                  className={`feed-row${active ? ' is-active' : ''}`}
+                  onClick={() => setSelected(a)}
+                  style={{
+                    width: '100%', textAlign: 'left',
+                    gridTemplateColumns: '28px 1fr auto',
+                    background: active ? 'var(--accent-wash)' : undefined,
+                    cursor: 'pointer', border: 0
+                  }}
+                >
+                  <span className="ff-side-foot-av" style={{ width: 26, height: 26 }}>{initials}</span>
+                  <span className="msg">
+                    <b>{a.name}</b>
+                    <div className="mono" style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>{a.model ?? '—'}</div>
+                  </span>
+                  <span className={`dot ${STATUS_DOT[a.status]}`} />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {selected ? (
+          <div className="panel">
+            <div className="panel-head">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span className="ff-side-foot-av" style={{ width: 36, height: 36, fontSize: 14 }}>
+                  {selected.name.split(' ').map((s) => s[0]).slice(0, 2).join('').toUpperCase()}
+                </span>
+                <div>
+                  <div className="panel-title" style={{ fontSize: 16 }}>{selected.name}</div>
+                  <div className="panel-sub" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span className={`dot ${STATUS_DOT[selected.status]}`} /> {selected.status}{selected.model ? ` · ${selected.model}` : ''}
+                  </div>
+                </div>
+              </div>
+              <div className="panel-right">
+                <span className={`tag ${selected.is_active ? 'tag-ok' : ''}`}>{selected.is_active ? 'active' : 'paused'}</span>
               </div>
             </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <div className="panel-body">
+              {selected.description && <p style={{ color: 'var(--ink-2)', marginTop: 0 }}>{selected.description}</p>}
+
+              <div style={{ marginTop: 16 }}>
+                <SectionLabel>System prompt</SectionLabel>
+                {selected.system_prompt ? (
+                  <CodeBlock code={selected.system_prompt} />
+                ) : (
+                  <div className="hint">No system prompt set.</div>
+                )}
+              </div>
+
+              {selected.enabled_skills?.length > 0 && (
+                <div style={{ marginTop: 16 }}>
+                  <SectionLabel>Skills</SectionLabel>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {selected.enabled_skills.map((sk) => (
+                      <span key={sk} className="tag tag-violet">{sk}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div style={{ marginTop: 16 }}>
+                <SectionLabel>Configuration</SectionLabel>
+                <CodeBlock language="json" code={JSON.stringify(selected.config ?? {}, null, 2)} />
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="panel">
+            <div className="panel-body">
+              <div className="hint">Select an agent on the left.</div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

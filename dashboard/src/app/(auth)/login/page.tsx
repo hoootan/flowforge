@@ -1,58 +1,39 @@
-"use client";
+'use client';
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, AlertCircle, Shield } from "lucide-react";
-import { FlowForgeLogo } from "@/components/flowforge-logo";
-import { useAuthStore, useHasHydrated } from "@/stores/auth-store";
-import { cn } from "@/lib/utils";
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { Loader2, AlertCircle, Shield } from 'lucide-react';
+import { FlowForgeLogo } from '@/components/flowforge-logo';
+import { useAuthStore, useHasHydrated } from '@/stores/auth-store';
 
 export default function LoginPage() {
   const router = useRouter();
   const hasHydrated = useHasHydrated();
   const { login, verify2FA, isAuthenticated, isLoading, refreshUser, requires2FA } = useAuthStore();
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [totpCode, setTotpCode] = useState("");
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [totpCode, setTotpCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Check if already authenticated - only after hydration
   useEffect(() => {
     if (!hasHydrated) return;
-
-    const checkAuth = async () => {
-      await refreshUser();
-    };
-    checkAuth();
+    refreshUser();
   }, [hasHydrated, refreshUser]);
 
   useEffect(() => {
-    if (hasHydrated && isAuthenticated && !isLoading) {
-      router.push("/");
-    }
+    if (hasHydrated && isAuthenticated && !isLoading) router.push('/');
   }, [hasHydrated, isAuthenticated, isLoading, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setIsSubmitting(true);
-
     const result = await login({ email, password });
-
-    if (result.success && !result.requires2FA) {
-      router.push("/");
-    } else if (!result.success) {
-      setError(result.error || "Login failed");
-    }
-    // If requires2FA, the form will switch to 2FA input
-
+    if (result.success && !result.requires2FA) router.push('/');
+    else if (!result.success) setError(result.error || 'Login failed');
     setIsSubmitting(false);
   };
 
@@ -60,280 +41,131 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
     setIsSubmitting(true);
-
     const result = await verify2FA(totpCode);
-
-    if (result.success) {
-      router.push("/");
-    } else {
-      setError(result.error || "Invalid verification code");
-    }
-
+    if (result.success) router.push('/');
+    else setError(result.error || 'Invalid verification code');
     setIsSubmitting(false);
   };
 
-  // Show loading while hydrating or checking auth
   if (!hasHydrated || isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>
+        <Loader2 className="animate-spin" style={{ color: 'var(--ink-3)' }} />
       </div>
     );
   }
-
-  // Don't render login form if already authenticated
-  if (isAuthenticated) {
-    return null;
-  }
+  if (isAuthenticated) return null;
 
   return (
-    <div className="relative h-screen flex-col items-center justify-center md:grid lg:max-w-none lg:grid-cols-2 lg:px-0">
-      {/* Left side - Branding */}
-      <div className="bg-muted relative hidden h-full flex-col p-10 text-white lg:flex dark:border-r">
-        <div className="absolute inset-0 bg-zinc-900" />
-
-        {/* Logo */}
-        <div className="relative z-20 flex items-center font-sans text-lg font-bold tracking-tight">
-          <div className="mr-2 flex h-8 w-8 items-center justify-center rounded-lg bg-white text-zinc-900">
-            <FlowForgeLogo className="h-4 w-4" />
+    <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--bg-0)', padding: 24 }}>
+      <div className="dot-grid" style={{ position: 'fixed', inset: 0, opacity: 0.5, pointerEvents: 'none' }} />
+      <div style={{ width: '100%', maxWidth: 400, position: 'relative' }}>
+        <div style={{ textAlign: 'center', marginBottom: 32 }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44, background: 'var(--accent)', color: 'var(--accent-ink)', borderRadius: 8, marginBottom: 12 }}>
+            <FlowForgeLogo style={{ width: 24, height: 24 }} />
           </div>
-          FlowForge
+          <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0, color: 'var(--ink-1)' }}>
+            Welcome <em className="serif" style={{ color: 'var(--ink-2)' }}>back.</em>
+          </h1>
+          <p className="mono" style={{ fontSize: 11.5, color: 'var(--ink-3)', margin: '6px 0 0', textTransform: 'uppercase', letterSpacing: '0.12em' }}>
+            FlowForge · v0.8
+          </p>
         </div>
 
-        {/* Decorative grid pattern */}
-        <div className="relative z-10 flex-1">
-          <div
-            className={cn(
-              "absolute inset-0 opacity-20",
-              "[mask-image:radial-gradient(400px_circle_at_center,white,transparent)]"
+        <div className="panel">
+          <div className="panel-body" style={{ padding: 24 }}>
+            {error && (
+              <div className="tag tag-fail" style={{ width: '100%', marginBottom: 16, padding: '8px 10px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <AlertCircle size={12} /> {error}
+              </div>
             )}
-          >
-            <svg
-              className="absolute inset-0 h-full w-full"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <defs>
-                <pattern
-                  id="grid"
-                  width="32"
-                  height="32"
-                  patternUnits="userSpaceOnUse"
-                >
-                  <path
-                    d="M0 32V0h32"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeOpacity="0.5"
-                  />
-                </pattern>
-              </defs>
-              <rect width="100%" height="100%" fill="url(#grid)" />
-            </svg>
-          </div>
-        </div>
 
-        {/* Testimonial */}
-        <div className="relative z-20 mt-auto">
-          <blockquote className="space-y-2">
-            <p className="text-lg">
-              &ldquo;FlowForge has transformed how we build AI workflows.
-              Durable execution and step memoization make our pipelines
-              incredibly reliable.&rdquo;
-            </p>
-            <footer className="text-sm text-zinc-400">
-              AI Workflow Orchestration Platform
-            </footer>
-          </blockquote>
-        </div>
-      </div>
-
-      {/* Right side - Login form */}
-      <div className="flex h-full items-center justify-center p-4 lg:p-8">
-        <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
-          {/* Mobile logo */}
-          <div className="flex flex-col space-y-2 text-center lg:hidden">
-            <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-lg bg-foreground text-background">
-              <FlowForgeLogo className="h-6 w-6" />
-            </div>
-            <h1 className="font-sans text-2xl font-bold tracking-tight">FlowForge</h1>
-          </div>
-
-          {/* Form header */}
-          <div className="flex flex-col space-y-2 text-center">
-            <h1 className="text-2xl font-semibold tracking-tight">
-              Welcome back
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Sign in to your account to continue
-            </p>
-          </div>
-
-          {/* Login form */}
-          <div className="grid gap-6">
             {requires2FA ? (
-              // 2FA verification form
               <form onSubmit={handleVerify2FA}>
-                <div className="grid gap-4">
-                  <div className="flex items-center justify-center">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                      <Shield className="h-6 w-6 text-primary" />
-                    </div>
-                  </div>
-
-                  <div className="text-center">
-                    <h2 className="text-lg font-semibold">Two-factor authentication</h2>
-                    <p className="text-sm text-muted-foreground">
-                      Enter the code from your authenticator app
-                    </p>
-                  </div>
-
-                  {error && (
-                    <Alert variant="destructive">
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertDescription>{error}</AlertDescription>
-                    </Alert>
-                  )}
-
-                  <div className="grid gap-2">
-                    <Label htmlFor="totp-code">Verification code</Label>
-                    <Input
-                      id="totp-code"
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      maxLength={6}
-                      placeholder="000000"
-                      value={totpCode}
-                      onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ""))}
-                      required
-                      disabled={isSubmitting}
-                      autoComplete="one-time-code"
-                      autoFocus
-                      className="text-center text-2xl tracking-widest"
-                    />
-                    <p className="text-xs text-muted-foreground text-center">
-                      You can also use a backup code
-                    </p>
-                  </div>
-
-                  <Button
-                    type="submit"
-                    className="w-full"
-                    disabled={isSubmitting || totpCode.length < 6}
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Verifying...
-                      </>
-                    ) : (
-                      "Verify"
-                    )}
-                  </Button>
-
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="w-full"
-                    onClick={() => {
-                      useAuthStore.setState({
-                        requires2FA: false,
-                        tempToken: null,
-                      });
-                      setTotpCode("");
-                      setError(null);
-                    }}
-                  >
-                    Back to login
-                  </Button>
+                <div style={{ textAlign: 'center', marginBottom: 16 }}>
+                  <Shield size={28} style={{ color: 'var(--accent)', marginBottom: 8 }} />
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink-1)' }}>Two-factor authentication</div>
+                  <div className="mono" style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 4 }}>Enter the code from your authenticator app</div>
                 </div>
+                <div className="field" style={{ marginBottom: 16 }}>
+                  <label className="field-label" htmlFor="totp">Code</label>
+                  <input
+                    id="totp"
+                    className="field-input mono"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={6}
+                    placeholder="000000"
+                    value={totpCode}
+                    onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ''))}
+                    required
+                    disabled={isSubmitting}
+                    autoComplete="one-time-code"
+                    autoFocus
+                    style={{ textAlign: 'center', fontSize: 18, letterSpacing: '0.4em' }}
+                  />
+                </div>
+                <button type="submit" className="btn btn-primary btn-lg" style={{ width: '100%' }} disabled={isSubmitting || totpCode.length < 6}>
+                  {isSubmitting ? <><Loader2 className="animate-spin" size={14} /> Verifying…</> : 'Verify'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  style={{ width: '100%', marginTop: 8 }}
+                  onClick={() => {
+                    useAuthStore.setState({ requires2FA: false, tempToken: null });
+                    setTotpCode('');
+                    setError(null);
+                  }}
+                >
+                  Back to login
+                </button>
               </form>
             ) : (
-              // Email/password form
               <form onSubmit={handleSubmit}>
-                <div className="grid gap-4">
-                  {error && (
-                    <Alert variant="destructive">
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertDescription>{error}</AlertDescription>
-                    </Alert>
-                  )}
-
-                  <div className="grid gap-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="you@example.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                      disabled={isSubmitting}
-                      autoComplete="email"
-                      autoFocus
-                    />
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label htmlFor="password">Password</Label>
-                    <Input
-                      id="password"
-                      type="password"
-                      placeholder="Enter your password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      disabled={isSubmitting}
-                      autoComplete="current-password"
-                    />
-                  </div>
-
-                  <Button
-                    type="submit"
-                    className="w-full"
-                    disabled={isSubmitting || !email || !password}
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Signing in...
-                      </>
-                    ) : (
-                      "Sign in"
-                    )}
-                  </Button>
+                <div className="field" style={{ marginBottom: 14 }}>
+                  <label className="field-label" htmlFor="email">Email</label>
+                  <input
+                    id="email"
+                    className="field-input"
+                    type="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    disabled={isSubmitting}
+                    autoComplete="email"
+                    autoFocus
+                  />
                 </div>
+                <div className="field" style={{ marginBottom: 18 }}>
+                  <label className="field-label" htmlFor="password">Password</label>
+                  <input
+                    id="password"
+                    className="field-input"
+                    type="password"
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    disabled={isSubmitting}
+                    autoComplete="current-password"
+                  />
+                </div>
+                <button type="submit" className="btn btn-primary btn-lg" style={{ width: '100%' }} disabled={isSubmitting || !email || !password}>
+                  {isSubmitting ? <><Loader2 className="animate-spin" size={14} /> Signing in…</> : 'Sign in'}
+                </button>
               </form>
             )}
           </div>
-
-          {/* Footer */}
-          <p className="px-8 text-center text-sm text-muted-foreground">
-            Don&apos;t have an account?{" "}
-            <span className="underline underline-offset-4">
-              Contact your administrator
-            </span>{" "}
-            to get access.
-          </p>
-
-          <p className="px-8 text-center text-sm text-muted-foreground">
-            By signing in, you agree to our{" "}
-            <Link
-              href="/terms"
-              className="underline underline-offset-4 hover:text-primary"
-            >
-              Terms of Service
-            </Link>{" "}
-            and{" "}
-            <Link
-              href="/privacy"
-              className="underline underline-offset-4 hover:text-primary"
-            >
-              Privacy Policy
-            </Link>
-            .
-          </p>
         </div>
+
+        <p className="mono" style={{ textAlign: 'center', fontSize: 11, color: 'var(--ink-3)', marginTop: 16 }}>
+          Need access? Contact your administrator
+        </p>
+        <p className="mono" style={{ textAlign: 'center', fontSize: 10, color: 'var(--ink-4)', marginTop: 4 }}>
+          <Link href="/terms" style={{ color: 'var(--ink-3)' }}>Terms</Link> · <Link href="/privacy" style={{ color: 'var(--ink-3)' }}>Privacy</Link>
+        </p>
       </div>
     </div>
   );

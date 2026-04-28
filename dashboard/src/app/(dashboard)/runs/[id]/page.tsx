@@ -1,360 +1,53 @@
-"use client";
+'use client';
 
-import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Skeleton } from "@/components/ui/skeleton";
-import { CollapsibleJson } from "@/components/ui/collapsible-json";
-import {
-  Activity,
-  ArrowLeft,
-  CheckCircle,
-  Clock,
-  XCircle,
-  Pause,
-  PlayCircle,
-  Bot,
-  Brain,
-  Timer,
-  Zap,
-  RotateCw,
-  Wrench,
-} from "lucide-react";
-import { toast } from "sonner";
-import { formatDistanceToNow } from "date-fns";
-import { api, RunWithSteps, Step } from "@/lib/api";
-import { NotFoundState } from "@/components/empty-state";
-import { hasAgentSteps, extractAgentResult } from "@/lib/hooks/useAgent";
-import { AgentRunView } from "@/components/agent/AgentRunView";
-import { AgentTimeline } from "@/components/agent/AgentTimeline";
-import { LiveActivityPanel } from "@/components/agent/LiveActivityPanel";
-import { useRunStream } from "@/hooks/useRunStream";
+import { use, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
+import { ArrowLeft, RotateCw, StopCircle, Share2, FileText } from 'lucide-react';
+import { toast } from 'sonner';
+import { formatDistanceToNow } from 'date-fns';
+import { api, type RunWithSteps, type Step } from '@/lib/api';
+import { useRunStream } from '@/hooks/useRunStream';
+import { VarStrip } from '@/components/ui/var-strip';
+import { CodeBlock } from '@/components/ui/code-block';
 
-function getStepIcon(type: string) {
-  switch (type) {
-    case "run":
-      return <PlayCircle className="h-4 w-4" />;
-    case "ai":
-      return <Brain className="h-4 w-4" />;
-    case "sleep":
-      return <Timer className="h-4 w-4" />;
-    case "wait_for_event":
-      return <Clock className="h-4 w-4" />;
-    case "send_event":
-      return <Zap className="h-4 w-4" />;
-    case "agent":
-      return <Brain className="h-4 w-4" />;
-    case "sub_agent":
-      return <Bot className="h-4 w-4" />;
-    default:
-      return <PlayCircle className="h-4 w-4" />;
-  }
+type TimelineMode = 'gantt' | 'flame' | 'swim' | 'graph';
+type StepRender = 'notebook' | 'thread' | 'ide' | 'terminal';
+
+function statusBadge(s: string): string {
+  if (s === 'completed') return 'status-badge ok';
+  if (s === 'failed') return 'status-badge fail';
+  if (s === 'running') return 'status-badge run';
+  if (s === 'pending' || s === 'paused' || s === 'sleeping' || s === 'waiting') return 'status-badge warn';
+  if (s === 'cancelled') return 'status-badge cancel';
+  return 'status-badge';
 }
 
-function getStatusIcon(status: string) {
-  switch (status) {
-    case "completed":
-      return <CheckCircle className="h-5 w-5 text-emerald-500" />;
-    case "running":
-      return <Clock className="h-5 w-5 text-primary animate-spin" />;
-    case "failed":
-      return <XCircle className="h-5 w-5 text-destructive" />;
-    case "paused":
-    case "sleeping":
-    case "waiting":
-      return <Pause className="h-5 w-5 text-amber-500" />;
-    default:
-      return <Clock className="h-5 w-5 text-muted-foreground" />;
-  }
+function stepBarType(t: Step['step_type']): string {
+  if (t === 'ai') return 'ai';
+  if (t === 'run') return 'run';
+  if (t === 'sleep') return 'sleep';
+  if (t === 'wait_for_event' || t === 'invoke' || t === 'send_event') return 'wait';
+  if (t === 'sub_agent' || t === 'agent') return 'tool';
+  return 'run';
 }
 
-const statusBadgeStyles: Record<string, string> = {
-  completed: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400",
-  running: "border-primary/20 bg-primary/10 text-primary",
-  failed: "border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-400",
-  paused: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-400",
-  sleeping: "border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-800 dark:bg-cyan-950 dark:text-cyan-400",
-  waiting: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-400",
-};
-
-function getStatusBadge(status: string) {
-  return (
-    <Badge variant="outline" className={`capitalize ${statusBadgeStyles[status] || ""}`}>
-      {status}
-    </Badge>
-  );
-}
-
-// ── Step color mapping for waterfall (matches Paper design) ────
-
-const stepTypeColors: Record<string, { bg: string; text: string; label: string }> = {
-  run: { bg: "bg-[var(--chart-1)]", text: "text-white", label: "run" },
-  ai: { bg: "bg-[var(--chart-6)]", text: "text-white", label: "ai" },
-  wait_for_event: { bg: "bg-[var(--chart-4)]", text: "text-black", label: "wait" },
-  sleep: { bg: "bg-[var(--chart-2)]", text: "text-white", label: "sleep" },
-  invoke: { bg: "bg-[var(--chart-3)]", text: "text-white", label: "invoke" },
-  send_event: { bg: "bg-[var(--chart-3)]", text: "text-white", label: "send" },
-  agent: { bg: "bg-[var(--chart-6)]", text: "text-white", label: "agent" },
-  sub_agent: { bg: "bg-[var(--chart-6)]", text: "text-white", label: "sub_agent" },
-};
-
-// ── Waterfall helpers ───────────────────────────────────────────
-
-/** Format ms to human-readable: 120ms, 3.2s, 2m 15s, 1h 30m */
-function formatWaterfallDuration(ms: number): string {
-  if (ms < 0) ms = 0;
-  if (ms < 1000) return `${Math.round(ms)}ms`;
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
-  const totalSec = Math.round(ms / 1000);
-  if (totalSec < 3600) {
-    const m = Math.floor(totalSec / 60);
-    const s = totalSec % 60;
-    return s > 0 ? `${m}m ${s}s` : `${m}m`;
-  }
-  const h = Math.floor(totalSec / 3600);
-  const m = Math.floor((totalSec % 3600) / 60);
-  return m > 0 ? `${h}h ${m}m` : `${h}h`;
-}
-
-/** Strip common step_id prefixes like "stage:N-" for cleaner display */
-function shortenStepId(id: string): string {
-  return id.replace(/^stage:\d+-/, "") || id;
-}
-
-// ── Waterfall Timeline Component ───────────────────────────────
-
-const INITIAL_VISIBLE_STEPS = 15;
-
-function WaterfallTimeline({
-  steps,
-}: {
-  steps: Step[];
-}) {
-  const [expanded, setExpanded] = useState(false);
-
-  // Sort all steps by started_at once (DB returns unsorted)
-  const sorted = useMemo(() => {
-    return [...steps]
-      .filter((s) => s.started_at)
-      .sort(
-        (a, b) =>
-          new Date(a.started_at!).getTime() - new Date(b.started_at!).getTime(),
-      );
-  }, [steps]);
-
-  if (sorted.length === 0) return null;
-
-  const firstStart = new Date(sorted[0].started_at!).getTime();
-
-  // Compute per-step durations.
-  // Legacy data: started_at ≈ ended_at (both set to utcnow() at save time) → infer from gap to next step.
-  // SDK-fixed data: started_at and ended_at differ meaningfully → use real duration.
-  const stepDurations: number[] = sorted.map((step, i) => {
-    const start = new Date(step.started_at!).getTime();
-    const end = step.ended_at ? new Date(step.ended_at).getTime() : Date.now();
-    const selfDuration = end - start;
-    const isLegacy = step.ended_at && Math.abs(selfDuration) <= 1;
-
-    if (!isLegacy) return Math.max(selfDuration, 0);
-
-    // Legacy: infer from gap to next step
-    if (i < sorted.length - 1) {
-      const nextStart = new Date(sorted[i + 1].started_at!).getTime();
-      const gap = nextStart - start;
-      if (gap > 0) return gap;
-    }
-
-    // Last legacy step: minimum visible duration
-    return 200;
-  });
-
-  // Timeline span: from first start to the max effective end (start + duration)
-  const maxEnd = sorted.reduce((max, step, i) => {
-    const start = new Date(step.started_at!).getTime();
-    return Math.max(max, start + stepDurations[i]);
-  }, firstStart);
-  const timelineSpan = Math.max(maxEnd - firstStart, 1000);
-
-  // Visible subset
-  const visibleCount = expanded ? sorted.length : Math.min(sorted.length, INITIAL_VISIBLE_STEPS);
-  const hiddenCount = sorted.length - INITIAL_VISIBLE_STEPS;
-
-  // Tick labels for time axis
-  const ticks = [0, 0.25, 0.5, 0.75, 1].map((pct) => ({
-    label: formatWaterfallDuration(timelineSpan * pct),
-    pct: pct * 100,
-  }));
-
-  return (
-    <div className="space-y-3 overflow-hidden">
-      {/* Time axis */}
-      <div className="relative h-5 text-xs text-muted-foreground ml-[200px]">
-        {ticks.map((tick) => (
-          <span
-            key={tick.pct}
-            className="absolute font-mono"
-            style={{
-              left: `${tick.pct}%`,
-              transform:
-                tick.pct === 100
-                  ? "translateX(-100%)"
-                  : tick.pct === 0
-                    ? "none"
-                    : "translateX(-50%)",
-            }}
-          >
-            {tick.label}
-          </span>
-        ))}
-      </div>
-
-      {/* Step bars */}
-      <div className="space-y-1.5">
-        {sorted.slice(0, visibleCount).map((step, i) => {
-          const start = new Date(step.started_at!).getTime();
-          const offset = ((start - firstStart) / timelineSpan) * 100;
-          const duration = stepDurations[i];
-          const widthPct = Math.max((duration / timelineSpan) * 100, 2);
-          const clampedWidth = Math.min(widthPct, 100 - offset);
-          const colors = stepTypeColors[step.step_type] || stepTypeColors.run;
-
-          return (
-            <div key={step.id} className="flex items-center gap-3 h-7">
-              <span
-                className="w-[188px] truncate text-right text-xs font-mono text-muted-foreground flex-shrink-0"
-                title={step.step_id}
-              >
-                {shortenStepId(step.step_id)}
-              </span>
-              <div className="relative flex-1 h-full overflow-hidden">
-                <div
-                  className={`absolute top-0 h-full rounded ${colors.bg} ${step.status === "failed" ? "!bg-destructive" : ""} flex items-center px-2`}
-                  style={{
-                    left: `${Math.min(offset, 98)}%`,
-                    width: `${clampedWidth}%`,
-                    minWidth: "40px",
-                    maxWidth: `${100 - offset}%`,
-                  }}
-                >
-                  <span
-                    className={`text-[11px] font-medium ${step.status === "failed" ? "text-white" : colors.text} truncate whitespace-nowrap`}
-                  >
-                    {formatWaterfallDuration(duration)}
-                    {widthPct > 8 && (
-                      <span className="opacity-60 ml-1">{colors.label}</span>
-                    )}
-                  </span>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Expand / collapse */}
-      {hiddenCount > 0 && !expanded && (
-        <button
-          onClick={() => setExpanded(true)}
-          className="text-xs text-primary hover:underline font-medium ml-[200px]"
-        >
-          Show {hiddenCount} more step{hiddenCount > 1 ? "s" : ""}
-        </button>
-      )}
-      {expanded && hiddenCount > 0 && (
-        <button
-          onClick={() => setExpanded(false)}
-          className="text-xs text-muted-foreground hover:text-foreground font-medium ml-[200px]"
-        >
-          Show fewer
-        </button>
-      )}
-
-      {/* Legend */}
-      <div className="flex flex-wrap gap-3 pt-2 text-xs text-muted-foreground">
-        {Object.entries(stepTypeColors)
-          .slice(0, 6)
-          .map(([type, colors]) => (
-            <span key={type} className="flex items-center gap-1.5">
-              <span className={`h-2.5 w-2.5 rounded-sm ${colors.bg}`} />
-              {colors.label}
-            </span>
-          ))}
-      </div>
-    </div>
-  );
-}
-
-function computeAIUsageTotals(steps: Step[]): { totalTokens: number; totalCost: number } {
-  return steps.reduce(
-    (acc, step) => {
-      if (step.step_type !== "ai" || !step.output) return acc;
-      const usage = (step.output as { usage?: { total_tokens?: number; cost_usd?: number } }).usage;
-      return {
-        totalTokens: acc.totalTokens + (usage?.total_tokens ?? 0),
-        totalCost: acc.totalCost + (usage?.cost_usd ?? 0),
-      };
-    },
-    { totalTokens: 0, totalCost: 0 }
-  );
-}
-
-function formatDuration(startedAt: string | null, endedAt: string | null): string {
-  if (!startedAt) return "—";
-  const start = new Date(startedAt).getTime();
-  const end = endedAt ? new Date(endedAt).getTime() : Date.now();
-  const ms = end - start;
+function fmtDuration(start?: string | null, end?: string | null, fallback = '—'): string {
+  if (!start) return fallback;
+  const s = new Date(start).getTime();
+  const e = end ? new Date(end).getTime() : Date.now();
+  const ms = e - s;
   if (ms < 1000) return `${ms}ms`;
-  if (ms < 60000) return `${(ms / 1000).toFixed(2)}s`;
-  return `${(ms / 60000).toFixed(1)}m`;
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+  return `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
 }
 
-function formatTimestamp(iso: string | null): string {
-  if (!iso) return "—";
-  const date = new Date(iso);
-  return date.toLocaleString();
-}
-
-function LoadingSkeleton() {
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Skeleton className="h-10 w-10" />
-        <div className="flex-1 space-y-2">
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-4 w-64" />
-        </div>
-      </div>
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <Skeleton className="h-96 w-full" />
-        </div>
-        <div className="space-y-4">
-          <Skeleton className="h-48 w-full" />
-          <Skeleton className="h-48 w-full" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export default function RunDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default function RunDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [run, setRun] = useState<RunWithSteps | null>(null);
   const [loading, setLoading] = useState(true);
-  const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    const ticker = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(ticker);
-  }, []);
+  const [timeline, setTimeline] = useState<TimelineMode>('gantt');
+  const [stepRender, setStepRender] = useState<StepRender>('notebook');
+  const [selectedStep, setSelectedStep] = useState<Step | null>(null);
 
   const fetchRun = useCallback(async () => {
     const data = await api.getRun(id);
@@ -367,545 +60,345 @@ export default function RunDetailPage({
     fetchRun().finally(() => setLoading(false));
   }, [fetchRun]);
 
-  const isActive = run?.status === "running" || run?.status === "pending" || run?.status === "paused";
+  const isActive = run?.status === 'running' || run?.status === 'pending' || run?.status === 'paused';
 
-  // Debounced refetch to avoid hammering the API on rapid events
   const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const debouncedFetchRun = useCallback(() => {
     if (refetchTimer.current) clearTimeout(refetchTimer.current);
-    refetchTimer.current = setTimeout(() => {
-      fetchRun();
-    }, 300);
+    refetchTimer.current = setTimeout(() => fetchRun(), 300);
   }, [fetchRun]);
 
-  const streamResult = useRunStream({
+  const { isConnected } = useRunStream({
     runId: id,
     enabled: isActive,
-    onEvent: (event) => {
-      switch (event.type) {
-        case "step_started":
-        case "step_completed":
-        case "step_failed":
-        case "tool_call_completed":
-        case "approval_required":
-        case "approval_resolved":
-        case "sub_agent_started":
-        case "sub_agent_completed":
-        case "run_started":
-        case "run_paused":
-        case "run_resumed":
-        case "run_completed":
-        case "run_failed":
-          debouncedFetchRun();
-          break;
-      }
-    },
+    onEvent: () => debouncedFetchRun()
   });
 
-  const { isConnected } = streamResult;
-
-  // Polling fallback for when SSE connection fails or events are missed
   useEffect(() => {
     if (!isActive) return;
-    const interval = setInterval(() => {
-      fetchRun();
-    }, isConnected ? 10000 : 3000);
+    const interval = setInterval(() => fetchRun(), isConnected ? 10000 : 3000);
     return () => clearInterval(interval);
   }, [isActive, isConnected, fetchRun]);
 
   const handleReplay = async () => {
     const result = await api.replayRun(id);
-    if (result) {
-      // Navigate to new run
-      window.location.href = `/runs/${result.id}`;
-    }
+    if (result?.id) window.location.href = `/runs/${result.id}`;
   };
 
   const handleCancel = async () => {
     const result = await api.cancelRun(id);
     if (result?.success) {
-      toast.success("Run cancelled successfully");
-      // Refresh run data
-      const data = await api.getRun(id);
-      setRun(data);
-    } else {
-      toast.error("Failed to cancel run");
-    }
+      toast.success('Run cancelled');
+      fetchRun();
+    } else toast.error('Failed to cancel');
   };
 
-  const canCancel = run?.status === "running" || run?.status === "pending" || run?.status === "paused";
+  const canCancel = isActive;
 
-  if (loading) {
-    return <LoadingSkeleton />;
-  }
-
-  if (!run) {
+  if (loading || !run) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-4">
-          <Link href="/runs">
-            <Button variant="ghost" size="icon">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          </Link>
+      <div>
+        <div className="page-hd">
+          <div>
+            <Link href="/runs" className="btn btn-sm"><ArrowLeft size={12} /> Runs</Link>
+            <h1 style={{ marginTop: 12 }}>Loading run…</h1>
+          </div>
         </div>
-        <NotFoundState resource="Run" />
+        <div className="hint">Fetching run details…</div>
       </div>
     );
   }
 
-  const triggerData = run.trigger_data as { event?: { name?: string; data?: Record<string, unknown> } };
-  const isAgentRun = hasAgentSteps(run);
-  const agentResult = extractAgentResult(run);
-  const { totalTokens, totalCost } = computeAIUsageTotals(run.steps);
-  const runDurationMs = run.started_at
-    ? (run.ended_at ? new Date(run.ended_at).getTime() : now) - new Date(run.started_at).getTime()
-    : 0;
-  const aiModel = run.steps.find((s) => s.step_type === "ai" && s.output)?.output as { model?: string } | undefined;
-  const aiLatency = run.steps.filter((s) => s.step_type === "ai" && s.started_at && s.ended_at).reduce((sum, s) => {
-    return sum + (new Date(s.ended_at!).getTime() - new Date(s.started_at!).getTime());
-  }, 0);
-
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Link href="/runs">
-          <Button variant="ghost" size="icon">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-        </Link>
-        <div className="flex-1">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold tracking-tight font-mono">{run.function_id}</h1>
-            {getStatusBadge(run.status)}
-            {isConnected && (
-              <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                Live
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
-            <span className="font-mono text-xs">{run.id.slice(0, 12)}</span>
-            <span className="text-border">|</span>
-            <span>Trigger: {run.trigger_type}</span>
-            <span className="text-border">|</span>
-            <span>Duration: {formatDuration(run.started_at, run.ended_at)}</span>
-            <span className="text-border">|</span>
-            <span>Started {run.started_at ? formatDistanceToNow(new Date(run.started_at), { addSuffix: true }) : "—"}</span>
+    <div>
+      <div className="page-hd">
+        <div>
+          <Link href="/runs" className="btn btn-sm" style={{ marginBottom: 8 }}>
+            <ArrowLeft size={12} /> Runs
+          </Link>
+          <h1>
+            <span className="mono" style={{ fontSize: 20 }}>#{run.id.slice(0, 8)}</span>{' '}
+            <em>· {run.function_id}</em>
+          </h1>
+          <div style={{ display: 'flex', gap: 12, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span className={statusBadge(run.status)}>{run.status}</span>
+            {isActive && isConnected && <span className="tag tag-running">Live</span>}
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="page-hd-right">
+          <button className="btn"><FileText size={12} /> Logs</button>
+          <button className="btn"><Share2 size={12} /> Share</button>
           {canCancel && (
-            <Button variant="outline" size="sm" onClick={handleCancel}>
-              Cancel
-            </Button>
+            <button className="btn btn-danger" onClick={handleCancel}>
+              <StopCircle size={12} /> Cancel
+            </button>
           )}
-          <Button size="sm" onClick={handleReplay}>
-            <RotateCw className="mr-2 h-4 w-4" />
-            Replay
-          </Button>
+          <button className="btn btn-primary" onClick={handleReplay}>
+            <RotateCw size={12} /> Replay
+          </button>
         </div>
       </div>
 
-      {/* Run Stats Cards (matching Paper design) */}
-      {totalTokens > 0 && (
-        <div className="grid gap-4 md:grid-cols-4">
-          <Card className="bg-muted/30">
-            <CardContent className="flex items-center gap-3 p-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                <Activity className="h-5 w-5 text-primary" />
+      <div className="panel" style={{ marginBottom: 16 }}>
+        <div className="panel-body">
+          <div className="meta-grid">
+            <div>
+              <label>Function</label>
+              <span className="v">{run.function_id}</span>
+            </div>
+            <div>
+              <label>Trigger</label>
+              <span className="v">{run.event_id ? 'event' : 'manual'}</span>
+            </div>
+            <div>
+              <label>Duration</label>
+              <span className="v">{fmtDuration(run.started_at, run.ended_at)}</span>
+            </div>
+            <div>
+              <label>Steps</label>
+              <span className="v">{run.steps?.length ?? 0}</span>
+            </div>
+            <div>
+              <label>Started</label>
+              <span className="v">{run.started_at ? formatDistanceToNow(new Date(run.started_at), { addSuffix: true }) : '—'}</span>
+            </div>
+            <div>
+              <label>Run ID</label>
+              <span className="v">{run.id}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Timeline */}
+      <div className="panel" style={{ marginBottom: 16 }}>
+        <div className="panel-head">
+          <div>
+            <div className="panel-title">Execution timeline</div>
+            <div className="panel-sub">{run.steps?.length ?? 0} steps</div>
+          </div>
+          <div className="panel-right">
+            <VarStrip
+              value={timeline}
+              onChange={setTimeline}
+              options={[
+                { value: 'gantt', label: 'Gantt' },
+                { value: 'flame', label: 'Flame' },
+                { value: 'swim', label: 'Swim' },
+                { value: 'graph', label: 'Graph' }
+              ]}
+            />
+          </div>
+        </div>
+        <Timeline run={run} mode={timeline} onSelectStep={setSelectedStep} selected={selectedStep} />
+      </div>
+
+      {/* Steps + inspector */}
+      <div className="split-2">
+        <div className="panel">
+          <div className="panel-head">
+            <div className="panel-title">Steps</div>
+            <div className="panel-sub">Ordered by execution</div>
+          </div>
+          <table className="ff-table">
+            <thead>
+              <tr>
+                <th></th>
+                <th>Step</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Duration</th>
+                <th>Attempt</th>
+              </tr>
+            </thead>
+            <tbody>
+              {run.steps?.length === 0 && (
+                <tr><td colSpan={6} className="hint" style={{ padding: 14 }}>No steps yet.</td></tr>
+              )}
+              {run.steps?.map((s) => (
+                <tr
+                  key={s.id}
+                  className="is-clickable"
+                  onClick={() => setSelectedStep(s)}
+                  style={selectedStep?.id === s.id ? { background: 'var(--bg-2)' } : undefined}
+                >
+                  <td><span className={`dot ${s.status === 'completed' ? 'dot-ok' : s.status === 'failed' ? 'dot-fail' : s.status === 'running' ? 'dot-run' : 'dot-warn'}`} /></td>
+                  <td className="td-id"><b>{s.step_id}</b></td>
+                  <td><span className={`tag ${s.step_type === 'ai' ? 'tag-violet' : s.step_type === 'sleep' ? 'tag-warn' : s.step_type === 'wait_for_event' ? 'tag-info' : 'tag-ok'}`}>{s.step_type}</span></td>
+                  <td><span className={statusBadge(s.status)}>{s.status}</span></td>
+                  <td className="mono">{fmtDuration(s.started_at, s.ended_at, '—')}</td>
+                  <td className="mono">{s.attempt}/{s.max_attempts}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="panel" style={{ position: 'sticky', top: 64 }}>
+          <div className="panel-head">
+            <div>
+              <div className="panel-title">Inspector</div>
+              <div className="panel-sub">{selectedStep ? selectedStep.step_id : 'Select a step'}</div>
+            </div>
+            {selectedStep && (
+              <div className="panel-right">
+                <VarStrip
+                  value={stepRender}
+                  onChange={setStepRender}
+                  options={[
+                    { value: 'notebook', label: 'NB' },
+                    { value: 'terminal', label: 'TERM' },
+                    { value: 'thread', label: 'THR' },
+                    { value: 'ide', label: 'IDE' }
+                  ]}
+                />
               </div>
-              <div>
-                <p className="text-2xl font-bold tabular-nums">{totalTokens.toLocaleString()}</p>
-                <p className="text-xs text-muted-foreground">Total Tokens</p>
+            )}
+          </div>
+          <div className="panel-body">
+            {!selectedStep && <div className="hint">Click a step on the left to inspect.</div>}
+            {selectedStep && <StepInspector step={selectedStep} mode={stepRender} />}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Timeline({ run, mode, onSelectStep, selected }: { run: RunWithSteps; mode: TimelineMode; onSelectStep: (s: Step) => void; selected: Step | null }) {
+  const steps = run.steps ?? [];
+  const range = useMemo(() => {
+    const starts = steps.map((s) => s.started_at ? new Date(s.started_at).getTime() : null).filter(Boolean) as number[];
+    const ends = steps.map((s) => s.ended_at ? new Date(s.ended_at).getTime() : Date.now()).filter(Boolean) as number[];
+    const min = starts.length ? Math.min(...starts) : 0;
+    const max = ends.length ? Math.max(...ends) : 1;
+    return { min, max, span: Math.max(1, max - min) };
+  }, [steps]);
+
+  if (steps.length === 0) {
+    return <div className="panel-body"><div className="hint">No steps to visualize yet.</div></div>;
+  }
+
+  if (mode === 'gantt') {
+    return (
+      <div className="timeline">
+        <div className="timeline-track">
+          {steps.map((s) => {
+            const start = s.started_at ? new Date(s.started_at).getTime() : range.min;
+            const end = s.ended_at ? new Date(s.ended_at).getTime() : Date.now();
+            const left = ((start - range.min) / range.span) * 100;
+            const width = Math.max(2, ((end - start) / range.span) * 100);
+            return (
+              <div key={s.id} className="timeline-row" onClick={() => onSelectStep(s)} style={{ cursor: 'pointer', opacity: selected?.id === s.id ? 1 : 0.95 }}>
+                <span className="name" title={s.step_id}>{s.step_id}</span>
+                <div className="timeline-track-line">
+                  <div className={`timeline-bar ${stepBarType(s.step_type)}${s.status === 'failed' ? ' error' : ''}`} style={{ left: `${left}%`, width: `${width}%` }}>
+                    {fmtDuration(s.started_at, s.ended_at, '')}
+                  </div>
+                </div>
               </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-muted/30">
-            <CardContent className="flex items-center gap-3 p-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10">
-                <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">$</span>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  if (mode === 'flame') {
+    return (
+      <div className="timeline">
+        {steps.map((s, i) => {
+          const start = s.started_at ? new Date(s.started_at).getTime() : range.min;
+          const end = s.ended_at ? new Date(s.ended_at).getTime() : Date.now();
+          const left = ((start - range.min) / range.span) * 100;
+          const width = Math.max(4, ((end - start) / range.span) * 100);
+          return (
+            <div key={s.id} style={{ position: 'relative', height: 24, marginBottom: 2 }}>
+              <div className={`timeline-bar ${stepBarType(s.step_type)}${s.status === 'failed' ? ' error' : ''}`}
+                   onClick={() => onSelectStep(s)}
+                   style={{ position: 'absolute', left: `${left}%`, width: `${width}%`, top: 0, bottom: 0, cursor: 'pointer' }}>
+                {s.step_id}
               </div>
-              <div>
-                <p className="text-2xl font-bold tabular-nums">${totalCost.toFixed(3)}</p>
-                <p className="text-xs text-muted-foreground">Total Cost</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-muted/30">
-            <CardContent className="flex items-center gap-3 p-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--chart-6)]/10">
-                <Brain className="h-5 w-5 text-[var(--chart-6)]" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{aiModel?.model || "—"}</p>
-                <p className="text-xs text-muted-foreground">Model Used</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-muted/30">
-            <CardContent className="flex items-center gap-3 p-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/10">
-                <Timer className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold tabular-nums">{aiLatency > 0 ? `${aiLatency}ms` : "—"}</p>
-                <p className="text-xs text-muted-foreground">AI Latency</p>
-              </div>
-            </CardContent>
-          </Card>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  return (
+    <div className="panel-body">
+      <div className="hint">{mode === 'swim' ? 'Swim' : 'Graph'} view coming soon — try Gantt or Flame.</div>
+    </div>
+  );
+}
+
+function StepInspector({ step, mode }: { step: Step; mode: StepRender }) {
+  const inputJson = step.input ? JSON.stringify(step.input, null, 2) : '';
+  const outputJson = step.output ? JSON.stringify(step.output, null, 2) : '';
+  const errorJson = step.error ? JSON.stringify(step.error, null, 2) : '';
+
+  if (mode === 'terminal') {
+    return (
+      <div>
+        <div className="kicker" style={{ marginBottom: 8 }}>$ stdout</div>
+        <pre className="snip" style={{ background: '#000' }}>
+          {outputJson || (errorJson ? `! ERROR\n${errorJson}` : '<no output>')}
+        </pre>
+      </div>
+    );
+  }
+
+  if (mode === 'thread') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {step.input && (
+          <div>
+            <div className="kicker">→ Input</div>
+            <CodeBlock language="json" code={inputJson} />
+          </div>
+        )}
+        {step.output && (
+          <div>
+            <div className="kicker" style={{ color: 'var(--accent)' }}>← Output</div>
+            <CodeBlock language="json" code={outputJson} />
+          </div>
+        )}
+        {step.error && (
+          <div>
+            <div className="kicker" style={{ color: 'var(--danger)' }}>! Error</div>
+            <CodeBlock language="json" code={errorJson} />
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // notebook + ide
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div className="meta-grid" style={{ paddingBottom: 12, borderBottom: '1px solid var(--line)' }}>
+        <div><label>Type</label><span className="v">{step.step_type}</span></div>
+        <div><label>Status</label><span className="v">{step.status}</span></div>
+        <div><label>Attempt</label><span className="v">{step.attempt}/{step.max_attempts}</span></div>
+        <div><label>Duration</label><span className="v">{fmtDuration(step.started_at, step.ended_at)}</span></div>
+      </div>
+      {step.input && (
+        <div>
+          <div className="kicker">Input</div>
+          <CodeBlock language="json" code={inputJson} />
         </div>
       )}
-
-      {/* Content */}
-      {isAgentRun && agentResult ? (
-        /* Agent-specific view */
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* Agent Timeline */}
-          <div className="lg:col-span-2 space-y-4">
-            <AgentTimeline agentResult={agentResult} />
-          </div>
-
-          {/* Sidebar */}
-          <div className="space-y-4">
-            {/* Live Activity Panel (visible when run is active) */}
-            {isActive && (
-              <LiveActivityPanel
-                isConnected={isConnected}
-                isComplete={streamResult.isComplete}
-                thinkingContent={streamResult.thinkingContent}
-                toolCalls={streamResult.toolCalls}
-                events={streamResult.events}
-              />
-            )}
-
-            {/* Agent Stats */}
-            <AgentRunView agentResult={agentResult} />
-
-            {/* Run Info */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Run Info</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {(() => {
-                  const { totalTokens, totalCost } = computeAIUsageTotals(run.steps);
-                  if (totalTokens === 0) return null;
-                  return (
-                    <>
-                      <div className="flex justify-between">
-                        <span className="text-sm text-muted-foreground">Total Tokens</span>
-                        <span className="font-mono text-sm">{totalTokens.toLocaleString()}</span>
-                      </div>
-                      {totalCost > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-sm text-muted-foreground">Total Cost</span>
-                          <span className="font-mono text-sm">${totalCost.toFixed(4)}</span>
-                        </div>
-                      )}
-                      <Separator />
-                    </>
-                  );
-                })()}
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Status</span>
-                  <div className="flex items-center gap-2">
-                    {getStatusIcon(run.status)}
-                    <span className="capitalize">{run.status}</span>
-                  </div>
-                </div>
-                <Separator />
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Started</span>
-                  <span className="text-sm">{formatTimestamp(run.started_at)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Ended</span>
-                  <span className="text-sm">
-                    {run.ended_at ? formatTimestamp(run.ended_at) : "—"}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Duration</span>
-                  <span className="font-mono text-sm">{formatDuration(run.started_at, run.ended_at)}</span>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Trigger Data */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Trigger Data</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CollapsibleJson
-                  value={triggerData.event?.data || run.trigger_data}
-                  maxHeightClassName="max-h-64"
-                />
-              </CardContent>
-            </Card>
-
-            {/* Error (if failed) */}
-            {run.error && (
-              <Card className="border-red-200">
-                <CardHeader>
-                  <CardTitle className="text-red-600">Error</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <CollapsibleJson
-                    value={run.error}
-                    maxHeightClassName="max-h-64"
-                    className="border-red-200 bg-red-50 text-red-600"
-                  />
-                </CardContent>
-              </Card>
-            )}
-          </div>
+      {step.output && (
+        <div>
+          <div className="kicker">Output</div>
+          <CodeBlock language="json" code={outputJson} />
         </div>
-      ) : (
-        /* Regular step-based view */
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* Steps Timeline */}
-          <div className="lg:col-span-2 space-y-4">
-            {/* Waterfall Timeline Card */}
-            {run.steps.length > 0 && runDurationMs > 0 && (
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <div>
-                    <CardTitle>Execution Timeline</CardTitle>
-                    <CardDescription>
-                      Step-by-step waterfall view — {run.steps.length} steps
-                    </CardDescription>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <WaterfallTimeline steps={run.steps} />
-                </CardContent>
-              </Card>
-            )}
-
-            <Card>
-            <CardHeader>
-              <CardTitle>Step Details</CardTitle>
-              <CardDescription>
-                Execution flow and step-by-step progress
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {run.steps.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4">No steps executed yet.</p>
-              ) : (
-                <div className="relative">
-                  {run.steps.map((step: Step, index: number) => (
-                    <div key={step.id} className="flex gap-4 pb-6 last:pb-0">
-                      {/* Timeline connector */}
-                      <div className="flex flex-col items-center">
-                        <div
-                          className={`flex h-10 w-10 items-center justify-center rounded-full border-2 ${
-                            step.status === "completed"
-                              ? "border-emerald-500 bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400"
-                              : step.status === "running"
-                              ? "border-primary bg-primary/10 text-primary"
-                              : step.status === "failed"
-                              ? "border-destructive bg-red-50 text-destructive dark:bg-red-950"
-                              : "border-muted bg-muted text-muted-foreground"
-                          }`}
-                        >
-                          {getStepIcon(step.step_type)}
-                        </div>
-                        {index < run.steps.length - 1 && (
-                          <div className="w-0.5 flex-1 bg-border" />
-                        )}
-                      </div>
-
-                      {/* Step content */}
-                      <div className="flex-1 pb-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">{step.step_id}</span>
-                            <Badge variant="outline" className="text-xs">
-                              {step.step_type}
-                            </Badge>
-                            {getStatusBadge(step.status)}
-                            {step.output && (step.output as { __rate_limited?: boolean }).__rate_limited && (
-                              <Badge className="text-xs border-amber-300 bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
-                                429 · retry in {Math.round(Number((step.output as { __retry_after?: number }).__retry_after ?? 0))}s
-                              </Badge>
-                            )}
-                          </div>
-                          <span className="font-mono text-sm text-muted-foreground">
-                            {formatDuration(step.started_at, step.ended_at)}
-                          </span>
-                        </div>
-
-                        {/* Step output preview */}
-                        {step.output && (
-                          <div className="rounded-lg border bg-muted/50 p-3">
-                            {(step.output as { __rate_limited?: boolean }).__rate_limited ? (
-                              <div className="text-xs text-amber-700 dark:text-amber-300">
-                                Rate-limited by {String((step.output as { __provider?: string }).__provider ?? "provider")} on {String((step.output as { __model?: string }).__model ?? "model")}. The SDK retry loop will sleep and re-attempt. {(step.output as { __error?: string }).__error && (
-                                  <span className="text-muted-foreground block mt-1">{(step.output as { __error?: string }).__error}</span>
-                                )}
-                              </div>
-                            ) : step.step_type === "ai" ? (
-                              <div className="space-y-2">
-                                {(step.output as { content?: string }).content && (
-                                  <p className="text-sm">{(step.output as { content?: string }).content}</p>
-                                )}
-                                {(step.output as { tool_calls?: { id: string; name: string; arguments: Record<string, unknown> }[] }).tool_calls && (
-                                  <div className="space-y-1.5">
-                                    {(step.output as { tool_calls: { id: string; name: string; arguments: Record<string, unknown> }[] }).tool_calls.map((tc) => (
-                                      <div key={tc.id} className="flex items-start gap-2 rounded border bg-background p-2">
-                                        <Wrench className="h-3.5 w-3.5 mt-0.5 text-muted-foreground shrink-0" />
-                                        <div className="min-w-0">
-                                          <span className="text-sm font-medium">{tc.name}</span>
-                                          <pre className="text-xs text-muted-foreground mt-0.5 whitespace-pre-wrap break-all">{JSON.stringify(tc.arguments, null, 2)}</pre>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                                <div className="flex gap-4 text-xs text-muted-foreground">
-                                  <span>Model: {(step.output as { model?: string }).model}</span>
-                                  <span>Tokens: {(step.output as { usage?: { total_tokens?: number } }).usage?.total_tokens}</span>
-                                  <span>Cost: ${(step.output as { usage?: { cost_usd?: number } }).usage?.cost_usd?.toFixed(4)}</span>
-                                </div>
-                              </div>
-                            ) : (
-                              <CollapsibleJson value={step.output} maxHeightClassName="max-h-64" />
-                            )}
-                          </div>
-                        )}
-
-                        {/* Step error */}
-                        {step.error && (
-                          <div className="mt-2">
-                            <CollapsibleJson
-                              value={step.error}
-                              maxHeightClassName="max-h-64"
-                              className="border-red-200 bg-red-50 text-red-600"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Sidebar */}
-        <div className="space-y-4">
-          {/* Run Info */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Run Info</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {(() => {
-                const { totalTokens, totalCost } = computeAIUsageTotals(run.steps);
-                if (totalTokens === 0) return null;
-                return (
-                  <>
-                    <div className="flex justify-between">
-                      <span className="text-sm text-muted-foreground">Total Tokens</span>
-                      <span className="font-mono text-sm">{totalTokens.toLocaleString()}</span>
-                    </div>
-                    {totalCost > 0 && (
-                      <div className="flex justify-between">
-                        <span className="text-sm text-muted-foreground">Total Cost</span>
-                        <span className="font-mono text-sm">${totalCost.toFixed(4)}</span>
-                      </div>
-                    )}
-                    <Separator />
-                  </>
-                );
-              })()}
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Status</span>
-                <div className="flex items-center gap-2">
-                  {getStatusIcon(run.status)}
-                  <span className="capitalize">{run.status}</span>
-                </div>
-              </div>
-              <Separator />
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Started</span>
-                <span className="text-sm">{formatTimestamp(run.started_at)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Ended</span>
-                <span className="text-sm">
-                  {run.ended_at ? formatTimestamp(run.ended_at) : "—"}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Duration</span>
-                <span className="font-mono text-sm">{formatDuration(run.started_at, run.ended_at)}</span>
-              </div>
-              <Separator />
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Trigger</span>
-                <Badge variant="outline" className="font-mono text-xs">
-                  {run.trigger_type}
-                </Badge>
-              </div>
-              {run.event_id && (
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Event ID</span>
-                  <span className="font-mono text-xs">{run.event_id.slice(0, 8)}...</span>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Event Data */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Trigger Data</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Tabs defaultValue="input">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="input">Input</TabsTrigger>
-                  <TabsTrigger value="output">Output</TabsTrigger>
-                </TabsList>
-                <TabsContent value="input" className="mt-4">
-                  <CollapsibleJson
-                    value={triggerData.event?.data || run.trigger_data}
-                    maxHeightClassName="max-h-64"
-                  />
-                </TabsContent>
-                <TabsContent value="output" className="mt-4">
-                  <CollapsibleJson
-                    value={run.output ?? "No output yet"}
-                    maxHeightClassName="max-h-64"
-                  />
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
-
-          {/* Error (if failed) */}
-          {run.error && (
-            <Card className="border-red-200">
-              <CardHeader>
-                <CardTitle className="text-red-600">Error</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CollapsibleJson
-                  value={run.error}
-                  maxHeightClassName="max-h-64"
-                  className="border-red-200 bg-red-50 text-red-600"
-                />
-              </CardContent>
-            </Card>
-          )}
-          </div>
+      )}
+      {step.error && (
+        <div>
+          <div className="kicker" style={{ color: 'var(--danger)' }}>Error</div>
+          <CodeBlock language="json" code={errorJson} />
         </div>
       )}
     </div>
