@@ -580,3 +580,42 @@ body[data-sidebar="compact"] .ff-side-foot-text { display: none; }
 @keyframes ff-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 @keyframes ff-accordion-down { from { height: 0; } to { height: var(--radix-accordion-content-height); } }
 @keyframes ff-accordion-up { from { height: var(--radix-accordion-content-height); } to { height: 0; } }
+
+/* ============ Settings page (set-* primitives) ============ */
+.set-grid { display: grid; grid-template-columns: 220px 1fr; gap: 24px; align-items: start; }
+@media (max-width: 900px) { .set-grid { grid-template-columns: 1fr; } }
+
+.set-nav { position: sticky; top: calc(var(--top-h) + 16px); display: flex; flex-direction: column; gap: 1px; }
+.set-nav h4 { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); margin: 14px 12px 6px; }
+.set-nav h4:first-child { margin-top: 0; }
+.set-nav a, .set-nav button { color: var(--ink-2); padding: 6px 12px; border-radius: 4px; font-size: 13px; cursor: pointer; text-decoration: none; display: block; transition: background .12s, color .12s; background: transparent; border: 0; width: 100%; text-align: left; font: inherit; }
+.set-nav a:hover, .set-nav button:hover { background: var(--bg-2); color: var(--ink-1); }
+.set-nav a.is-on, .set-nav button.is-on { background: var(--accent-wash); color: var(--ink-1); border-left: 2px solid var(--accent); padding-left: 10px; }
+.set-nav a:focus-visible, .set-nav button:focus-visible { outline: var(--focus); outline-offset: 2px; }
+
+.set-section { margin-bottom: 28px; scroll-margin-top: calc(var(--top-h) + 16px); }
+.set-section > h2 { font-family: var(--sans); font-size: 18px; font-weight: 600; color: var(--ink-1); margin: 0 0 4px; letter-spacing: -0.01em; }
+.set-section > h2 em { font-family: var(--serif); font-style: italic; font-weight: 400; color: var(--ink-3); margin-left: 4px; }
+.set-section > .sub { color: var(--ink-3); font-size: 13px; margin-bottom: 16px; }
+
+.set-card { background: var(--bg-1); border: 1px solid var(--line); border-radius: 8px; padding: 18px 20px; margin-bottom: 12px; }
+.set-card.danger-card { border-color: color-mix(in oklab, var(--danger) 30%, var(--line)); }
+.set-card.danger-card h3 { color: var(--danger); margin: 0 0 4px; font-size: 14px; }
+
+.set-row { display: grid; grid-template-columns: 200px 1fr; gap: 18px; padding: 14px 0; border-bottom: 1px dashed var(--line); align-items: start; }
+.set-row:first-child { padding-top: 0; }
+.set-row:last-child { border-bottom: 0; padding-bottom: 0; }
+.set-lbl { font-size: 13px; color: var(--ink-1); font-weight: 500; }
+.set-lbl small { display: block; color: var(--ink-3); font-weight: 400; font-size: 11.5px; margin-top: 2px; line-height: 1.45; }
+.set-input { font-family: var(--mono); font-size: 12px; color: var(--ink-1); background: var(--bg-2); border: 1px solid var(--line); border-radius: 4px; padding: 6px 10px; width: 100%; max-width: 380px; height: 30px; outline: none; transition: border-color .12s; }
+.set-input:focus { border-color: var(--accent); }
+.set-help { font-size: 11.5px; color: var(--ink-3); margin-top: 6px; font-family: var(--mono); }
+
+.toggle { width: 32px; height: 18px; background: var(--bg-3); border-radius: 9px; position: relative; cursor: pointer; border: 1px solid var(--line); padding: 0; transition: background .15s, border-color .15s; }
+.toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--ink-3); transition: all .15s; }
+.toggle.on { background: var(--accent); border-color: var(--accent); }
+.toggle.on::after { left: 16px; background: white; }
+
+.key-row { display: grid; grid-template-columns: 24px 1fr auto auto; gap: 12px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 4px; align-items: center; margin-bottom: 6px; background: var(--bg-2); }
+.key-row .lbl { font-family: var(--mono); font-size: 11.5px; color: var(--ink-1); }
+.key-row .lbl small { display: block; color: var(--ink-3); margin-top: 2px; }
