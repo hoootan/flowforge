@@ -59,8 +59,9 @@ def validate_webhook_url(url: str) -> None:
     resolve_and_validate_host(hostname, parsed.port)
 
 
-def _check_redirect(response: httpx.Response) -> None:
-    """httpx event hook: validate redirect targets against SSRF."""
+def _check_redirect_impl(response: httpx.Response) -> None:
+    """SSRF check applied to every response. Raises ValueError on a
+    redirect whose target resolves to a private/reserved address."""
     if response.is_redirect and "location" in response.headers:
         target = response.headers["location"]
         target_url = response.url.join(target)
@@ -72,12 +73,30 @@ def _check_redirect(response: httpx.Response) -> None:
         resolve_and_validate_host(hostname, target_url.port)
 
 
+async def _async_check_redirect(response: httpx.Response) -> None:
+    """Async event-hook wrapper for ``AsyncClient``. httpx awaits the
+    return of every async-client event hook; a plain sync function
+    returns ``None`` and triggers ``TypeError: object NoneType can't be
+    used in 'await' expression`` on every webhook-tool invocation."""
+    _check_redirect_impl(response)
+
+
+def _sync_check_redirect(response: httpx.Response) -> None:
+    """Sync event-hook wrapper for the sync ``Client``."""
+    _check_redirect_impl(response)
+
+
+# Public alias kept for any external callers that referenced the
+# pre-fix sync function name.
+_check_redirect = _sync_check_redirect
+
+
 def create_ssrf_safe_client(**kwargs: object) -> httpx.AsyncClient:
     """Create an async httpx client that validates redirect targets."""
     kwargs.setdefault("follow_redirects", True)
     kwargs.setdefault("timeout", 30.0)
     return httpx.AsyncClient(
-        event_hooks={"response": [_check_redirect]}, **kwargs  # type: ignore[arg-type]
+        event_hooks={"response": [_async_check_redirect]}, **kwargs  # type: ignore[arg-type]
     )
 
 
@@ -86,5 +105,5 @@ def create_ssrf_safe_sync_client(**kwargs: object) -> httpx.Client:
     kwargs.setdefault("follow_redirects", True)
     kwargs.setdefault("timeout", 30.0)
     return httpx.Client(
-        event_hooks={"response": [_check_redirect]}, **kwargs  # type: ignore[arg-type]
+        event_hooks={"response": [_sync_check_redirect]}, **kwargs  # type: ignore[arg-type]
     )
