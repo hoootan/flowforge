@@ -69,7 +69,7 @@ export default function OverviewPage() {
         const days = range === '24h' ? 1 : range === '7d' ? 7 : 30;
         const [statsData, runsData, recentRuns, fns, usage] = await Promise.all([
           api.getStats(),
-          api.getRuns({ page_size: 200 }),
+          api.getRuns({ page_size: 100 }),
           api.getRuns({ page_size: 12 }),
           api.getFunctions(),
           api.getDailyUsage(days).catch(() => [] as DailyUsage[])

@@ -49,7 +49,7 @@ export default function RunsPage() {
     let cancelled = false;
     const fetch = async () => {
       try {
-        const r = await api.getRuns({ page_size: 200, status: status === 'all' ? undefined : status });
+        const r = await api.getRuns({ page_size: 100, status: status === 'all' ? undefined : status });
         if (!cancelled) setRuns(r.runs);
       } finally {
         if (!cancelled) setLoading(false);
