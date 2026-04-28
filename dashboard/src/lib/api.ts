@@ -639,6 +639,21 @@ const emptyApprovalsResponse: ApprovalsResponse = { approvals: [], total: 0 };
 const emptyUsersResponse: UsersResponse = { users: [], total: 0 };
 const emptyApiKeysResponse: ApiKeysResponse = { keys: [], total: 0 };
 
+// Workspace concurrency / step-execution defaults
+export interface ConcurrencySettings {
+  max_concurrent_runs: number;
+  per_function_default: number;
+  default_step_timeout_s: number;
+  use_event_id_idempotency: boolean;
+}
+
+export const DEFAULT_CONCURRENCY_SETTINGS: ConcurrencySettings = {
+  max_concurrent_runs: 500,
+  per_function_default: 50,
+  default_step_timeout_s: 60,
+  use_event_id_idempotency: true,
+};
+
 // Workspace notification settings
 export interface NotificationSettings {
   slack_channel: string | null;
@@ -1862,6 +1877,28 @@ class FlowForgeAPI {
         by_model: { models: [] },
         daily: { daily: [] },
       };
+    }
+  }
+
+  // Tenant / workspace concurrency settings
+  async getConcurrencySettings(): Promise<ConcurrencySettings> {
+    try {
+      return await this.request<ConcurrencySettings>("/tenant/concurrency");
+    } catch {
+      return DEFAULT_CONCURRENCY_SETTINGS;
+    }
+  }
+
+  async updateConcurrencySettings(
+    data: Partial<ConcurrencySettings>
+  ): Promise<ConcurrencySettings | null> {
+    try {
+      return await this.request<ConcurrencySettings>("/tenant/concurrency", {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      });
+    } catch {
+      return null;
     }
   }
 

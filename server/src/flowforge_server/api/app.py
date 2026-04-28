@@ -30,6 +30,7 @@ from flowforge_server.api.routes import (
     stream_router,
     tasks_router,
     tenant_notifications_router,
+    tenants_router,
     tools_router,
     usage_router,
     users_router,
@@ -221,6 +222,7 @@ FlowForge provides durable execution for AI-powered workflows with:
     app.include_router(notifications_router, prefix="/api/v1")
     app.include_router(skills_router, prefix="/api/v1")
     app.include_router(tenant_notifications_router, prefix="/api/v1")
+    app.include_router(tenants_router, prefix="/api/v1")
 
     # Static media files (generated images, etc.)
     media_path = Path(settings.media_dir)

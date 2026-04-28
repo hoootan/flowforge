@@ -28,6 +28,7 @@ import {
   DollarSign,
   FileText,
   Bell,
+  Gauge,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore, usePermissions } from "@/stores/auth-store";
@@ -40,6 +41,7 @@ import { ModelPricingTab } from "@/components/settings/model-pricing-tab";
 import { AuditLogTab } from "@/components/settings/audit-log-tab";
 import { CredentialsTab } from "@/components/settings/credentials-tab";
 import { NotificationsTab } from "@/components/settings/notifications-tab";
+import { ConcurrencyTab } from "@/components/settings/concurrency-tab";
 import type { User } from "@/lib/api";
 
 interface SettingsData {
@@ -141,7 +143,7 @@ export default function SettingsPage() {
 
       {/* Tabbed Settings Interface */}
       <Tabs defaultValue="general" className="flex-1">
-        <TabsList className={`grid w-full max-w-6xl ${showUsersTab ? "grid-cols-10" : "grid-cols-8"}`}>
+        <TabsList className={`grid w-full max-w-7xl ${showUsersTab ? "grid-cols-11" : "grid-cols-9"}`}>
           <TabsTrigger value="general" className="gap-1.5">
             <Settings className="h-4 w-4" />
             <span className="hidden sm:inline">General</span>
@@ -178,6 +180,10 @@ export default function SettingsPage() {
               <span className="hidden sm:inline">Audit</span>
             </TabsTrigger>
           )}
+          <TabsTrigger value="concurrency" className="gap-1.5">
+            <Gauge className="h-4 w-4" />
+            <span className="hidden sm:inline">Concurrency</span>
+          </TabsTrigger>
           <TabsTrigger value="notifications" className="gap-1.5">
             <Bell className="h-4 w-4" />
             <span className="hidden sm:inline">Notifications</span>
@@ -366,6 +372,11 @@ export default function SettingsPage() {
             <AuditLogTab />
           </TabsContent>
         )}
+
+        {/* Concurrency & limits Tab */}
+        <TabsContent value="concurrency" className="mt-6 space-y-6">
+          <ConcurrencyTab />
+        </TabsContent>
 
         {/* Notifications Tab */}
         <TabsContent value="notifications" className="mt-6 space-y-6">

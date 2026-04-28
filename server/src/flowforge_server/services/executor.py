@@ -29,6 +29,27 @@ from flowforge_server.services import notifier as notifier_service
 from flowforge_server.stream.pubsub import RunEventType, publish_run_event
 
 
+def _parse_timeout_to_seconds(s: str | None) -> int | None:
+    """Parse a duration string like '30s' / '5m' / '1h' to seconds.
+
+    Returns None on failure. Mirrors inline_executor._parse_timeout but at
+    module scope so executor's worker-mode path can resolve the same way.
+    """
+    if not s:
+        return None
+    try:
+        s = str(s).strip()
+        if s.endswith("h"):
+            return int(s[:-1]) * 3600
+        if s.endswith("m"):
+            return int(s[:-1]) * 60
+        if s.endswith("s"):
+            return int(s[:-1])
+        return int(s)
+    except (ValueError, TypeError):
+        return None
+
+
 def _fire_run_failed_notification(run_id: Any) -> None:
     """Schedule a fire-and-forget notification dispatch.
 
@@ -334,6 +355,24 @@ class Executor:
                 # Invoke the function via HTTP (worker mode)
                 endpoint_url = job.data.get("endpoint_url")
 
+                # Resolve the step timeout for this invoke cycle:
+                # function-level config wins; otherwise fall back to the workspace
+                # default (default_step_timeout_s, injected by runner._enqueue_run).
+                # Each /invoke call is bounded by one step yield, so this gives a
+                # real per-step soft timeout for worker-mode functions.
+                fn_cfg = job.data.get("config") or {}
+                fn_timeout_str = fn_cfg.get("timeout") if isinstance(fn_cfg, dict) else None
+                tenant_default_step_s = (
+                    fn_cfg.get("default_step_timeout_s")
+                    if isinstance(fn_cfg, dict)
+                    else None
+                )
+                step_timeout_s = (
+                    _parse_timeout_to_seconds(fn_timeout_str)
+                    if fn_timeout_str
+                    else (int(tenant_default_step_s) if tenant_default_step_s else None)
+                )
+
                 result = await self._invoke_function(
                     endpoint_url=endpoint_url,
                     function_id=job.function_id,
@@ -341,6 +380,7 @@ class Executor:
                     event=trigger_data.get("event", {}),
                     completed_steps=completed_steps,
                     attempt=run.attempt,
+                    step_timeout_s=step_timeout_s,
                 )
 
             # Process result
@@ -354,8 +394,15 @@ class Executor:
         event: dict[str, Any],
         completed_steps: dict[str, Any],
         attempt: int,
+        step_timeout_s: int | None = None,
     ) -> dict[str, Any]:
-        """Invoke a user function via HTTP."""
+        """Invoke a user function via HTTP.
+
+        When `step_timeout_s` is set, the per-invoke read timeout is overridden
+        on this single call so a stuck step yields control instead of riding
+        the long client-default. Also forwarded in the payload as a hint so
+        SDKs can self-enforce.
+        """
         client = await self._get_http_client()
 
         payload = {
@@ -365,11 +412,24 @@ class Executor:
             "steps": completed_steps,
             "attempt": attempt,
         }
+        if step_timeout_s is not None:
+            payload["step_timeout_s"] = step_timeout_s
+
+        # Per-call timeout override. Generous connect/write/pool, tight read.
+        request_timeout: httpx.Timeout | None = None
+        if step_timeout_s is not None and step_timeout_s > 0:
+            request_timeout = httpx.Timeout(
+                connect=10.0,
+                read=float(step_timeout_s),
+                write=10.0,
+                pool=10.0,
+            )
 
         try:
             response = await client.post(
                 f"{endpoint_url}/invoke",
                 json=payload,
+                timeout=request_timeout if request_timeout is not None else httpx.USE_CLIENT_DEFAULT,
             )
             response.raise_for_status()
             return response.json()
@@ -788,10 +848,29 @@ class Executor:
                 session, job.function_id, run.function_id
             )
 
+            # Resolve a soft step timeout for this AI call. Step-level value (if
+            # the SDK passed one) wins; otherwise function-level `timeout`; final
+            # fallback is the tenant default injected by runner._enqueue_run.
+            step_level_timeout = step_result.get("timeout_seconds")
+            fn_cfg_blob = job.data.get("config") or {}
+            fn_timeout = (
+                _parse_timeout_to_seconds(fn_cfg_blob.get("timeout"))
+                if isinstance(fn_cfg_blob, dict)
+                else None
+            )
+            tenant_default = (
+                int(fn_cfg_blob.get("default_step_timeout_s"))
+                if isinstance(fn_cfg_blob, dict) and fn_cfg_blob.get("default_step_timeout_s")
+                else None
+            )
+            ai_step_timeout_s: int | None = (
+                step_level_timeout if step_level_timeout else (fn_timeout or tenant_default)
+            )
+
             try:
                 # Execute the AI call via LiteLLM with tenant-specific credentials
                 ai_service = self._get_ai_service()
-                response = await ai_service.complete(
+                ai_call = ai_service.complete(
                     model=model,
                     messages=messages,
                     temperature=temperature,
@@ -804,6 +883,10 @@ class Executor:
                     function_id=job.function_id,
                     rate_limits=rate_limits_cfg,
                 )
+                if ai_step_timeout_s and ai_step_timeout_s > 0:
+                    response = await asyncio.wait_for(ai_call, timeout=ai_step_timeout_s)
+                else:
+                    response = await ai_call
 
                 # Detect the structured rate-limit marker. AIService returns
                 # this instead of raising on 429 so the SDK's step.ai loop can

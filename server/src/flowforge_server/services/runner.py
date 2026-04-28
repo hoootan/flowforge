@@ -6,14 +6,27 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from flowforge_server.api.schemas.tenant import ConcurrencySettings
 from flowforge_server.config import get_settings
 from flowforge_server.db import get_session_context
-from flowforge_server.db.models import Function, Run, RunStatus, Step, StepStatus
+from flowforge_server.db.models import Function, Run, RunStatus, Step, StepStatus, Tenant
 from flowforge_server.queue import FairQueue, Job
 from flowforge_server.stream import RedisEventStream, StreamMessage
+
+
+def _tenant_concurrency(tenant: Tenant | None) -> ConcurrencySettings:
+    """Read the workspace concurrency block from a tenant row, with defaults.
+
+    Mirrors the logic in api/routes/tenants.py so the runner can honor settings
+    without going through the API layer.
+    """
+    if tenant is None:
+        return ConcurrencySettings()
+    raw = (tenant.settings or {}).get("concurrency") or {}
+    return ConcurrencySettings(**{k: v for k, v in raw.items() if v is not None})
 
 
 class Runner:
@@ -350,7 +363,23 @@ class Runner:
         fn: Function,
         message: StreamMessage,
     ) -> Run:
-        """Create a new run record."""
+        """Create a new run record.
+
+        Honors the workspace `use_event_id_idempotency` setting: when enabled,
+        the trigger event id becomes the new run's idempotency key so a
+        redelivered event from the broker maps to the same logical run.
+        """
+        # Read tenant concurrency settings to decide on idempotency
+        tenant_result = await session.execute(
+            select(Tenant).where(Tenant.id == fn.tenant_id)
+        )
+        tenant = tenant_result.scalar_one_or_none()
+        concurrency_cfg = _tenant_concurrency(tenant)
+
+        idempotency_key: str | None = None
+        if concurrency_cfg.use_event_id_idempotency and message.event_id:
+            idempotency_key = f"event:{message.event_id}:fn:{fn.id}"
+
         run = Run(
             tenant_id=fn.tenant_id,
             function_id=fn.id,
@@ -365,6 +394,7 @@ class Runner:
                 }
             },
             max_attempts=fn.retries,
+            idempotency_key=idempotency_key,
         )
 
         session.add(run)
@@ -374,7 +404,48 @@ class Runner:
         return run
 
     async def _enqueue_run(self, run: Run, fn: Function) -> None:
-        """Enqueue a job for the executor."""
+        """Enqueue a job for the executor.
+
+        Honors the workspace `max_concurrent_runs` setting by introducing a
+        small delay when the tenant is already at its concurrent-run cap, and
+        falls back to the workspace `per_function_default` concurrency limit
+        when the Function does not declare its own.
+        """
+        delay: float | None = None
+        async with get_session_context() as cfg_session:
+            tenant_row = await cfg_session.execute(
+                select(Tenant).where(Tenant.id == run.tenant_id)
+            )
+            tenant = tenant_row.scalar_one_or_none()
+            cfg = _tenant_concurrency(tenant)
+
+            running_count = await cfg_session.execute(
+                select(func.count())
+                .select_from(Run)
+                .where(
+                    Run.tenant_id == run.tenant_id,
+                    Run.status == RunStatus.RUNNING,
+                )
+            )
+            running = running_count.scalar() or 0
+
+            if running >= cfg.max_concurrent_runs:
+                delay = 5.0
+                print(
+                    f"[Runner] Tenant {run.tenant_id} at cap "
+                    f"({running}/{cfg.max_concurrent_runs}); delaying run {run.id}"
+                )
+
+        # Inject per-function default concurrency when Function does not declare its own.
+        cfg_blob = dict(fn.config or {})
+        if "concurrency" not in cfg_blob:
+            cfg_blob["concurrency"] = {"limit": cfg.per_function_default}
+
+        # Inject default step timeout (Phase 2.5) so the executor's step paths
+        # can read tenant-level timeout when neither step nor function override.
+        if "default_step_timeout_s" not in cfg_blob:
+            cfg_blob["default_step_timeout_s"] = cfg.default_step_timeout_s
+
         job = Job(
             job_type="execute_run",
             run_id=str(run.id),
@@ -383,13 +454,13 @@ class Runner:
             data={
                 "function_uuid": str(fn.id),
                 "endpoint_url": fn.endpoint_url,
-                "config": fn.config,
+                "config": cfg_blob,
                 "trigger_data": run.trigger_data,
             },
             max_attempts=fn.retries,
         )
 
-        await self.queue.enqueue(job)
+        await self.queue.enqueue(job, delay=delay)
 
     async def _process_scheduled_runs(self) -> None:
         """Process runs that are scheduled to resume (sleep, etc.)."""
