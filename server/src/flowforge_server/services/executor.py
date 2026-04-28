@@ -455,14 +455,23 @@ class Executor:
             )
             await self.queue.enqueue(new_job)
 
-            # Publish step completed event
+            # Publish step completed event. step.step_type is sometimes a
+            # plain string (loaded from a JSON-cast row, or set directly by
+            # the inline executor before SQLAlchemy coerces it back to the
+            # StepType enum on flush). Match the defensive treatment already
+            # used in routes/runs.py and routes/stream.py.
+            step_type_value = (
+                step.step_type.value
+                if hasattr(step.step_type, "value")
+                else (step.step_type or "run")
+            )
             await publish_run_event(
                 str(run.id),
                 RunEventType.STEP_COMPLETED,
                 {
                     "run_id": str(run.id),
                     "step_id": step_id,
-                    "step_type": step.step_type.value if step.step_type else "run",
+                    "step_type": step_type_value,
                     "output": step.output,
                 },
             )
