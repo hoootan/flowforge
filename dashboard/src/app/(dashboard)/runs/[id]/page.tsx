@@ -360,7 +360,7 @@ function StepInspector({ step, mode }: { step: Step; mode: StepRender }) {
         )}
         {step.output && (
           <div>
-            <div className="kicker" style={{ color: 'var(--accent)' }}>← Output</div>
+            <div className="kicker" style={{ color: 'var(--brand)' }}>← Output</div>
             <CodeBlock language="json" code={outputJson} />
           </div>
         )}
