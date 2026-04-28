@@ -1,9 +1,10 @@
 """Tenant model for multi-tenancy support."""
 
 import uuid
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import String, Text
+from sqlalchemy import DateTime, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -58,6 +59,14 @@ class Tenant(Base, TimestampMixin):
         JSONB,
         nullable=False,
         default=dict,
+    )
+
+    # Soft-delete marker. Set by the Danger zone delete flow; routes filter
+    # out tenants with deleted_at IS NOT NULL via the auth dependency.
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
     )
 
     # Relationships

@@ -131,6 +131,21 @@ async def _validate_user_jwt_token(
         return None
 
 
+def _bounce_if_deleted(tenant: Tenant) -> Tenant:
+    """Reject auth attempts targeting a soft-deleted tenant.
+
+    Set when an admin runs the Danger-zone delete flow. We respond with a
+    410 Gone so clients can distinguish a deleted workspace from a missing
+    one without leaking presence.
+    """
+    if getattr(tenant, "deleted_at", None) is not None:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="This workspace has been deleted.",
+        )
+    return tenant
+
+
 async def get_current_tenant(
     session: AsyncSession = Depends(get_session),
     api_key: str | None = Header(None, alias="X-FlowForge-API-Key"),
@@ -146,13 +161,14 @@ async def get_current_tenant(
 
     Raises:
         HTTPException(401): If authentication is missing or invalid
+        HTTPException(410): If the workspace has been soft-deleted
     """
     # Try API key first
     if api_key:
         # Try the new ApiKey model first
         api_key_model, tenant = await _validate_api_key_from_model(session, api_key)
         if tenant:
-            return tenant
+            return _bounce_if_deleted(tenant)
 
         # Fall back to legacy Tenant.api_key_hash for backwards compatibility
         api_key_hash = hash_api_key(api_key)
@@ -162,7 +178,7 @@ async def get_current_tenant(
         tenant = result.scalar_one_or_none()
 
         if tenant:
-            return tenant
+            return _bounce_if_deleted(tenant)
 
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -176,7 +192,7 @@ async def get_current_tenant(
         tenant = await _validate_jwt_token(session, token, settings)
 
         if tenant:
-            return tenant
+            return _bounce_if_deleted(tenant)
 
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

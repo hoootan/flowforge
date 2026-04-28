@@ -639,6 +639,26 @@ const emptyApprovalsResponse: ApprovalsResponse = { approvals: [], total: 0 };
 const emptyUsersResponse: UsersResponse = { users: [], total: 0 };
 const emptyApiKeysResponse: ApiKeysResponse = { keys: [], total: 0 };
 
+// Workspace identity (GET /tenant)
+export interface TenantInfo {
+  id: string;
+  name: string;
+  slug: string;
+  deleted_at: string | null;
+}
+
+// Workspace danger-zone responses
+export interface PauseAllResponse {
+  paused_count: number;
+}
+export interface TransferOwnershipResponse {
+  new_owner_id: string;
+  new_owner_email: string;
+}
+export interface DeleteWorkspaceResponse {
+  deleted_at: string;
+}
+
 // Workspace concurrency / step-execution defaults
 export interface ConcurrencySettings {
   max_concurrent_runs: number;
@@ -1877,6 +1897,51 @@ class FlowForgeAPI {
         by_model: { models: [] },
         daily: { daily: [] },
       };
+    }
+  }
+
+  async getTenantInfo(): Promise<TenantInfo | null> {
+    try {
+      return await this.request<TenantInfo>("/tenant");
+    } catch {
+      return null;
+    }
+  }
+
+  // Tenant / workspace danger-zone actions
+  async pauseAllFunctions(): Promise<PauseAllResponse | null> {
+    try {
+      return await this.request<PauseAllResponse>("/tenant/pause-all", {
+        method: "POST",
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async transferOwnership(
+    userId: string
+  ): Promise<TransferOwnershipResponse | null> {
+    try {
+      return await this.request<TransferOwnershipResponse>(
+        "/tenant/transfer-ownership",
+        { method: "POST", body: JSON.stringify({ user_id: userId }) }
+      );
+    } catch {
+      return null;
+    }
+  }
+
+  async deleteWorkspace(
+    confirmSlug: string
+  ): Promise<DeleteWorkspaceResponse | null> {
+    try {
+      return await this.request<DeleteWorkspaceResponse>("/tenant", {
+        method: "DELETE",
+        body: JSON.stringify({ confirm_slug: confirmSlug }),
+      });
+    } catch {
+      return null;
     }
   }
 

@@ -42,6 +42,7 @@ import { AuditLogTab } from "@/components/settings/audit-log-tab";
 import { CredentialsTab } from "@/components/settings/credentials-tab";
 import { NotificationsTab } from "@/components/settings/notifications-tab";
 import { ConcurrencyTab } from "@/components/settings/concurrency-tab";
+import { DangerZone } from "@/components/settings/danger-zone";
 import type { User } from "@/lib/api";
 
 interface SettingsData {
@@ -288,29 +289,8 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          {/* Danger Zone */}
-          <Card className="border-destructive/50">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-destructive">
-                <Shield className="h-5 w-5" />
-                Danger Zone
-              </CardTitle>
-              <CardDescription>
-                Irreversible actions. Proceed with caution.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between rounded-lg border border-destructive/50 p-4">
-                <div>
-                  <h4 className="font-medium">Clear All Data</h4>
-                  <p className="text-sm text-muted-foreground">
-                    Delete all runs, events, and function data.
-                  </p>
-                </div>
-                <Button variant="destructive">Clear Data</Button>
-              </div>
-            </CardContent>
-          </Card>
+          {/* Danger Zone — pause-all / transfer-ownership / delete-workspace */}
+          <DangerZone />
         </TabsContent>
 
         {/* Users Tab (Admin only) */}
