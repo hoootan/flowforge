@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { usePermissions } from "@/stores/auth-store";
+import { useAuthStore, usePermissions } from "@/stores/auth-store";
 import { UsersList } from "@/components/settings/users-list";
 import { UserDialog } from "@/components/settings/user-dialog";
 import { ApiKeysTab } from "@/components/settings/api-keys-tab";
@@ -87,16 +87,21 @@ const NAV: { group: string; items: { id: NavId; label: string; adminOnly?: boole
     ],
   },
   {
+    // Both items are admin-only:
+    // - Notifications GET/PATCH require admin (returns 403 otherwise) and the
+    //   response includes secrets (Slack webhook URL, PD integration key).
+    // - Danger zone actions are destructive and admin-only on the server.
     group: "Notifications",
     items: [
-      { id: "notifications", label: "Alerts" },
-      { id: "danger", label: "Danger zone" },
+      { id: "notifications", label: "Alerts", adminOnly: true },
+      { id: "danger", label: "Danger zone", adminOnly: true },
     ],
   },
 ];
 
 export default function SettingsPage() {
   const { isAdmin } = usePermissions();
+  const currentUserId = useAuthStore((s) => s.user?.id);
   const [active, setActive] = useState<NavId>("general");
 
   // General — workspace identity (localStorage until backend ships)
@@ -145,29 +150,39 @@ export default function SettingsPage() {
     api.getConcurrencySettings().then((s) => {
       if (!cancelled) setConc(s);
     });
-    api.getNotificationSettings().then((s) => {
-      if (!cancelled) {
-        setNotif(s);
-        setNotifLoaded(true);
-      }
-    });
+    // Notifications GET is admin-only on the server (response includes secrets).
+    // Skip the fetch for non-admins to avoid noisy 403s in the console.
+    if (isAdmin) {
+      api.getNotificationSettings().then((s) => {
+        if (!cancelled) {
+          setNotif(s);
+          setNotifLoaded(true);
+        }
+      });
+    }
     api.getTenantInfo().then((info) => {
       if (!cancelled && info) setTenantSlug(info.slug);
     });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isAdmin]);
 
-  // Lazy-load workspace user list when transfer dialog opens
+  // Lazy-load workspace user list when transfer dialog opens.
+  // Filter out the current user — transferring to yourself is a no-op
+  // and the server explicitly rejects it.
   useEffect(() => {
     if (!transferOpen || transferUsers.length > 0) return;
     api.getUsers().then((res) => {
       if (res?.users) {
-        setTransferUsers(res.users.map((u) => ({ id: u.id, email: u.email })));
+        setTransferUsers(
+          res.users
+            .filter((u) => u.id !== currentUserId)
+            .map((u) => ({ id: u.id, email: u.email }))
+        );
       }
     });
-  }, [transferOpen, transferUsers.length]);
+  }, [transferOpen, transferUsers.length, currentUserId]);
 
   // ---- mutations ------------------------------------------------------------
 
@@ -259,6 +274,13 @@ export default function SettingsPage() {
   }
 
   async function handleDeleteWorkspace() {
+    // Defense-in-depth: never POST a delete with an empty slug. The button
+    // disable already covers this, but a stale render or replayed event
+    // could slip through.
+    if (!tenantSlug) {
+      toast.error("Workspace slug hasn't loaded yet — try again in a moment.");
+      return;
+    }
     if (confirmSlug.trim() !== tenantSlug) {
       toast.error("Slug doesn't match — type the workspace slug exactly.");
       return;
@@ -292,7 +314,7 @@ export default function SettingsPage() {
           <h1>
             Settings <em>· workspace.</em>
           </h1>
-          <p>flowforge · workspace settings</p>
+          <p>{`${tenantSlug || general.workspaceSlug || "workspace"} · workspace settings`}</p>
         </div>
       </div>
 
@@ -305,16 +327,15 @@ export default function SettingsPage() {
               <div key={g.group}>
                 <h4>{g.group}</h4>
                 {items.map((it) => (
-                  <a
+                  <button
                     key={it.id}
+                    type="button"
                     className={active === it.id ? "is-on" : ""}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setActive(it.id);
-                    }}
+                    aria-current={active === it.id ? "page" : undefined}
+                    onClick={() => setActive(it.id)}
                   >
                     {it.label}
-                  </a>
+                  </button>
                 ))}
               </div>
             );
@@ -488,6 +509,8 @@ export default function SettingsPage() {
                   <div>
                     <button
                       type="button"
+                      role="switch"
+                      aria-checked={conc.use_event_id_idempotency}
                       aria-label="Toggle idempotency keys"
                       className={`toggle ${conc.use_event_id_idempotency ? "on" : ""}`}
                       onClick={() =>
@@ -653,6 +676,8 @@ export default function SettingsPage() {
                   <div>
                     <button
                       type="button"
+                      role="switch"
+                      aria-checked={notif.pagerduty_enabled}
                       aria-label="Toggle PagerDuty"
                       className={`toggle ${notif.pagerduty_enabled ? "on" : ""}`}
                       onClick={() =>
@@ -702,6 +727,8 @@ export default function SettingsPage() {
                   <div>
                     <button
                       type="button"
+                      role="switch"
+                      aria-checked={notif.notify_on_run_failed}
                       aria-label="Toggle run-failed notifications"
                       className={`toggle ${notif.notify_on_run_failed ? "on" : ""}`}
                       onClick={() =>
@@ -718,6 +745,8 @@ export default function SettingsPage() {
                   <div>
                     <button
                       type="button"
+                      role="switch"
+                      aria-checked={notif.notify_on_run_timeout}
                       aria-label="Toggle run-timeout notifications"
                       className={`toggle ${notif.notify_on_run_timeout ? "on" : ""}`}
                       onClick={() =>
@@ -734,6 +763,8 @@ export default function SettingsPage() {
                   <div>
                     <button
                       type="button"
+                      role="switch"
+                      aria-checked={notif.email_digest_enabled}
                       aria-label="Toggle email digest"
                       className={`toggle ${notif.email_digest_enabled ? "on" : ""}`}
                       onClick={() =>
@@ -883,7 +914,9 @@ export default function SettingsPage() {
                 borderColor: "color-mix(in oklab, var(--danger) 40%, var(--line))",
               }}
               onClick={handleDeleteWorkspace}
-              disabled={deleting || confirmSlug.trim() !== tenantSlug}
+              disabled={
+                deleting || !tenantSlug || confirmSlug.trim() !== tenantSlug
+              }
             >
               {deleting ? (
                 <>

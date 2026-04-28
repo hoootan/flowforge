@@ -588,9 +588,10 @@ body[data-sidebar="compact"] .ff-side-foot-text { display: none; }
 .set-nav { position: sticky; top: calc(var(--top-h) + 16px); display: flex; flex-direction: column; gap: 1px; }
 .set-nav h4 { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); margin: 14px 12px 6px; }
 .set-nav h4:first-child { margin-top: 0; }
-.set-nav a { color: var(--ink-2); padding: 6px 12px; border-radius: 4px; font-size: 13px; cursor: pointer; text-decoration: none; display: block; transition: background .12s, color .12s; }
-.set-nav a:hover { background: var(--bg-2); color: var(--ink-1); }
-.set-nav a.is-on { background: var(--accent-wash); color: var(--ink-1); border-left: 2px solid var(--accent); padding-left: 10px; }
+.set-nav a, .set-nav button { color: var(--ink-2); padding: 6px 12px; border-radius: 4px; font-size: 13px; cursor: pointer; text-decoration: none; display: block; transition: background .12s, color .12s; background: transparent; border: 0; width: 100%; text-align: left; font: inherit; }
+.set-nav a:hover, .set-nav button:hover { background: var(--bg-2); color: var(--ink-1); }
+.set-nav a.is-on, .set-nav button.is-on { background: var(--accent-wash); color: var(--ink-1); border-left: 2px solid var(--accent); padding-left: 10px; }
+.set-nav a:focus-visible, .set-nav button:focus-visible { outline: var(--focus); outline-offset: 2px; }
 
 .set-section { margin-bottom: 28px; scroll-margin-top: calc(var(--top-h) + 16px); }
 .set-section > h2 { font-family: var(--sans); font-size: 18px; font-weight: 600; color: var(--ink-1); margin: 0 0 4px; letter-spacing: -0.01em; }
