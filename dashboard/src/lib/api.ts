@@ -638,6 +638,68 @@ const emptyToolsResponse: ToolsResponse = { tools: [], total: 0 };
 const emptyApprovalsResponse: ApprovalsResponse = { approvals: [], total: 0 };
 const emptyUsersResponse: UsersResponse = { users: [], total: 0 };
 const emptyApiKeysResponse: ApiKeysResponse = { keys: [], total: 0 };
+
+// Workspace identity (GET /tenant)
+export interface TenantInfo {
+  id: string;
+  name: string;
+  slug: string;
+  deleted_at: string | null;
+}
+
+// Workspace danger-zone responses
+export interface PauseAllResponse {
+  paused_count: number;
+}
+export interface TransferOwnershipResponse {
+  new_owner_id: string;
+  new_owner_email: string;
+}
+export interface DeleteWorkspaceResponse {
+  deleted_at: string;
+}
+
+// Workspace concurrency / step-execution defaults
+export interface ConcurrencySettings {
+  max_concurrent_runs: number;
+  per_function_default: number;
+  default_step_timeout_s: number;
+  use_event_id_idempotency: boolean;
+}
+
+export const DEFAULT_CONCURRENCY_SETTINGS: ConcurrencySettings = {
+  max_concurrent_runs: 500,
+  per_function_default: 50,
+  default_step_timeout_s: 60,
+  use_event_id_idempotency: true,
+};
+
+// Workspace notification settings
+export interface NotificationSettings {
+  slack_channel: string | null;
+  slack_webhook_url: string | null;
+  pagerduty_enabled: boolean;
+  pagerduty_integration_key: string | null;
+  email_digest_enabled: boolean;
+  notify_on_run_failed: boolean;
+  notify_on_run_timeout: boolean;
+}
+
+export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
+  slack_channel: null,
+  slack_webhook_url: null,
+  pagerduty_enabled: false,
+  pagerduty_integration_key: null,
+  email_digest_enabled: false,
+  notify_on_run_failed: true,
+  notify_on_run_timeout: true,
+};
+
+export interface NotificationTestResponse {
+  ok: boolean;
+  channel: string;
+  message: string;
+}
 const emptyStats: Stats = {
   runs: { total: 0, completed: 0, failed: 0, running: 0 },
   functions: { total: 0, active: 0 },
@@ -1835,6 +1897,108 @@ class FlowForgeAPI {
         by_model: { models: [] },
         daily: { daily: [] },
       };
+    }
+  }
+
+  async getTenantInfo(): Promise<TenantInfo | null> {
+    try {
+      return await this.request<TenantInfo>("/tenant");
+    } catch {
+      return null;
+    }
+  }
+
+  // Tenant / workspace danger-zone actions
+  async pauseAllFunctions(): Promise<PauseAllResponse | null> {
+    try {
+      return await this.request<PauseAllResponse>("/tenant/pause-all", {
+        method: "POST",
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async transferOwnership(
+    userId: string
+  ): Promise<TransferOwnershipResponse | null> {
+    try {
+      return await this.request<TransferOwnershipResponse>(
+        "/tenant/transfer-ownership",
+        { method: "POST", body: JSON.stringify({ user_id: userId }) }
+      );
+    } catch {
+      return null;
+    }
+  }
+
+  async deleteWorkspace(
+    confirmSlug: string
+  ): Promise<DeleteWorkspaceResponse | null> {
+    try {
+      return await this.request<DeleteWorkspaceResponse>("/tenant", {
+        method: "DELETE",
+        body: JSON.stringify({ confirm_slug: confirmSlug }),
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  // Tenant / workspace concurrency settings
+  async getConcurrencySettings(): Promise<ConcurrencySettings> {
+    try {
+      return await this.request<ConcurrencySettings>("/tenant/concurrency");
+    } catch {
+      return DEFAULT_CONCURRENCY_SETTINGS;
+    }
+  }
+
+  async updateConcurrencySettings(
+    data: Partial<ConcurrencySettings>
+  ): Promise<ConcurrencySettings | null> {
+    try {
+      return await this.request<ConcurrencySettings>("/tenant/concurrency", {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  // Tenant / workspace notification settings
+  async getNotificationSettings(): Promise<NotificationSettings> {
+    try {
+      return await this.request<NotificationSettings>("/tenant/notifications");
+    } catch {
+      return DEFAULT_NOTIFICATION_SETTINGS;
+    }
+  }
+
+  async updateNotificationSettings(
+    data: Partial<NotificationSettings>
+  ): Promise<NotificationSettings | null> {
+    try {
+      return await this.request<NotificationSettings>("/tenant/notifications", {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async testNotification(
+    channel: "slack" | "pagerduty"
+  ): Promise<NotificationTestResponse | null> {
+    try {
+      return await this.request<NotificationTestResponse>(
+        "/tenant/notifications/test",
+        { method: "POST", body: JSON.stringify({ channel }) }
+      );
+    } catch {
+      return null;
     }
   }
 }

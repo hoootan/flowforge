@@ -18,6 +18,10 @@ from flowforge_server.api.routes.skills import router as skills_router
 from flowforge_server.api.routes.stats import router as stats_router
 from flowforge_server.api.routes.stream import router as stream_router
 from flowforge_server.api.routes.tasks import router as tasks_router
+from flowforge_server.api.routes.tenant_notifications import (
+    router as tenant_notifications_router,
+)
+from flowforge_server.api.routes.tenants import router as tenants_router
 from flowforge_server.api.routes.tools import router as tools_router
 from flowforge_server.api.routes.usage import router as usage_router
 from flowforge_server.api.routes.users import router as users_router
@@ -44,4 +48,6 @@ __all__ = [
     "comments_router",
     "notifications_router",
     "skills_router",
+    "tenant_notifications_router",
+    "tenants_router",
 ]

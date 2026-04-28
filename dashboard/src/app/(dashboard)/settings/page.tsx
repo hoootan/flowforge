@@ -27,6 +27,8 @@ import {
   Lock,
   DollarSign,
   FileText,
+  Bell,
+  Gauge,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthStore, usePermissions } from "@/stores/auth-store";
@@ -38,6 +40,9 @@ import { SecurityTab } from "@/components/settings/security-tab";
 import { ModelPricingTab } from "@/components/settings/model-pricing-tab";
 import { AuditLogTab } from "@/components/settings/audit-log-tab";
 import { CredentialsTab } from "@/components/settings/credentials-tab";
+import { NotificationsTab } from "@/components/settings/notifications-tab";
+import { ConcurrencyTab } from "@/components/settings/concurrency-tab";
+import { DangerZone } from "@/components/settings/danger-zone";
 import type { User } from "@/lib/api";
 
 interface SettingsData {
@@ -139,7 +144,7 @@ export default function SettingsPage() {
 
       {/* Tabbed Settings Interface */}
       <Tabs defaultValue="general" className="flex-1">
-        <TabsList className={`grid w-full max-w-5xl ${showUsersTab ? "grid-cols-9" : "grid-cols-7"}`}>
+        <TabsList className={`grid w-full max-w-7xl ${showUsersTab ? "grid-cols-11" : "grid-cols-9"}`}>
           <TabsTrigger value="general" className="gap-1.5">
             <Settings className="h-4 w-4" />
             <span className="hidden sm:inline">General</span>
@@ -176,6 +181,14 @@ export default function SettingsPage() {
               <span className="hidden sm:inline">Audit</span>
             </TabsTrigger>
           )}
+          <TabsTrigger value="concurrency" className="gap-1.5">
+            <Gauge className="h-4 w-4" />
+            <span className="hidden sm:inline">Concurrency</span>
+          </TabsTrigger>
+          <TabsTrigger value="notifications" className="gap-1.5">
+            <Bell className="h-4 w-4" />
+            <span className="hidden sm:inline">Notifications</span>
+          </TabsTrigger>
           <TabsTrigger value="appearance" className="gap-1.5">
             <Palette className="h-4 w-4" />
             <span className="hidden sm:inline">Theme</span>
@@ -276,29 +289,8 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          {/* Danger Zone */}
-          <Card className="border-destructive/50">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-destructive">
-                <Shield className="h-5 w-5" />
-                Danger Zone
-              </CardTitle>
-              <CardDescription>
-                Irreversible actions. Proceed with caution.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between rounded-lg border border-destructive/50 p-4">
-                <div>
-                  <h4 className="font-medium">Clear All Data</h4>
-                  <p className="text-sm text-muted-foreground">
-                    Delete all runs, events, and function data.
-                  </p>
-                </div>
-                <Button variant="destructive">Clear Data</Button>
-              </div>
-            </CardContent>
-          </Card>
+          {/* Danger Zone — pause-all / transfer-ownership / delete-workspace */}
+          <DangerZone />
         </TabsContent>
 
         {/* Users Tab (Admin only) */}
@@ -360,6 +352,16 @@ export default function SettingsPage() {
             <AuditLogTab />
           </TabsContent>
         )}
+
+        {/* Concurrency & limits Tab */}
+        <TabsContent value="concurrency" className="mt-6 space-y-6">
+          <ConcurrencyTab />
+        </TabsContent>
+
+        {/* Notifications Tab */}
+        <TabsContent value="notifications" className="mt-6 space-y-6">
+          <NotificationsTab />
+        </TabsContent>
 
         {/* Appearance Tab */}
         <TabsContent value="appearance" className="mt-6 space-y-6">

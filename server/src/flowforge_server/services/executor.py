@@ -21,11 +21,69 @@ from flowforge_server.db.models import (
     Step,
     StepStatus,
     StepType,
+    Tenant,
     UsageRecord,
 )
 from flowforge_server.queue import FairQueue, Job
+from flowforge_server.services import notifier as notifier_service
 from flowforge_server.services.ai import AIService, get_ai_service
+from flowforge_server.services.concurrency import read_tenant_concurrency
 from flowforge_server.stream.pubsub import RunEventType, publish_run_event
+
+
+def _parse_timeout_to_seconds(s: str | None) -> int | None:
+    """Parse a duration string like '30s' / '5m' / '1h' to seconds.
+
+    Returns None on failure. Mirrors inline_executor._parse_timeout but at
+    module scope so executor's worker-mode path can resolve the same way.
+    """
+    if not s:
+        return None
+    try:
+        s = str(s).strip()
+        if s.endswith("h"):
+            return int(s[:-1]) * 3600
+        if s.endswith("m"):
+            return int(s[:-1]) * 60
+        if s.endswith("s"):
+            return int(s[:-1])
+        return int(s)
+    except (ValueError, TypeError):
+        return None
+
+
+async def _resolve_tenant_step_timeout(
+    session: AsyncSession, tenant_id: Any
+) -> int | None:
+    """Load the workspace default_step_timeout_s from the tenant row.
+
+    Used by _execute_run as a correctness fallback when the runner-injected
+    job config is absent (e.g. on the _recover_stuck_runs re-enqueue path,
+    which only carries trigger_data + endpoint_url). Returns None if the
+    tenant or settings can't be read so callers can use their own defaults.
+    """
+    try:
+        result = await session.execute(
+            select(Tenant).where(Tenant.id == tenant_id)
+        )
+        tenant = result.scalar_one_or_none()
+    except Exception:
+        return None
+    cfg = read_tenant_concurrency(tenant)
+    return cfg.default_step_timeout_s
+
+
+def _fire_run_failed_notification(run_id: Any) -> None:
+    """Schedule a fire-and-forget notification dispatch.
+
+    Wrapped so a missing event loop (e.g. during sync teardown) doesn't crash
+    the executor. The notifier itself is exception-safe.
+    """
+    try:
+        asyncio.create_task(notifier_service.notify_run_failed(run_id))
+    except RuntimeError:
+        # No running event loop — best-effort skip.
+        pass
 
 if TYPE_CHECKING:
     from flowforge_server.services.inline_executor import InlineExecutor
@@ -320,6 +378,32 @@ class Executor:
                 # Invoke the function via HTTP (worker mode)
                 endpoint_url = job.data.get("endpoint_url")
 
+                # Resolve the step timeout for this invoke cycle:
+                # function-level config wins; otherwise fall back to the workspace
+                # default (default_step_timeout_s, injected by runner._enqueue_run).
+                # Each /invoke call is bounded by one step yield, so this gives a
+                # real per-step soft timeout for worker-mode functions.
+                #
+                # Fallback to a tenant DB load when the job config lacks a
+                # default_step_timeout_s — covers _recover_stuck_runs and any
+                # future enqueue site that doesn't carry full config.
+                fn_cfg = job.data.get("config") or {}
+                fn_timeout_str = fn_cfg.get("timeout") if isinstance(fn_cfg, dict) else None
+                tenant_default_step_s = (
+                    fn_cfg.get("default_step_timeout_s")
+                    if isinstance(fn_cfg, dict)
+                    else None
+                )
+                if tenant_default_step_s is None:
+                    tenant_default_step_s = await _resolve_tenant_step_timeout(
+                        session, run.tenant_id
+                    )
+                step_timeout_s = (
+                    _parse_timeout_to_seconds(fn_timeout_str)
+                    if fn_timeout_str
+                    else (int(tenant_default_step_s) if tenant_default_step_s else None)
+                )
+
                 result = await self._invoke_function(
                     endpoint_url=endpoint_url,
                     function_id=job.function_id,
@@ -327,6 +411,7 @@ class Executor:
                     event=trigger_data.get("event", {}),
                     completed_steps=completed_steps,
                     attempt=run.attempt,
+                    step_timeout_s=step_timeout_s,
                 )
 
             # Process result
@@ -340,8 +425,15 @@ class Executor:
         event: dict[str, Any],
         completed_steps: dict[str, Any],
         attempt: int,
+        step_timeout_s: int | None = None,
     ) -> dict[str, Any]:
-        """Invoke a user function via HTTP."""
+        """Invoke a user function via HTTP.
+
+        When `step_timeout_s` is set, the per-invoke read timeout is overridden
+        on this single call so a stuck step yields control instead of riding
+        the long client-default. Also forwarded in the payload as a hint so
+        SDKs can self-enforce.
+        """
         client = await self._get_http_client()
 
         payload = {
@@ -351,11 +443,24 @@ class Executor:
             "steps": completed_steps,
             "attempt": attempt,
         }
+        if step_timeout_s is not None:
+            payload["step_timeout_s"] = step_timeout_s
+
+        # Per-call timeout override. Generous connect/write/pool, tight read.
+        request_timeout: httpx.Timeout | None = None
+        if step_timeout_s is not None and step_timeout_s > 0:
+            request_timeout = httpx.Timeout(
+                connect=10.0,
+                read=float(step_timeout_s),
+                write=10.0,
+                pool=10.0,
+            )
 
         try:
             response = await client.post(
                 f"{endpoint_url}/invoke",
                 json=payload,
+                timeout=request_timeout if request_timeout is not None else httpx.USE_CLIENT_DEFAULT,
             )
             response.raise_for_status()
             return response.json()
@@ -370,10 +475,15 @@ class Executor:
                 },
             }
         except httpx.RequestError as e:
+            # Distinguish read-timeout from other transport errors so the
+            # notifier can gate on `notify_on_run_timeout` vs `notify_on_run_failed`.
+            # httpx.TimeoutException is the parent of ReadTimeout / ConnectTimeout
+            # / WriteTimeout / PoolTimeout, all of which we treat as "timeout".
+            err_type = "HTTPTimeout" if isinstance(e, httpx.TimeoutException) else "RequestError"
             return {
                 "status": "error",
                 "error": {
-                    "type": "RequestError",
+                    "type": err_type,
                     "message": str(e),
                     "retryable": True,
                 },
@@ -502,6 +612,10 @@ class Executor:
                         "ended_at": run.ended_at.isoformat(),
                     },
                 )
+
+                # Fire workspace notifications (Slack / PagerDuty).
+                # Fire-and-forget — must not block run completion.
+                _fire_run_failed_notification(run.id)
 
                 print(f"[Executor] Run {run.id} permanently failed")
 
@@ -770,10 +884,34 @@ class Executor:
                 session, job.function_id, run.function_id
             )
 
+            # Resolve a soft step timeout for this AI call. Step-level value (if
+            # the SDK passed one) wins; otherwise function-level `timeout`; final
+            # fallback is the tenant default injected by runner._enqueue_run.
+            step_level_timeout = step_result.get("timeout_seconds")
+            fn_cfg_blob = job.data.get("config") or {}
+            fn_timeout = (
+                _parse_timeout_to_seconds(fn_cfg_blob.get("timeout"))
+                if isinstance(fn_cfg_blob, dict)
+                else None
+            )
+            tenant_default = (
+                int(fn_cfg_blob.get("default_step_timeout_s"))
+                if isinstance(fn_cfg_blob, dict) and fn_cfg_blob.get("default_step_timeout_s")
+                else None
+            )
+            # Fallback to a tenant DB load when the job config lacks a
+            # default_step_timeout_s — covers _recover_stuck_runs and any
+            # future enqueue site that doesn't carry full config.
+            if tenant_default is None:
+                tenant_default = await _resolve_tenant_step_timeout(session, run.tenant_id)
+            ai_step_timeout_s: int | None = (
+                step_level_timeout if step_level_timeout else (fn_timeout or tenant_default)
+            )
+
             try:
                 # Execute the AI call via LiteLLM with tenant-specific credentials
                 ai_service = self._get_ai_service()
-                response = await ai_service.complete(
+                ai_call = ai_service.complete(
                     model=model,
                     messages=messages,
                     temperature=temperature,
@@ -786,6 +924,10 @@ class Executor:
                     function_id=job.function_id,
                     rate_limits=rate_limits_cfg,
                 )
+                if ai_step_timeout_s and ai_step_timeout_s > 0:
+                    response = await asyncio.wait_for(ai_call, timeout=ai_step_timeout_s)
+                else:
+                    response = await ai_call
 
                 # Detect the structured rate-limit marker. AIService returns
                 # this instead of raising on 429 so the SDK's step.ai loop can
@@ -901,6 +1043,8 @@ class Executor:
                     print(f"[Executor] Run {run.id} failed permanently (AI step error, no retries left)")
 
                 await session.commit()
+                if not will_retry:
+                    _fire_run_failed_notification(run.id)
                 return True
 
             # Update step with actual result
