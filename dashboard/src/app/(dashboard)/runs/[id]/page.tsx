@@ -333,10 +333,252 @@ function Timeline({ run, mode, onSelectStep, selected }: { run: RunWithSteps; mo
   );
 }
 
+type ToolCallShape = {
+  id?: string;
+  // Canonical FlowForge shape from AIResponse.to_dict()
+  name?: string;
+  arguments?: unknown;
+  // OpenAI-wrapped fallback in case a passthrough adapter preserves it
+  function?: { name?: string; arguments?: unknown };
+};
+
+type AiOutput = {
+  content?: string;
+  model?: string;
+  provider?: string;
+  usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number; cost_usd?: number; latency_ms?: number };
+  finish_reason?: string;
+  tool_calls?: ToolCallShape[];
+};
+
+type AgentOutput = {
+  output?: string;
+  status?: string;
+  iterations?: number;
+  tool_calls_count?: number;
+  tokens_used?: number;
+  messages?: Array<{ role?: string; content?: unknown; name?: string; tool_calls?: unknown }>;
+  tool_calls?: unknown[];
+};
+
+type AiInput = {
+  model?: string;
+  messages?: Array<{ role?: string; content?: unknown }>;
+  temperature?: number;
+  max_tokens?: number;
+  tools?: unknown[];
+  tool_choice?: unknown;
+};
+
+function isAiOutput(o: unknown): o is AiOutput {
+  return !!o && typeof o === 'object' && 'usage' in (o as object) && 'model' in (o as object);
+}
+
+function isAgentOutput(o: unknown): o is AgentOutput {
+  return !!o && typeof o === 'object' && Array.isArray((o as AgentOutput).messages) && 'iterations' in (o as object);
+}
+
+function isAiInput(i: unknown): i is AiInput {
+  return !!i && typeof i === 'object' && Array.isArray((i as AiInput).messages) && 'model' in (i as object);
+}
+
+function stringifyMessageContent(c: unknown): string {
+  if (typeof c === 'string') return c;
+  if (c == null) return '';
+  return JSON.stringify(c, null, 2);
+}
+
+function looksLikeJson(s: string): boolean {
+  const t = s.trim();
+  return t.startsWith('{') || t.startsWith('[');
+}
+
+function RawToggle({ value }: { value: unknown }) {
+  return (
+    <details style={{ marginTop: 8 }}>
+      <summary className="kicker" style={{ cursor: 'pointer', userSelect: 'none' }}>Raw JSON</summary>
+      <div style={{ marginTop: 6 }}>
+        <CodeBlock language="json" code={JSON.stringify(value, null, 2)} />
+      </div>
+    </details>
+  );
+}
+
+function MessageThread({ messages }: { messages: Array<{ role?: string; content?: unknown; name?: string }> }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {messages.map((m, idx) => {
+        const role = m.role || 'message';
+        const text = stringifyMessageContent(m.content);
+        return (
+          <div key={idx} style={{ borderLeft: '2px solid var(--line)', paddingLeft: 10 }}>
+            <div className="kicker" style={{ marginBottom: 4 }}>
+              {role}{m.name ? ` · ${m.name}` : ''}
+            </div>
+            {looksLikeJson(text) ? (
+              <CodeBlock language="json" code={text} />
+            ) : (
+              <pre className="snip" style={{ whiteSpace: 'pre-wrap' }}>{text || <em className="hint">(empty)</em>}</pre>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function AiResponseCard({ output }: { output: AiOutput }) {
+  const content = output.content ?? '';
+  const usage = output.usage ?? {};
+  const toolCalls = output.tool_calls ?? [];
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div className="kicker" style={{ color: 'var(--brand)' }}>AI Response</div>
+
+      <div>
+        <div className="kicker" style={{ marginBottom: 4 }}>Content</div>
+        {content ? (
+          looksLikeJson(content) ? (
+            <CodeBlock language="json" code={content} />
+          ) : (
+            <pre className="snip" style={{ whiteSpace: 'pre-wrap' }}>{content}</pre>
+          )
+        ) : (
+          <div className="hint">(no content)</div>
+        )}
+      </div>
+
+      {toolCalls.length > 0 && (
+        <div>
+          <div className="kicker" style={{ marginBottom: 4 }}>Tool Calls ({toolCalls.length})</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {toolCalls.map((tc, idx) => {
+              const name = tc.name ?? tc.function?.name ?? '(unnamed)';
+              const args = tc.arguments ?? tc.function?.arguments;
+              const argsStr = typeof args === 'string' ? args : JSON.stringify(args ?? {}, null, 2);
+              return (
+                <div key={tc.id ?? idx} style={{ borderLeft: '2px solid var(--brand)', paddingLeft: 10 }}>
+                  <div className="mono" style={{ fontSize: 12, marginBottom: 4 }}><b>{name}</b></div>
+                  <CodeBlock language="json" code={argsStr} />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 11 }}>
+        {output.model && <span className="tag tag-violet">{output.model}</span>}
+        {usage.total_tokens != null && (
+          <span className="tag tag-info">
+            {usage.prompt_tokens ?? 0}→{usage.completion_tokens ?? 0} ({usage.total_tokens} tok)
+          </span>
+        )}
+        {usage.cost_usd != null && <span className="tag">${usage.cost_usd.toFixed(6)}</span>}
+        {usage.latency_ms != null && <span className="tag">{usage.latency_ms}ms</span>}
+        {output.finish_reason && <span className="tag">{output.finish_reason}</span>}
+      </div>
+
+      <RawToggle value={output} />
+    </div>
+  );
+}
+
+function AgentConversationCard({ output }: { output: AgentOutput }) {
+  const messages = output.messages ?? [];
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div className="kicker" style={{ color: 'var(--brand)' }}>Agent Conversation</div>
+
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 11 }}>
+        {output.status && <span className="tag tag-ok">{output.status}</span>}
+        {output.iterations != null && <span className="tag">{output.iterations} iter</span>}
+        {output.tool_calls_count != null && <span className="tag tag-info">{output.tool_calls_count} tool calls</span>}
+        {output.tokens_used != null && <span className="tag">{output.tokens_used} tok</span>}
+      </div>
+
+      {output.output && (
+        <div>
+          <div className="kicker" style={{ marginBottom: 4 }}>Final Output</div>
+          {looksLikeJson(output.output) ? (
+            <CodeBlock language="json" code={output.output} />
+          ) : (
+            <pre className="snip" style={{ whiteSpace: 'pre-wrap' }}>{output.output}</pre>
+          )}
+        </div>
+      )}
+
+      {messages.length > 0 && (
+        <div>
+          <div className="kicker" style={{ marginBottom: 4 }}>Messages ({messages.length})</div>
+          <MessageThread messages={messages} />
+        </div>
+      )}
+
+      <RawToggle value={output} />
+    </div>
+  );
+}
+
+function AiInputCard({ input }: { input: AiInput }) {
+  const messages = input.messages ?? [];
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div className="kicker">AI Request</div>
+
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 11 }}>
+        {input.model && <span className="tag tag-violet">{input.model}</span>}
+        {input.temperature != null && <span className="tag">temp {input.temperature}</span>}
+        {input.max_tokens != null && <span className="tag">max {input.max_tokens} tok</span>}
+        {Array.isArray(input.tools) && input.tools.length > 0 && (
+          <span className="tag tag-info">{input.tools.length} tools</span>
+        )}
+      </div>
+
+      {messages.length > 0 && (
+        <div>
+          <div className="kicker" style={{ marginBottom: 4 }}>Messages ({messages.length})</div>
+          <MessageThread messages={messages} />
+        </div>
+      )}
+
+      <RawToggle value={input} />
+    </div>
+  );
+}
+
+function InputBlock({ step }: { step: Step }) {
+  if (!step.input) return null;
+  if (isAiInput(step.input)) {
+    return <AiInputCard input={step.input} />;
+  }
+  return (
+    <div>
+      <div className="kicker">Input</div>
+      <CodeBlock language="json" code={JSON.stringify(step.input, null, 2)} />
+    </div>
+  );
+}
+
+function OutputBlock({ step }: { step: Step }) {
+  if (!step.output) return null;
+  if (isAiOutput(step.output)) {
+    return <AiResponseCard output={step.output as AiOutput} />;
+  }
+  if (isAgentOutput(step.output)) {
+    return <AgentConversationCard output={step.output as AgentOutput} />;
+  }
+  return (
+    <div>
+      <div className="kicker">Output</div>
+      <CodeBlock language="json" code={JSON.stringify(step.output, null, 2)} />
+    </div>
+  );
+}
+
 function StepInspector({ step, mode }: { step: Step; mode: StepRender }) {
-  const inputJson = step.input ? JSON.stringify(step.input, null, 2) : '';
-  const outputJson = step.output ? JSON.stringify(step.output, null, 2) : '';
   const errorJson = step.error ? JSON.stringify(step.error, null, 2) : '';
+  const outputJson = step.output ? JSON.stringify(step.output, null, 2) : '';
 
   if (mode === 'terminal') {
     return (
@@ -351,17 +593,17 @@ function StepInspector({ step, mode }: { step: Step; mode: StepRender }) {
 
   if (mode === 'thread') {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         {step.input && (
           <div>
-            <div className="kicker">→ Input</div>
-            <CodeBlock language="json" code={inputJson} />
+            <div className="kicker" style={{ marginBottom: 6 }}>→ Input</div>
+            <InputBlock step={step} />
           </div>
         )}
         {step.output && (
           <div>
-            <div className="kicker" style={{ color: 'var(--brand)' }}>← Output</div>
-            <CodeBlock language="json" code={outputJson} />
+            <div className="kicker" style={{ color: 'var(--brand)', marginBottom: 6 }}>← Output</div>
+            <OutputBlock step={step} />
           </div>
         )}
         {step.error && (
@@ -374,7 +616,9 @@ function StepInspector({ step, mode }: { step: Step; mode: StepRender }) {
     );
   }
 
-  // notebook + ide
+  // notebook + ide: input | output side-by-side, collapses to single column when narrow
+  const hasInput = !!step.input;
+  const hasOutput = !!step.output;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div className="meta-grid" style={{ paddingBottom: 12, borderBottom: '1px solid var(--line)' }}>
@@ -383,16 +627,17 @@ function StepInspector({ step, mode }: { step: Step; mode: StepRender }) {
         <div><label>Attempt</label><span className="v">{step.attempt}/{step.max_attempts}</span></div>
         <div><label>Duration</label><span className="v">{fmtDuration(step.started_at, step.ended_at)}</span></div>
       </div>
-      {step.input && (
-        <div>
-          <div className="kicker">Input</div>
-          <CodeBlock language="json" code={inputJson} />
-        </div>
-      )}
-      {step.output && (
-        <div>
-          <div className="kicker">Output</div>
-          <CodeBlock language="json" code={outputJson} />
+      {(hasInput || hasOutput) && (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: hasInput && hasOutput ? 'repeat(auto-fit, minmax(320px, 1fr))' : '1fr',
+            gap: 14,
+            alignItems: 'start',
+          }}
+        >
+          {hasInput && <InputBlock step={step} />}
+          {hasOutput && <OutputBlock step={step} />}
         </div>
       )}
       {step.error && (

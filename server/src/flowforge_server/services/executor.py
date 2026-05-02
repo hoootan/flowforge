@@ -917,6 +917,19 @@ class Executor:
                 step_level_timeout if step_level_timeout else (fn_timeout or tenant_default)
             )
 
+            # Snapshot the request on step.input so the dashboard can show
+            # what was sent to the model alongside the response. Without this,
+            # the request is lost when step.output gets overwritten below.
+            step.input = {
+                "model": model,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "use_cache": use_cache,
+                "tools": tools,
+                "tool_choice": tool_choice,
+            }
+
             try:
                 # Execute the AI call via LiteLLM with tenant-specific credentials
                 ai_service = self._get_ai_service()
