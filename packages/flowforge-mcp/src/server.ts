@@ -60,7 +60,7 @@ export function createMcpServer(
   config: { serverUrl: string; apiKey?: string }
 ): McpServer {
   const server = new McpServer(
-    { name: "FlowForge", version: "0.2.0" },
+    { name: "FlowForge", version: "0.4.2" },
     {
       instructions: `FlowForge is an AI workflow orchestration platform with durable execution, agent team management, and a skill marketplace.
 

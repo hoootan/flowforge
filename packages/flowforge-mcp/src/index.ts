@@ -25,7 +25,7 @@ function parseArgs(argv: string[]) {
 
 function printUsage() {
   console.error(`
-flowforge-mcp — MCP server for FlowForge (v0.2.0)
+flowforge-mcp — MCP server for FlowForge (v0.4.2)
 
 Usage:
   flowforge-mcp [options]
@@ -120,7 +120,7 @@ async function main() {
     });
 
     app.get("/health", (_req, res) => {
-      res.json({ status: "ok", version: "0.2.0" });
+      res.json({ status: "ok", version: "0.4.2" });
     });
 
     app.listen(port, () => {
