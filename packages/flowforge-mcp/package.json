@@ -1,6 +1,6 @@
 {
   "name": "flowforge-mcp-server",
-  "version": "0.2.0",
+  "version": "0.4.2",
   "description": "MCP server for FlowForge — connect Claude to your AI workflows",
   "bin": {
     "flowforge-mcp": "./dist/index.js"
