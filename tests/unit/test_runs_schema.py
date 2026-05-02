@@ -10,11 +10,18 @@ These tests pin the contract: StepResponse and RunResponse must accept any
 valid JSON value for their JSON-blob fields.
 """
 
-from datetime import datetime
+import os
+import tempfile
 
-import pytest
+# `flowforge_server.api.__init__` imports `app.py`, which calls `create_app()`
+# at module load and tries to mkdir settings.media_dir (default `/app/media`).
+# Point it at a writable temp dir so importing schemas doesn't fail in CI.
+os.environ.setdefault("FLOWFORGE_MEDIA_DIR", tempfile.mkdtemp(prefix="ff-test-media-"))
 
-from flowforge_server.api.schemas.runs import RunResponse, StepResponse
+from datetime import datetime  # noqa: E402
+
+import pytest  # noqa: E402
+from flowforge_server.api.schemas.runs import RunResponse, StepResponse  # noqa: E402
 
 
 def _step_kwargs(**overrides):
