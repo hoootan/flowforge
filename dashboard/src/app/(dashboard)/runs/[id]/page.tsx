@@ -333,13 +333,22 @@ function Timeline({ run, mode, onSelectStep, selected }: { run: RunWithSteps; mo
   );
 }
 
+type ToolCallShape = {
+  id?: string;
+  // Canonical FlowForge shape from AIResponse.to_dict()
+  name?: string;
+  arguments?: unknown;
+  // OpenAI-wrapped fallback in case a passthrough adapter preserves it
+  function?: { name?: string; arguments?: unknown };
+};
+
 type AiOutput = {
   content?: string;
   model?: string;
   provider?: string;
   usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number; cost_usd?: number; latency_ms?: number };
   finish_reason?: string;
-  tool_calls?: Array<{ id?: string; function?: { name?: string; arguments?: unknown } }>;
+  tool_calls?: ToolCallShape[];
 };
 
 type AgentOutput = {
@@ -444,8 +453,8 @@ function AiResponseCard({ output }: { output: AiOutput }) {
           <div className="kicker" style={{ marginBottom: 4 }}>Tool Calls ({toolCalls.length})</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {toolCalls.map((tc, idx) => {
-              const name = tc.function?.name ?? '(unnamed)';
-              const args = tc.function?.arguments;
+              const name = tc.name ?? tc.function?.name ?? '(unnamed)';
+              const args = tc.arguments ?? tc.function?.arguments;
               const argsStr = typeof args === 'string' ? args : JSON.stringify(args ?? {}, null, 2);
               return (
                 <div key={tc.id ?? idx} style={{ borderLeft: '2px solid var(--brand)', paddingLeft: 10 }}>
