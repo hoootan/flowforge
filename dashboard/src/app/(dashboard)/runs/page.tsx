@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { formatDistanceToNow } from 'date-fns';
-import { RefreshCw, Search } from 'lucide-react';
+import { ChevronLeft, ChevronRight, RefreshCw, Search } from 'lucide-react';
 import { api, type Run } from '@/lib/api';
 import { VarStrip } from '@/components/ui/var-strip';
 
@@ -40,28 +40,47 @@ function fmtDuration(r: Run): string {
 export default function RunsPage() {
   const router = useRouter();
   const [runs, setRuns] = useState<Run[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<View>('table');
   const [status, setStatus] = useState<StatusFilter>('all');
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 50;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  useEffect(() => {
+    setPage(1);
+  }, [status]);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
     const fetch = async () => {
       try {
-        const r = await api.getRuns({ page_size: 100, status: status === 'all' ? undefined : status });
-        if (!cancelled) setRuns(r.runs);
+        const r = await api.getRuns({
+          page,
+          page_size: PAGE_SIZE,
+          status: status === 'all' ? undefined : status,
+        });
+        if (!cancelled) {
+          setRuns(r.runs);
+          setTotal(r.total);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
     };
     fetch();
+    // Background polling keeps the data fresh without flashing the loading
+    // state — only the explicit setLoading(true) above (on status/page change)
+    // toggles the spinner.
     const id = setInterval(fetch, 15000);
     return () => {
       cancelled = true;
       clearInterval(id);
     };
-  }, [status]);
+  }, [status, page]);
 
   const filtered = useMemo(() => {
     if (!search) return runs;
@@ -82,7 +101,10 @@ export default function RunsPage() {
       <div className="page-hd">
         <div>
           <h1>Runs <em>· every execution.</em></h1>
-          <p>{filtered.length} run{filtered.length === 1 ? '' : 's'}{search ? ` matching "${search}"` : ''}</p>
+          <p>
+            {total} run{total === 1 ? '' : 's'} total
+            {search ? ` · ${filtered.length} matching "${search}" on this page` : ''}
+          </p>
         </div>
         <div className="page-hd-right">
           <VarStrip
@@ -210,6 +232,38 @@ export default function RunsPage() {
                   </div>
                 </Link>
               ))}
+            </div>
+          )}
+
+          {(view === 'table' || view === 'cards') && total > PAGE_SIZE && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginTop: 10,
+                gap: 8,
+              }}
+            >
+              <span className="mono" style={{ fontSize: 11, color: 'var(--ink-3)' }}>
+                Page {page} of {totalPages} · showing {runs.length} of {total}
+              </span>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button
+                  className="btn"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1 || loading}
+                >
+                  <ChevronLeft size={12} /> Prev
+                </button>
+                <button
+                  className="btn"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages || loading}
+                >
+                  Next <ChevronRight size={12} />
+                </button>
+              </div>
             </div>
           )}
 
