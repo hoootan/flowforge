@@ -104,6 +104,19 @@ class TestRunResponseAcceptsAnyJson:
         run = RunResponse(**_run_kwargs(error=["e1", "e2"]))
         assert run.error == ["e1", "e2"]
 
+    @pytest.mark.parametrize(
+        "value",
+        [
+            [{"event": "x"}, {"event": "y"}],
+            "raw-string",
+            42,
+        ],
+        ids=["list", "string", "int"],
+    )
+    def test_trigger_data_accepts_non_dict(self, value):
+        run = RunResponse(**_run_kwargs(trigger_data=value))
+        assert run.trigger_data == value
+
 
 class TestRunResponseRoundTripsListSteps:
     """The bug surfaced when serialising a Run with list-output steps. Verify

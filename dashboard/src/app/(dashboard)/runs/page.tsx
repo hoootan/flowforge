@@ -55,6 +55,7 @@ export default function RunsPage() {
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
     const fetch = async () => {
       try {
         const r = await api.getRuns({
@@ -71,6 +72,9 @@ export default function RunsPage() {
       }
     };
     fetch();
+    // Background polling keeps the data fresh without flashing the loading
+    // state — only the explicit setLoading(true) above (on status/page change)
+    // toggles the spinner.
     const id = setInterval(fetch, 15000);
     return () => {
       cancelled = true;
